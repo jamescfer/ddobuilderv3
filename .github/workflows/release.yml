@@ -1,8 +1,8 @@
 name: Auto Release on Version Bump
 
-# Runs whenever BuildInfo.h or VERSION changes on main.
-# If the version tag doesn't already exist, creates a tag and GitHub release
-# with an auto-generated changelog from the git log.
+# Fires when BuildInfo.h or VERSION changes on main.
+# Compiles a Release|Win32 build, bundles it with the data files and
+# required DLLs, and publishes a GitHub release with the zip attached.
 
 on:
   push:
@@ -16,22 +16,25 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Create release if version changed
-    runs-on: ubuntu-latest
+  build-and-release:
+    name: Build, package, and release
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      # ----------------------------------------------------------------
+      # 1. Checkout with full history (needed for changelog + tag checks)
+      # ----------------------------------------------------------------
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0          # full history needed for changelog + tag checks
+          fetch-depth: 0
 
-      # ------------------------------------------------------------------
-      # Parse the four version components out of BuildInfo.h and write them
-      # back to VERSION so both files stay in sync.
-      # ------------------------------------------------------------------
+      # ----------------------------------------------------------------
+      # 2. Parse the four version parts from BuildInfo.h and sync VERSION
+      # ----------------------------------------------------------------
       - name: Read version from BuildInfo.h
         id: ver
+        shell: bash
         run: |
           MAJOR=$(grep -m1 'BUILDINFO_VERSION_MAJOR' BuildInfo.h | grep -oE '[0-9]+$')
           MINOR=$(grep -m1 'BUILDINFO_VERSION_MINOR' BuildInfo.h | grep -oE '[0-9]+$')
@@ -40,78 +43,160 @@ jobs:
 
           TAG="v${MAJOR}.${MINOR}.${MODIF}.${BUILD}"
           NAME="DDOBuilder ${MAJOR}.${MINOR}.${MODIF}.${BUILD}"
+          ZIP="DDOBuilder-${TAG}.zip"
 
           echo "tag=${TAG}"   >> "$GITHUB_OUTPUT"
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+          echo "zip=${ZIP}"   >> "$GITHUB_OUTPUT"
 
-          # Keep VERSION file in sync
           printf '%s.%s.%s.%s\n' "$MAJOR" "$MINOR" "$MODIF" "$BUILD" > VERSION
-          echo "Detected version: ${TAG}"
+          echo "Version detected: ${TAG}"
 
-      # ------------------------------------------------------------------
-      # Skip everything if this tag was already released (e.g. re-running
-      # the workflow on an unrelated commit that also touched BuildInfo.h).
-      # ------------------------------------------------------------------
+      # ----------------------------------------------------------------
+      # 3. Skip everything if this exact release already exists
+      # ----------------------------------------------------------------
       - name: Check whether release already exists
         id: check
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view "${{ steps.ver.outputs.tag }}" --repo "${{ github.repository }}" \
-              > /dev/null 2>&1; then
+          if gh release view "${{ steps.ver.outputs.tag }}" \
+              --repo "${{ github.repository }}" > /dev/null 2>&1; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "Release ${{ steps.ver.outputs.tag }} already exists — skipping."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "No existing release for ${{ steps.ver.outputs.tag }} — will create one."
+            echo "No release for ${{ steps.ver.outputs.tag }} — proceeding."
           fi
 
-      # ------------------------------------------------------------------
-      # Build the changelog: everything since the last semver tag, or the
-      # last 50 commits if this is the first release.
-      # ------------------------------------------------------------------
+      # ----------------------------------------------------------------
+      # 4. Set up MSBuild (ships with Visual Studio on windows-latest)
+      # ----------------------------------------------------------------
+      - name: Set up MSBuild
+        if: steps.check.outputs.skip == 'false'
+        uses: microsoft/setup-msbuild@v2
+
+      # ----------------------------------------------------------------
+      # 5. Compile Release|Win32
+      #    OutDir is $(SolutionDir)Output\ so the exe lands alongside the
+      #    existing DataFiles/, Default.ini, Example Builds/, wget.exe.
+      # ----------------------------------------------------------------
+      - name: Build Release|Win32
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          msbuild DDOBuilder.sln `
+            /p:Configuration=Release `
+            /p:Platform=Win32 `
+            /m `
+            /v:minimal `
+            /nologo
+
+      # ----------------------------------------------------------------
+      # 6. Bundle runtime DLLs into Output\
+      #    - msxml.dll  (project dependency, checked in under 3rdPartyLibraries)
+      #    - MFC / CRT  (Visual C++ 2019 x86 redistributables)
+      #      Searched in the VS redist path first, then SysWOW64 as fallback.
+      # ----------------------------------------------------------------
+      - name: Bundle DLLs into Output
+        if: steps.check.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          # Project-supplied DLL
+          Copy-Item "3rdPartyLibraries\MicrosoftIncludes\msxml.dll" "Output\" -Force
+
+          # Visual C++ 2019 x86 redist DLLs (v142 toolset → VC142 CRT)
+          $vsBase = "C:\Program Files (x86)\Microsoft Visual Studio"
+          $dlls   = @("mfc140.dll","msvcp140.dll","vcruntime140.dll","vcruntime140_1.dll")
+
+          $redist = Get-ChildItem "$vsBase" -Recurse -Filter "mfc140.dll" `
+                      -ErrorAction SilentlyContinue |
+                    Where-Object { $_.FullName -match "x86" } |
+                    Select-Object -First 1
+
+          if ($redist) {
+            $dir = $redist.DirectoryName
+            Write-Host "Using redist from: $dir"
+            foreach ($dll in $dlls) {
+              $src = Join-Path $dir $dll
+              if (Test-Path $src) {
+                Copy-Item $src "Output\" -Force
+                Write-Host "  Copied $dll"
+              }
+            }
+          } else {
+            Write-Host "VS redist path not found; falling back to SysWOW64"
+            foreach ($dll in $dlls) {
+              $src = "C:\Windows\SysWOW64\$dll"
+              if (Test-Path $src) {
+                Copy-Item $src "Output\" -Force
+                Write-Host "  Copied $dll from SysWOW64"
+              }
+            }
+          }
+
+          # List what we're shipping
+          Write-Host "`nOutput\ contents:"
+          Get-ChildItem "Output\" | Select-Object Name, Length
+
+      # ----------------------------------------------------------------
+      # 7. Zip up the entire Output\ folder
+      # ----------------------------------------------------------------
+      - name: Create release zip
+        if: steps.check.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          $zip = "${{ steps.ver.outputs.zip }}"
+          Compress-Archive -Path "Output\*" -DestinationPath $zip -Force
+          $size = (Get-Item $zip).Length / 1MB
+          Write-Host "Created ${zip} ($([math]::Round($size,1)) MB)"
+
+      # ----------------------------------------------------------------
+      # 8. Build a changelog from the git log since the previous tag
+      # ----------------------------------------------------------------
       - name: Build changelog
         if: steps.check.outputs.skip == 'false'
-        id: changelog
+        shell: bash
         run: |
+          NOTES="${RUNNER_TEMP}/release_notes.md"
           PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]' | head -1)
 
-          if [ -n "$PREV_TAG" ]; then
-            echo "Changelog since ${PREV_TAG}"
-            git log "${PREV_TAG}..HEAD" \
-              --pretty=format:"- %s" \
-              --no-merges \
-              | head -100 > /tmp/changelog.md
-          else
-            echo "First release — using last 50 commits"
-            git log HEAD \
-              --pretty=format:"- %s" \
-              --no-merges \
-              | head -50 > /tmp/changelog.md
-          fi
-
-          # Prepend a header
           {
             echo "## What's changed"
             echo ""
-            cat /tmp/changelog.md
-          } > /tmp/release_notes.md
+            if [ -n "$PREV_TAG" ]; then
+              git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges | head -100
+            else
+              git log HEAD --pretty=format:"- %s" --no-merges | head -50
+            fi
+            echo ""
+            echo "---"
+            echo ""
+            echo "## Installation"
+            echo ""
+            echo "1. Download and extract **${{ steps.ver.outputs.zip }}**"
+            echo "2. Run **DDOBuilder.exe** from the extracted folder"
+            echo "3. If Windows shows a missing DLL error, install the"
+            echo "   [Visual C++ 2019 Redistributable (x86)](https://aka.ms/vs/16/release/vc_redist.x86.exe)"
+          } > "$NOTES"
 
-          echo "--- Release notes preview ---"
-          cat /tmp/release_notes.md
+          echo "NOTES_FILE=${NOTES}" >> "$GITHUB_ENV"
+          cat "$NOTES"
 
-      # ------------------------------------------------------------------
-      # Create the tag and GitHub release.
-      # ------------------------------------------------------------------
+      # ----------------------------------------------------------------
+      # 9. Create the GitHub release and upload the zip
+      # ----------------------------------------------------------------
       - name: Create GitHub release
         if: steps.check.outputs.skip == 'false'
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ steps.ver.outputs.tag }}" \
+            "${{ steps.ver.outputs.zip }}" \
             --repo     "${{ github.repository }}" \
             --title    "${{ steps.ver.outputs.name }}" \
-            --notes-file /tmp/release_notes.md \
+            --notes-file "$NOTES_FILE" \
             --target   main
 
-          echo "✓ Release ${{ steps.ver.outputs.tag }} created."
+          echo "Release ${{ steps.ver.outputs.tag }} published."
