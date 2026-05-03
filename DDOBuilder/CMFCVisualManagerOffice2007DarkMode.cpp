@@ -146,60 +146,6 @@ void CMFCVisualManagerOffice2007DarkMode::UpdateColours()
 }
 
 // ---------------------------------------------------------------------------
-// OnDrawPaneCaption
-// Draws a DDO-styled gradient header for every dockable pane caption bar.
-// The base class (CDockablePane::DrawCaption) calls this after shifting the
-// rect past the icon that CCustomDockablePane draws first.
-// ---------------------------------------------------------------------------
-void CMFCVisualManagerOffice2007DarkMode::OnDrawPaneCaption(
-    CDC* pDC, CDockablePane* pBar,
-    BOOL bActive, CRect rectCaption, CRect rectButtons)
-{
-    // Vertical gradient: darker at top, slightly lighter at bottom
-    TRIVERTEX tv[2];
-    tv[0].x     = rectCaption.left;
-    tv[0].y     = rectCaption.top;
-    tv[0].Red   = (COLOR16)(GetRValue(CLR_DDO_CAP_TOP)  << 8);
-    tv[0].Green = (COLOR16)(GetGValue(CLR_DDO_CAP_TOP)  << 8);
-    tv[0].Blue  = (COLOR16)(GetBValue(CLR_DDO_CAP_TOP)  << 8);
-    tv[0].Alpha = 0;
-    tv[1].x     = rectCaption.right;
-    tv[1].y     = rectCaption.bottom;
-    tv[1].Red   = (COLOR16)(GetRValue(CLR_DDO_CAP_BTM) << 8);
-    tv[1].Green = (COLOR16)(GetGValue(CLR_DDO_CAP_BTM) << 8);
-    tv[1].Blue  = (COLOR16)(GetBValue(CLR_DDO_CAP_BTM) << 8);
-    tv[1].Alpha = 0;
-    GRADIENT_RECT gr = { 0, 1 };
-    ::GradientFill(pDC->GetSafeHdc(), tv, 2, &gr, 1, GRADIENT_FILL_RECT_V);
-
-    // Gold accent line along the bottom of the caption
-    COLORREF clrLine = bActive ? CLR_DDO_GOLD : CLR_DDO_GOLD_DIM;
-    CPen pen(PS_SOLID, 1, clrLine);
-    CPen* pOld = pDC->SelectObject(&pen);
-    pDC->MoveTo(rectCaption.left,  rectCaption.bottom - 1);
-    pDC->LineTo(rectCaption.right, rectCaption.bottom - 1);
-    pDC->SelectObject(pOld);
-
-    // Title text
-    CString strTitle;
-    pBar->GetWindowText(strTitle);
-    if (!strTitle.IsEmpty())
-    {
-        CRect rectText = rectCaption;
-        rectText.DeflateRect(4, 1);
-        if (!rectButtons.IsRectEmpty())
-            rectText.right = rectButtons.left - 2;
-
-        pDC->SetBkMode(TRANSPARENT);
-        pDC->SetTextColor(bActive ? CLR_DDO_GOLD_BRIGHT : CLR_DDO_TEXT_DIM);
-        CFont* pOldFont = (CFont*)pDC->SelectStockObject(DEFAULT_GUI_FONT);
-        pDC->DrawText(strTitle, rectText,
-            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-        pDC->SelectObject(pOldFont);
-    }
-}
-
-// ---------------------------------------------------------------------------
 // OnFillBarBackground
 // Fills toolbar, menu-bar, and dockable pane backgrounds with DDO colours.
 // bNCArea = TRUE  →  non-client / caption strip → use caption gradient
@@ -220,15 +166,15 @@ void CMFCVisualManagerOffice2007DarkMode::OnFillBarBackground(
         TRIVERTEX tv[2];
         tv[0].x     = rectClient.left;
         tv[0].y     = rectClient.top;
-        tv[0].Red   = (COLOR16)(GetRValue(CLR_DDO_CAP_TOP)  << 8);
-        tv[0].Green = (COLOR16)(GetGValue(CLR_DDO_CAP_TOP)  << 8);
-        tv[0].Blue  = (COLOR16)(GetBValue(CLR_DDO_CAP_TOP)  << 8);
+        tv[0].Red   = (COLOR16)((WORD)GetRValue(CLR_DDO_CAP_TOP)  << 8);
+        tv[0].Green = (COLOR16)((WORD)GetGValue(CLR_DDO_CAP_TOP)  << 8);
+        tv[0].Blue  = (COLOR16)((WORD)GetBValue(CLR_DDO_CAP_TOP)  << 8);
         tv[0].Alpha = 0;
         tv[1].x     = rectClient.right;
         tv[1].y     = rectClient.bottom;
-        tv[1].Red   = (COLOR16)(GetRValue(CLR_DDO_CAP_BTM) << 8);
-        tv[1].Green = (COLOR16)(GetGValue(CLR_DDO_CAP_BTM) << 8);
-        tv[1].Blue  = (COLOR16)(GetBValue(CLR_DDO_CAP_BTM) << 8);
+        tv[1].Red   = (COLOR16)((WORD)GetRValue(CLR_DDO_CAP_BTM) << 8);
+        tv[1].Green = (COLOR16)((WORD)GetGValue(CLR_DDO_CAP_BTM) << 8);
+        tv[1].Blue  = (COLOR16)((WORD)GetBValue(CLR_DDO_CAP_BTM) << 8);
         tv[1].Alpha = 0;
         GRADIENT_RECT gr = { 0, 1 };
         ::GradientFill(pDC->GetSafeHdc(), tv, 2, &gr, 1, GRADIENT_FILL_RECT_V);
