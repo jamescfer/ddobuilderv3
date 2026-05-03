@@ -3,6 +3,8 @@
 #include "stdafx.h"
 #include "DDOFormView.h"
 
+IMPLEMENT_DYNAMIC(CDDOFormView, CFormView)
+
 BEGIN_MESSAGE_MAP(CDDOFormView, CFormView)
     ON_WM_CTLCOLOR()
     ON_WM_ERASEBKGND()

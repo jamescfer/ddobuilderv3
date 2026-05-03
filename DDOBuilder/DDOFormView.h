@@ -7,6 +7,7 @@
 
 class CDDOFormView : public CFormView
 {
+    DECLARE_DYNAMIC(CDDOFormView)
 protected:
     explicit CDDOFormView(UINT nIDTemplate);
     explicit CDDOFormView(LPCTSTR lpszTemplateName);

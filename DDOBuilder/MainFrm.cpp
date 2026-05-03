@@ -196,14 +196,6 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
         return -1;
     }
 
-    // Snapshot our coded default layout so OnResetScreenLayout can always
-    // restore it, regardless of how the user has rearranged things.
-    {
-        CWinAppEx* pAppEx = dynamic_cast<CWinAppEx*>(AfxGetApp());
-        if (pAppEx != nullptr)
-            pAppEx->SaveState(this, "DefaultWorkspace");
-    }
-
     // Enable tool bar and docking window menu replacement
     EnablePaneMenu(TRUE, ID_VIEW_CUSTOMIZE, strCustomize, ID_VIEW_TOOLBAR);
 
@@ -569,26 +561,10 @@ void CMainFrame::OnUpdateApplicationLook(CCmdUI* pCmdUI)
 
 BOOL CMainFrame::LoadFrame(UINT nIDResource, DWORD dwDefaultStyle, CWnd* pParentWnd, CCreateContext* pContext)
 {
-    // base class creates the window, loads the persisted "Workspace" state,
-    // and runs OnCreate (which creates and positions panes, then saves "DefaultWorkspace").
+    // base class does the real work
     if (!CFrameWndEx::LoadFrame(nIDResource, dwDefaultStyle, pParentWnd, pContext))
     {
         return FALSE;
-    }
-
-    // If the coded layout version has changed since the user last ran the app,
-    // force the new default layout to become active and persist it as "Workspace".
-    const int c_layoutVersion = 4;
-    int nSavedVersion = theApp.GetProfileInt(_T("Settings"), _T("LayoutVersion"), 0);
-    if (nSavedVersion != c_layoutVersion)
-    {
-        CWinAppEx* pAppEx = dynamic_cast<CWinAppEx*>(AfxGetApp());
-        if (pAppEx != nullptr)
-        {
-            pAppEx->LoadState(this, "DefaultWorkspace");
-            pAppEx->SaveState(this, "Workspace");
-        }
-        theApp.WriteProfileInt(_T("Settings"), _T("LayoutVersion"), c_layoutVersion);
     }
 
     // enable customization button for all user tool bars
