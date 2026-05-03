@@ -11,6 +11,7 @@ type Action =
   | { type: 'SET_ABILITY'; ability: Ability; score: number }
   | { type: 'SET_ABILITY_LEVELUP'; level: 4 | 8 | 12 | 16 | 20 | 24 | 28 | 32 | 36 | 40; ability: Ability }
   | { type: 'SET_FEAT'; slotKey: string; featName: string }
+  | { type: 'LOAD_BUILD'; build: CharacterBuild }
   | { type: 'RESET' }
 
 function reducer(state: CharacterBuild, action: Action): CharacterBuild {
@@ -38,6 +39,8 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       return { ...state, abilityLevelUps: { ...state.abilityLevelUps, [action.level]: action.ability } }
     case 'SET_FEAT':
       return { ...state, featChoices: { ...state.featChoices, [action.slotKey]: action.featName } }
+    case 'LOAD_BUILD':
+      return action.build
     case 'RESET':
       return emptyBuild()
     default:

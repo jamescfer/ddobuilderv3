@@ -26,6 +26,10 @@
   color: var(--color-text-secondary);
 }
 
+.headerExtra {
+  margin-left: auto;
+}
+
 .main {
   flex: 1;
   padding: 16px;
