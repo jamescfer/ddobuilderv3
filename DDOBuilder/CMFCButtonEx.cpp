@@ -34,7 +34,6 @@ void CMFCButtonEx::OnDraw(CDC* pDC, const CRect& rect, UINT uiState)
     const bool bDisabled  = (uiState & ODS_DISABLED)  != 0;
     const bool bPressed   = (uiState & ODS_SELECTED)   != 0;
     const bool bHovered   = m_bHighlighted && !bDisabled;
-    const bool bFocused   = (uiState & ODS_FOCUS)      != 0;
 
     // ---- Background fill -----------------------------------------------
     COLORREF clrBg;
