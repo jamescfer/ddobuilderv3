@@ -196,6 +196,14 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
         return -1;
     }
 
+    // Snapshot our coded default layout so OnResetScreenLayout can always
+    // restore it, regardless of how the user has rearranged things.
+    {
+        CWinAppEx* pAppEx = dynamic_cast<CWinAppEx*>(AfxGetApp());
+        if (pAppEx != nullptr)
+            pAppEx->SaveState(this, "DefaultWorkspace");
+    }
+
     // Enable tool bar and docking window menu replacement
     EnablePaneMenu(TRUE, ID_VIEW_CUSTOMIZE, strCustomize, ID_VIEW_TOOLBAR);
 
@@ -246,105 +254,147 @@ BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 BOOL CMainFrame::CreateDockingWindows()
 {
     // create the floating views
+    // ---- Bottom strip: Log + Stances + AutoFeats + GrantedFeats -----------
     CCustomDockablePane * pLogPane = CreateDockablePane(
             "Log",
             GetActiveDocument(),
             RUNTIME_CLASS(CLogPane),
-            ID_DOCK_LOG);
+            ID_DOCK_LOG,
+            AFX_IDW_DOCKBAR_BOTTOM);
     pLogPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
-
-    // has to be created before builds bane for correct operation
-    // on build switch/load
-    CCustomDockablePane* pBreakdownsPane = CreateDockablePane(
-            "Breakdowns",
-            GetActiveDocument(),
-            RUNTIME_CLASS(CBreakdownsPane),
-            ID_DOCK_BREAKDOWNS);
-    pBreakdownsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
 
     CCustomDockablePane* pStancesPane = CreateDockablePane(
             "Stances",
             GetActiveDocument(),
             RUNTIME_CLASS(CStancesPane),
-            ID_DOCK_STANCES);
+            ID_DOCK_STANCES,
+            AFX_IDW_DOCKBAR_BOTTOM);
     pStancesPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
-
-    CCustomDockablePane * pClassAndLevel = CreateDockablePane(
-            "Class and Levels",
-            GetActiveDocument(),
-            RUNTIME_CLASS(CClassAndFeatPane),
-            ID_DOCK_CLASSFEATS);
-    pClassAndLevel->SetDocumentAndCharacter(GetActiveDocument(), NULL);
-
-    CCustomDockablePane * pSkills = CreateDockablePane(
-            "Skills",
-            GetActiveDocument(),
-            RUNTIME_CLASS(CSkillsPane),
-            ID_DOCK_SKILLS);
-    pSkills->SetDocumentAndCharacter(GetActiveDocument(), NULL);
-
-    CCustomDockablePane * pSpecialFeats = CreateDockablePane(
-            "Past Lives and Special Feats",
-            GetActiveDocument(),
-            RUNTIME_CLASS(CSpecialFeatPane),
-            ID_DOCK_SPECIALFEATS);
-    pSpecialFeats->SetDocumentAndCharacter(GetActiveDocument(), NULL);
-
-    CCustomDockablePane* pEnhancementsPane = CreateDockablePane(
-            "Enhancements",
-            GetActiveDocument(),
-            RUNTIME_CLASS(CEnhancementsPane),
-            ID_DOCK_ENHANCEMENTS);
-    pEnhancementsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
-
-    CCustomDockablePane* pDestinyPane = CreateDockablePane(
-            "Epic Destinies",
-            GetActiveDocument(),
-            RUNTIME_CLASS(CDestinyPane),
-            ID_DOCK_DESTINY);
-    pDestinyPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
 
     CCustomDockablePane* pAutomaticFeatsPane = CreateDockablePane(
             "Automatic Feats",
             GetActiveDocument(),
             RUNTIME_CLASS(CAutomaticFeatsPane),
-            ID_DOCK_AUTOMATICFEATS);
+            ID_DOCK_AUTOMATICFEATS,
+            AFX_IDW_DOCKBAR_BOTTOM);
     pAutomaticFeatsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
 
     CCustomDockablePane* pGrantedFeatsPane = CreateDockablePane(
             "Granted Feats",
             GetActiveDocument(),
             RUNTIME_CLASS(CGrantedFeatsPane),
-            ID_DOCK_GRANTEDFEATS);
+            ID_DOCK_GRANTEDFEATS,
+            AFX_IDW_DOCKBAR_BOTTOM);
     pGrantedFeatsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
 
-    CCustomDockablePane* pReaperEnhancementsPane = CreateDockablePane(
-            "Reaper Enhancements",
-            GetActiveDocument(),
-            RUNTIME_CLASS(CReaperEnhancementsPane),
-            ID_DOCK_REAPERENHANCEMENTS);
-    pReaperEnhancementsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
+    // Tab all bottom-strip panes into the Log host
+    pStancesPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
+    pAutomaticFeatsPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
+    pGrantedFeatsPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
 
-    CCustomDockablePane* pDCsPane = CreateDockablePane(
-            "DCs",
+    // ---- Right column: ClassAndLevel group + Enhancements group + Breakdowns
+    CCustomDockablePane * pClassAndLevel = CreateDockablePane(
+            "Class and Levels",
             GetActiveDocument(),
-            RUNTIME_CLASS(CDCPane),
-            ID_DOCK_DCS);
-    pDCsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
+            RUNTIME_CLASS(CClassAndFeatPane),
+            ID_DOCK_CLASSFEATS,
+            AFX_IDW_DOCKBAR_RIGHT);
+    pClassAndLevel->SetDocumentAndCharacter(GetActiveDocument(), NULL);
+
+    CCustomDockablePane * pSkills = CreateDockablePane(
+            "Skills",
+            GetActiveDocument(),
+            RUNTIME_CLASS(CSkillsPane),
+            ID_DOCK_SKILLS,
+            AFX_IDW_DOCKBAR_RIGHT);
+    pSkills->SetDocumentAndCharacter(GetActiveDocument(), NULL);
+
+    CCustomDockablePane * pSpecialFeats = CreateDockablePane(
+            "Past Lives and Special Feats",
+            GetActiveDocument(),
+            RUNTIME_CLASS(CSpecialFeatPane),
+            ID_DOCK_SPECIALFEATS,
+            AFX_IDW_DOCKBAR_RIGHT);
+    pSpecialFeats->SetDocumentAndCharacter(GetActiveDocument(), NULL);
 
     CCustomDockablePane* pEquipmentPane = CreateDockablePane(
             "Gear and Filigrees",
             GetActiveDocument(),
             RUNTIME_CLASS(CEquipmentPane),
-            ID_DOCK_EQUIPMENT);
+            ID_DOCK_EQUIPMENT,
+            AFX_IDW_DOCKBAR_RIGHT);
     pEquipmentPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
 
     CCustomDockablePane* pSpellsPane = CreateDockablePane(
             "Spells and SLAs",
             GetActiveDocument(),
             RUNTIME_CLASS(CSpellsPane),
-            ID_DOCK_SPELLS);
+            ID_DOCK_SPELLS,
+            AFX_IDW_DOCKBAR_RIGHT);
     pSpellsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
+
+    // Tab leveling panes into ClassAndLevel host
+    pSkills->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
+    pEquipmentPane->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
+    pSpellsPane->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
+    pSpecialFeats->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
+
+    CCustomDockablePane* pEnhancementsPane = CreateDockablePane(
+            "Enhancements",
+            GetActiveDocument(),
+            RUNTIME_CLASS(CEnhancementsPane),
+            ID_DOCK_ENHANCEMENTS,
+            AFX_IDW_DOCKBAR_RIGHT);
+    pEnhancementsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
+
+    CCustomDockablePane* pReaperEnhancementsPane = CreateDockablePane(
+            "Reaper Enhancements",
+            GetActiveDocument(),
+            RUNTIME_CLASS(CReaperEnhancementsPane),
+            ID_DOCK_REAPERENHANCEMENTS,
+            AFX_IDW_DOCKBAR_RIGHT);
+    pReaperEnhancementsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
+
+    CCustomDockablePane* pDestinyPane = CreateDockablePane(
+            "Epic Destinies",
+            GetActiveDocument(),
+            RUNTIME_CLASS(CDestinyPane),
+            ID_DOCK_DESTINY,
+            AFX_IDW_DOCKBAR_RIGHT);
+    pDestinyPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
+
+    // Tab enhancement panes into Enhancements host
+    pReaperEnhancementsPane->AttachToTabWnd(pEnhancementsPane, DM_UNKNOWN, FALSE);
+    pDestinyPane->AttachToTabWnd(pEnhancementsPane, DM_UNKNOWN, FALSE);
+
+    // Breakdowns docks to the right on its own
+    // has to be created before builds pane for correct operation on build switch/load
+    CCustomDockablePane* pBreakdownsPane = CreateDockablePane(
+            "Breakdowns",
+            GetActiveDocument(),
+            RUNTIME_CLASS(CBreakdownsPane),
+            ID_DOCK_BREAKDOWNS,
+            AFX_IDW_DOCKBAR_RIGHT);
+    pBreakdownsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
+
+    // ---- Left column: Builds -----------------------------------------------
+    // Builds pane must be created last, so that panes are initialised
+    // correctly in order after a file load event
+    CCustomDockablePane* pBuildsPane = CreateDockablePane(
+            "Builds",
+            GetActiveDocument(),
+            RUNTIME_CLASS(CBuildsPane),
+            ID_DOCK_BUILDS,
+            AFX_IDW_DOCKBAR_LEFT);
+    pBuildsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
+
+    // ---- Floating secondary panes (user can arrange as desired) ------------
+    CCustomDockablePane* pDCsPane = CreateDockablePane(
+            "DCs",
+            GetActiveDocument(),
+            RUNTIME_CLASS(CDCPane),
+            ID_DOCK_DCS);
+    pDCsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
 
     CCustomDockablePane* pFavorPane = CreateDockablePane(
             "Quests and Favor",
@@ -387,34 +437,6 @@ BOOL CMainFrame::CreateDockingWindows()
             RUNTIME_CLASS(CBonusesPane),
             ID_DOCK_BONUSES);
     pBonusesPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
-
-    // Builds pane must be created last, so that panes are initialised
-    // correctly in order after a file load event
-    CCustomDockablePane* pBuildsPane = CreateDockablePane(
-            "Builds",
-            GetActiveDocument(),
-            RUNTIME_CLASS(CBuildsPane),
-            ID_DOCK_BUILDS);
-    pBuildsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
-
-    // ---- Default pane groupings ----------------------------------------
-    // Group 1 (right): Character leveling panel
-    //   Host: ClassAndLevel; tabs: Skills, Spells, Equipment, Past Lives
-    pSkills->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
-    pSpellsPane->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
-    pEquipmentPane->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
-    pSpecialFeats->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
-
-    // Group 2 (right): Enhancement panel
-    //   Host: Enhancements; tabs: Reaper, Destiny
-    pReaperEnhancementsPane->AttachToTabWnd(pEnhancementsPane, DM_UNKNOWN, FALSE);
-    pDestinyPane->AttachToTabWnd(pEnhancementsPane, DM_UNKNOWN, FALSE);
-
-    // Group 3 (bottom): Log and tracking panel
-    //   Host: Log; tabs: Stances, Automatic Feats, Granted Feats
-    pStancesPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
-    pAutomaticFeatsPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
-    pGrantedFeatsPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
 
     return TRUE;
 }
@@ -560,12 +582,28 @@ void CMainFrame::OnUpdateApplicationLook(CCmdUI* pCmdUI)
     pCmdUI->SetRadio(theApp.m_nAppLook == pCmdUI->m_nID);
 }
 
-BOOL CMainFrame::LoadFrame(UINT nIDResource, DWORD dwDefaultStyle, CWnd* pParentWnd, CCreateContext* pContext) 
+BOOL CMainFrame::LoadFrame(UINT nIDResource, DWORD dwDefaultStyle, CWnd* pParentWnd, CCreateContext* pContext)
 {
-    // base class does the real work
+    // base class creates the window, loads the persisted "Workspace" state,
+    // and runs OnCreate (which creates and positions panes, then saves "DefaultWorkspace").
     if (!CFrameWndEx::LoadFrame(nIDResource, dwDefaultStyle, pParentWnd, pContext))
     {
         return FALSE;
+    }
+
+    // If the coded layout version has changed since the user last ran the app,
+    // force the new default layout to become active and persist it as "Workspace".
+    const int c_layoutVersion = 3;
+    int nSavedVersion = theApp.GetInt(_T("Settings"), _T("LayoutVersion"), 0);
+    if (nSavedVersion != c_layoutVersion)
+    {
+        CWinAppEx* pAppEx = dynamic_cast<CWinAppEx*>(AfxGetApp());
+        if (pAppEx != nullptr)
+        {
+            pAppEx->LoadState(this, "DefaultWorkspace");
+            pAppEx->SaveState(this, "Workspace");
+        }
+        theApp.WriteInt(_T("Settings"), _T("LayoutVersion"), c_layoutVersion);
     }
 
     // enable customization button for all user tool bars
@@ -617,10 +655,11 @@ void CMainFrame::NewDocument(CDDOBuilderDoc * pDoc)
 }
 
 CCustomDockablePane* CMainFrame::CreateDockablePane(
-        const char* paneTitle, 
-        CDocument* doc, 
+        const char* paneTitle,
+        CDocument* doc,
         CRuntimeClass* runtimeClass,
-        UINT viewID)
+        UINT viewID,
+        UINT nDockBarID)
 {
     CCreateContext createContext;
     createContext.m_pCurrentDoc = doc;
@@ -641,7 +680,7 @@ CCustomDockablePane* CMainFrame::CreateDockablePane(
             15UL,
             &createContext);
     pane->EnableDocking(CBRS_ALIGN_ANY);
-    DockPane(pane);
+    DockPane(pane, nDockBarID);
 
     return pane;
 }

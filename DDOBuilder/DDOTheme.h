@@ -54,14 +54,14 @@
 // ---------------------------------------------------------------------------
 // Pane caption bars  (dark red gradient)
 // ---------------------------------------------------------------------------
-#define CLR_DDO_CAP_TOP     RGB(18,   8,   8)   // caption gradient top (darkest)
-#define CLR_DDO_CAP_BTM     RGB(55,  22,  22)   // caption gradient bottom
+#define CLR_DDO_CAP_TOP     RGB(45,  12,  12)   // caption gradient top (dark crimson)
+#define CLR_DDO_CAP_BTM     RGB(95,  32,  32)   // caption gradient bottom (mid crimson)
 
 // ---------------------------------------------------------------------------
 // Active pane caption  (orange glow)
 // ---------------------------------------------------------------------------
-#define CLR_DDO_CAP_ACTIVE_TOP  RGB(28,  10,   4)   // active gradient top
-#define CLR_DDO_CAP_ACTIVE_BTM  RGB(80,  38,   8)   // active gradient bottom (warm orange)
+#define CLR_DDO_CAP_ACTIVE_TOP  RGB(60,  22,   5)   // active gradient top
+#define CLR_DDO_CAP_ACTIVE_BTM  RGB(135, 62,  10)   // active gradient bottom (warm orange)
 
 // ---------------------------------------------------------------------------
 // Tooltip

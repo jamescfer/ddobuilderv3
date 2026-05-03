@@ -2,6 +2,7 @@
 //
 #include "stdafx.h"
 #include "GlobalSupportFunctions.h"
+#include "DDOTheme.h"
 
 #include "Augment.h"
 #include "DDOBuilder.h"
@@ -573,7 +574,7 @@ BOOL OnEraseBackground(
     }
     else
     {
-        pDC->FillSolidRect(rctClient, GetSysColor(COLOR_BTNFACE));
+        pDC->FillSolidRect(rctClient, CLR_DDO_BG_PANEL);
     }
     pDC->RestoreDC(-1);
 

@@ -10,6 +10,7 @@
 #include "DDOBuilderDoc.h"
 #include "DDOBuilderView.h"
 #include "GlobalSupportFunctions.h"
+#include "DDOTheme.h"
 #include "MainFrm.h"
 //#include "ActiveStanceDialog.h"
 #include <algorithm>
@@ -239,7 +240,7 @@ LRESULT CDDOBuilderView::OnThemeChanged(WPARAM wParam, LPARAM)
 {
     // wParam = 1 for dark mode, else = 0 for all others
     bool bDark = (wParam != 0);
-    COLORREF clrText = bDark ? RGB(255, 255, 255) : RGB(0, 0, 0);   // white text in dark mode, else black
+    COLORREF clrText = CLR_DDO_TEXT;
     m_staticBuildDescription.SetTextColour(clrText);
     m_staticAvailableSpend.SetTextColour(clrText);
     for (size_t i = 0; i < MSS_Number; ++i)

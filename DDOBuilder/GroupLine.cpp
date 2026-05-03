@@ -3,6 +3,7 @@
 #include "stdafx.h"
 #include "GroupLine.h"
 #include "afxvisualmanager.h"
+#include "DDOTheme.h"
 
 using MfcControls::CGroupLine;
 
@@ -82,7 +83,7 @@ BOOL CGroupLine::OnEraseBkgnd(CDC* pDC)
     }
     else
     {
-        pDC->FillSolidRect(cr, GetSysColor(COLOR_BTNFACE));
+        pDC->FillSolidRect(cr, CLR_DDO_BG_PANEL);
     }
 
     return TRUE;
@@ -129,8 +130,9 @@ void CGroupLine::OnPaint()
     }
 
     // draw line
-    COLORREF upperCol = ::GetSysColor(COLOR_3DSHADOW);
-    COLORREF lowerCol = ::GetSysColor(COLOR_3DHIGHLIGHT);
+    dc.SetTextColor(CLR_DDO_TEXT_DIM);
+    COLORREF upperCol = CLR_DDO_BORDER;
+    COLORREF lowerCol = CLR_DDO_BG_MID;
     int lineUpper = (clientRect.top + clientRect.bottom) / 2;
     int lineLower = lineUpper + 1;
     CPen upperPen(PS_SOLID, 1, upperCol);
