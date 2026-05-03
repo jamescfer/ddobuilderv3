@@ -3,12 +3,13 @@
 
 #include "stdafx.h"
 #include "FeatSelectionDialog.h"
+#include "DDODialog.h"
 #include "GlobalSupportFunctions.h"
 #include "MainFrm.h"
 
 #pragma warning(push)
 #pragma warning(disable: 4407) // warning C4407: cast between different pointer to member representations, compiler may generate incorrect code
-BEGIN_MESSAGE_MAP(CFeatSelectionDialog, CDialog)
+BEGIN_MESSAGE_MAP(CFeatSelectionDialog, CDDODialog)
     //{{AFX_MSG_MAP(CFeatSelectionDialog)
     ON_REGISTERED_MESSAGE(UWM_NEW_DOCUMENT, OnNewDocument)
     ON_BN_CLICKED(IDC_FEAT_BUTTON, OnFeatButtonLeftClick)
@@ -25,7 +26,7 @@ END_MESSAGE_MAP()
 CFeatSelectionDialog::CFeatSelectionDialog(
         CWnd* pParent,
         const Feat& feat) :
-    CDialog(CFeatSelectionDialog::IDD, pParent),
+    CDDODialog(CFeatSelectionDialog::IDD, pParent),
     m_feat(feat),
     m_pCharacter(NULL),
     m_showingTip(false),

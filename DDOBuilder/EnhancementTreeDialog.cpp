@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "EnhancementTreeDialog.h"
+#include "DDODialog.h"
 #include "GlobalSupportFunctions.h"
 #include "LogPane.h"
 #include "SelectionSelectDialog.h"
@@ -110,7 +111,7 @@ void CEnhancementTreeDialog::InitialiseStaticImages()
 
 #pragma warning(push)
 #pragma warning(disable: 4407) // warning C4407: cast between different pointer to member representations, compiler may generate incorrect code
-BEGIN_MESSAGE_MAP(CEnhancementTreeDialog, CDialog)
+BEGIN_MESSAGE_MAP(CEnhancementTreeDialog, CDDODialog)
     //{{AFX_MSG_MAP(CEnhancementTreeDialog)
     ON_WM_ERASEBKGND()
     ON_WM_PAINT()
@@ -131,7 +132,7 @@ CEnhancementTreeDialog::CEnhancementTreeDialog(
         Character* pCharacter,
         const EnhancementTree& tree,
         enum TreeType type) :
-    CDialog(CEnhancementTreeDialog::IDD, pParent),
+    CDDODialog(CEnhancementTreeDialog::IDD, pParent),
     m_pTree(&tree),
     m_type(type),
     m_pCharacter(pCharacter),

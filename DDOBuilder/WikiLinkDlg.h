@@ -1,8 +1,9 @@
 // WikiLinkDlg.h
 //
 #include "Resource.h"
+#include "DDODialog.h"
 
-class CWikiLinkDlg : public CDialogEx
+class CWikiLinkDlg : public CDDODialogEx
 {
     public:
         CWikiLinkDlg();

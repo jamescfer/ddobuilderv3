@@ -2,12 +2,13 @@
 //
 #pragma once
 #include "Resource.h"
+#include "DDODialog.h"
 #include <string>
 
 class Character;
 
 class CGearSetNameDialog :
-        public CDialog
+        public CDDODialog
 {
     DECLARE_DYNAMIC(CGearSetNameDialog)
 

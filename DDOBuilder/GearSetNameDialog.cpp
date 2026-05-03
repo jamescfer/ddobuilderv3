@@ -2,18 +2,19 @@
 //
 #include "stdafx.h"
 #include "GearSetNameDialog.h"
+#include "DDODialog.h"
 
 #include "Character.h"
 
 // CGearSetNameDialog dialog
 
-IMPLEMENT_DYNAMIC(CGearSetNameDialog, CDialog)
+IMPLEMENT_DYNAMIC(CGearSetNameDialog, CDDODialog)
 
 CGearSetNameDialog::CGearSetNameDialog(
         CWnd* pParent,
         const Character * pCharacter,
         const std::string& defaultName) :
-    CDialog(CGearSetNameDialog::IDD, pParent),
+    CDDODialog(CGearSetNameDialog::IDD, pParent),
     m_pCharacter(pCharacter),
     m_name(defaultName)
 {
@@ -29,7 +30,7 @@ void CGearSetNameDialog::DoDataExchange(CDataExchange* pDX)
     DDX_Control(pDX, IDC_EDIT_GEAR_SET_NAME, m_editGearName);
 }
 
-BEGIN_MESSAGE_MAP(CGearSetNameDialog, CDialog)
+BEGIN_MESSAGE_MAP(CGearSetNameDialog, CDDODialog)
 END_MESSAGE_MAP()
 
 // CGearSetNameDialog message handlers

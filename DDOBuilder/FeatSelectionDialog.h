@@ -5,12 +5,13 @@
 
 #include "Character.h"
 #include "Resource.h"
+#include "DDODialog.h"
 #include "Feat.h"
 #include "MFCButtonMMRelay.h"
 #include "InfoTip.h"
 
 class CFeatSelectionDialog :
-    public CDialog,
+    public CDDODialog,
     public CharacterObserver
 {
     public:

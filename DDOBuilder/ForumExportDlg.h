@@ -1,6 +1,7 @@
 // ForumExportDlg.h
 //
 #include "Resource.h"
+#include "DDODialog.h"
 #include "XmlLib\SaxContentElement.h"
 #include "GlobalSupportFunctions.h"
 #include "EnhancementSpendInTree.h"
@@ -72,7 +73,7 @@ const XmlLib::enumMapEntry<ForumExportSections> forumExportSectionsMap[] =
     {ForumExportSections(0), NULL}
 };
 
-class CForumExportDlg : public CDialogEx
+class CForumExportDlg : public CDDODialogEx
 {
     public:
         CForumExportDlg(Build* pBuild);

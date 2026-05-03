@@ -2,6 +2,7 @@
 //
 #include "stdafx.h"
 #include "SelectionSelectDialog.h"
+#include "DDODialog.h"
 #include "afxdialogex.h"
 #include "Build.h"
 #include "EnhancementTreeItem.h"
@@ -10,7 +11,7 @@
 
 // CSelectionSelectDialog dialog
 
-IMPLEMENT_DYNAMIC(CSelectionSelectDialog, CDialog)
+IMPLEMENT_DYNAMIC(CSelectionSelectDialog, CDDODialog)
 
 CSelectionSelectDialog::CSelectionSelectDialog(
         CWnd* pParent,
@@ -18,7 +19,7 @@ CSelectionSelectDialog::CSelectionSelectDialog(
         const EnhancementTreeItem & item,
         const std::string& treeName,
         TreeType type) :
-    CDialog(CSelectionSelectDialog::IDD, pParent),
+    CDDODialog(CSelectionSelectDialog::IDD, pParent),
     m_build(build),
     m_item(item),
     m_treeName(treeName),
@@ -47,7 +48,7 @@ void CSelectionSelectDialog::DoDataExchange(CDataExchange* pDX)
     }
 }
 
-BEGIN_MESSAGE_MAP(CSelectionSelectDialog, CDialog)
+BEGIN_MESSAGE_MAP(CSelectionSelectDialog, CDDODialog)
     ON_WM_LBUTTONDOWN()
     ON_WM_MOUSEMOVE()
     ON_MESSAGE(WM_MOUSELEAVE, OnMouseLeave)

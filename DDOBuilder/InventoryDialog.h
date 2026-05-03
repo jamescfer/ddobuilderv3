@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Resource.h"
+#include "DDODialog.h"
 #include "inventorySlotTypes.h"
 #include "InfoTip.h"
 #include "Character.h"
@@ -89,7 +90,7 @@ class InventoryObserver :
 };
 
 class CInventoryDialog :
-    public CDialog,
+    public CDDODialog,
     public Subject<InventoryObserver>
 {
     public:

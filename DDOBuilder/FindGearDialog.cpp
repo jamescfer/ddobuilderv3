@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "FindGearDialog.h"
+#include "DDODialog.h"
 #include "Build.h"
 #include "Life.h"
 #include "Character.h"
@@ -21,12 +22,12 @@ namespace
     };
 }
 
-IMPLEMENT_DYNAMIC(CFindGearDialog, CDialog)
+IMPLEMENT_DYNAMIC(CFindGearDialog, CDDODialog)
 
 CFindGearDialog::CFindGearDialog(
         CWnd* pParent,
         Build* pBuild) :
-    CDialog(CFindGearDialog::IDD, pParent),
+    CDDODialog(CFindGearDialog::IDD, pParent),
     m_pBuild(pBuild),
     m_bInitialising(false),
     m_showingTip(false),
@@ -78,7 +79,7 @@ void CFindGearDialog::DoDataExchange(CDataExchange* pDX)
     }
 }
 
-BEGIN_MESSAGE_MAP(CFindGearDialog, CDialog)
+BEGIN_MESSAGE_MAP(CFindGearDialog, CDDODialog)
     ON_NOTIFY(LVN_ITEMCHANGED, IDC_ITEM_LIST, OnItemSelected)
     ON_CONTROL_RANGE(CBN_SELENDOK, IDC_COMBO_AUGMENT1, IDC_COMBO_AUGMENT1 + MAX_Augments - 1, OnAugmentSelect)
     ON_CONTROL_RANGE(CBN_SELENDCANCEL, IDC_COMBO_AUGMENT1, IDC_COMBO_AUGMENT1 + MAX_Augments - 1, OnAugmentCancel)

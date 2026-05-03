@@ -1,7 +1,8 @@
 #pragma once
 // CItemImageDialog dialog
+#include "DDODialog.h"
 
-class CItemImageDialog : public CDialogEx
+class CItemImageDialog : public CDDODialogEx
 {
     DECLARE_DYNAMIC(CItemImageDialog)
 

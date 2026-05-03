@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "InventoryDialog.h"
+#include "DDODialog.h"
 
 #include "Augment.h"
 #include "GlobalSupportFunctions.h"
@@ -32,7 +33,7 @@ namespace
 
 #pragma warning(push)
 #pragma warning(disable: 4407) // warning C4407: cast between different pointer to member representations, compiler may generate incorrect code
-BEGIN_MESSAGE_MAP(CInventoryDialog, CDialog)
+BEGIN_MESSAGE_MAP(CInventoryDialog, CDDODialog)
     //{{AFX_MSG_MAP(CInventoryDialog)
     ON_WM_ERASEBKGND()
     ON_WM_PAINT()
@@ -45,7 +46,7 @@ END_MESSAGE_MAP()
 #pragma warning(pop)
 
 CInventoryDialog::CInventoryDialog(CWnd* pParent) :
-    CDialog(CInventoryDialog::IDD, pParent),
+    CDDODialog(CInventoryDialog::IDD, pParent),
     m_pBuild(NULL),
     m_bitmapSize(CSize(0, 0)),
     m_showingItemTip(false),

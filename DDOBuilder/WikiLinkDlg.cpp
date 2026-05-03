@@ -1,10 +1,11 @@
 // WikiLinkDlg.cpp
 //
 #include "stdafx.h"
+#include "DDODialog.h"
 #include "WikiLinkDlg.h"
 
 CWikiLinkDlg::CWikiLinkDlg() :
-    CDialogEx(CWikiLinkDlg::IDD)
+    CDDODialogEx(CWikiLinkDlg::IDD)
 {
 }
 
@@ -18,7 +19,7 @@ void CWikiLinkDlg::DoDataExchange(CDataExchange* pDX)
     DDX_Control(pDX, IDC_EDIT_LINK, m_editLink);
 }
 
-BEGIN_MESSAGE_MAP(CWikiLinkDlg, CDialogEx)
+BEGIN_MESSAGE_MAP(CWikiLinkDlg, CDDODialogEx)
 END_MESSAGE_MAP()
 
 BOOL CWikiLinkDlg::OnInitDialog()

@@ -1,7 +1,8 @@
 #pragma once
 // CWeaponImageDialog dialog
+#include "DDODialog.h"
 
-class CWeaponImageDialog : public CDialogEx
+class CWeaponImageDialog : public CDDODialogEx
 {
     DECLARE_DYNAMIC(CWeaponImageDialog)
 
