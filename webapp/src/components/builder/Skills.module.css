@@ -1,0 +1,166 @@
+.pointsRemaining {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--color-gold-light);
+}
+
+.pointsRemaining[data-over='true'] {
+  color: var(--color-red);
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* ── Table layout ────────────────────────────────────────────────────── */
+
+.table {
+  display: flex;
+  flex-direction: column;
+}
+
+.tableHeader {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 6px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border-radius: var(--radius-sm);
+}
+
+.row:nth-child(even) {
+  background: var(--color-bg-secondary);
+}
+
+.row[data-class-skill='true'] .colName {
+  color: var(--color-text-primary);
+}
+
+.row[data-class-skill='false'] .colName {
+  color: var(--color-text-secondary);
+}
+
+/* ── Columns ─────────────────────────────────────────────────────────── */
+
+.colName {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.colCs {
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.colControls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.colMax {
+  width: 28px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.colCost {
+  width: 28px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+/* ── Class-skill marker ──────────────────────────────────────────────── */
+
+.csMarker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--color-gold-dark);
+  color: var(--color-bg-primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ── +/− buttons ─────────────────────────────────────────────────────── */
+
+.btn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* ── Rank value ──────────────────────────────────────────────────────── */
+
+.rank {
+  width: 24px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.rank[data-nonzero='true'] {
+  color: var(--color-gold-light);
+}
+
+/* ── Footer legend ───────────────────────────────────────────────────── */
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.legendCs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--color-gold-dark);
+  color: var(--color-bg-primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.legendLabel {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
