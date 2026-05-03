@@ -778,6 +778,7 @@ void CMainFrame::CopyDefaultIniToDDOBuilderIni()
 
 void CMainFrame::LoadComplete()
 {
+    LOG_INFO("LoadComplete: AddSmallClassImageMenuIcons");
     AddSmallClassImageMenuIcons();
 
     // do the documents views (usually only 1)
@@ -788,6 +789,7 @@ void CMainFrame::LoadComplete()
         while (pos != NULL)
         {
             CView* pView = pDoc->GetNextView(pos);
+            LOG_INFO("LoadComplete: UWM_LOAD_COMPLETE -> doc view %s", pView->GetRuntimeClass()->m_lpszClassName);
             pView->SendMessage(UWM_LOAD_COMPLETE, 0, 0L);
         }
     }
@@ -796,15 +798,23 @@ void CMainFrame::LoadComplete()
     for (size_t i = 0; i < m_dockablePanes.size(); ++i)
     {
         CView* pView = m_dockablePanes[i]->GetView();
+        if (!pView)
+        {
+            LOG_WARN("LoadComplete: pane[%zu] has NULL view – skipping", i);
+            continue;
+        }
         pDoc->AddView(pView);
         if (RUNTIME_CLASS(CEquipmentPane) != pView->GetRuntimeClass())
         {
+            LOG_INFO("LoadComplete: UWM_LOAD_COMPLETE -> pane[%zu] %s", i, pView->GetRuntimeClass()->m_lpszClassName);
             pView->SendMessage(UWM_LOAD_COMPLETE, 0, 0L);
         }
     }
     m_bLoadComplete = true;
     CDDOBuilderDoc* pDDODoc = dynamic_cast<CDDOBuilderDoc*>(pDoc);
+    LOG_INFO("LoadComplete: NewDocument");
     NewDocument(pDDODoc);   // ensure all views have the doc pointers etc
+    LOG_INFO("LoadComplete: done");
 }
 
 MouseHook* CMainFrame::GetMouseHook()
