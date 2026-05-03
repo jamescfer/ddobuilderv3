@@ -71,46 +71,18 @@ jobs:
           fi
 
       # ----------------------------------------------------------------
-      # 4. Install MFC libraries
-      #    MFC is not pre-installed on the windows-latest runner image.
-      #    The project uses the v142 (VS 2019) toolset so we install both
-      #    the general and the v142-specific MFC/ATL components.
-      # ----------------------------------------------------------------
-      - name: Install MFC libraries
-        if: steps.check.outputs.skip == 'false'
-        shell: pwsh
-        run: |
-          $installer = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
-          $vsPath    = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
-
-          $components = @(
-            "Microsoft.VisualStudio.Component.VC.ATLMFC",
-            "Microsoft.VisualStudio.Component.VC.14.29.16.11.MFC",
-            "Microsoft.VisualStudio.Component.VC.14.29.16.11.ATL"
-          )
-
-          foreach ($comp in $components) {
-            Write-Host "Installing $comp ..."
-            $proc = Start-Process -FilePath $installer -Wait -PassThru -ArgumentList @(
-              "modify",
-              "--installPath", $vsPath,
-              "--add", $comp,
-              "--quiet", "--norestart", "--force"
-            )
-            Write-Host "Exit code: $($proc.ExitCode)"
-          }
-
-          Write-Host "MFC installation complete."
-
-      # ----------------------------------------------------------------
-      # 5. Set up MSBuild
+      # 4. Set up MSBuild
       # ----------------------------------------------------------------
       - name: Set up MSBuild
         if: steps.check.outputs.skip == 'false'
         uses: microsoft/setup-msbuild@v2
 
       # ----------------------------------------------------------------
-      # 6. Compile Release|Win32
+      # 5. Compile Release|Win32
+      #    The project targets PlatformToolset v142 (VS 2019), but the
+      #    windows-latest runner only ships MFC for v143 (VS 2022).
+      #    Overriding PlatformToolset=v143 on the command line lets us use
+      #    the available MFC libraries without touching the project file.
       #    OutDir is $(SolutionDir)Output\ so the exe lands alongside the
       #    existing DataFiles/, Default.ini, Example Builds/, wget.exe.
       # ----------------------------------------------------------------
@@ -120,6 +92,7 @@ jobs:
           msbuild DDOBuilder.sln `
             /p:Configuration=Release `
             /p:Platform=Win32 `
+            /p:PlatformToolset=v143 `
             /m `
             /v:minimal `
             /nologo
