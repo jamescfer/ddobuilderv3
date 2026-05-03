@@ -97,12 +97,6 @@ void CGrantedFeatsPane::OnInitialUpdate()
         m_bHadInitialUpdate = true;
         CDDOFormView::OnInitialUpdate();
 
-        CWnd* pWnd = AfxGetApp()->m_pMainWnd;
-        CMainFrame* pMainWnd = dynamic_cast<CMainFrame*>(pWnd);
-        CBreakdownsPane* pBreakdownsPane = dynamic_cast<CBreakdownsPane*>(
-                pMainWnd->GetPaneView(RUNTIME_CLASS(CBreakdownsPane)));
-        pBreakdownsPane->RegisterBuildCallbackEffect(Effect_GrantFeat, this);
-
         m_listGrantedFeats.SetupControl();
     }
 }
@@ -145,6 +139,16 @@ const std::list<Effect>& CGrantedFeatsPane::GrantedFeats() const
 
 LRESULT CGrantedFeatsPane::OnLoadComplete(WPARAM, LPARAM)
 {
+    // CBreakdownsPane is guaranteed to exist by this point (all panes created before load)
+    CWnd* pWnd = AfxGetApp()->m_pMainWnd;
+    CMainFrame* pMainWnd = dynamic_cast<CMainFrame*>(pWnd);
+    if (pMainWnd)
+    {
+        CBreakdownsPane* pBreakdownsPane = dynamic_cast<CBreakdownsPane*>(
+                pMainWnd->GetPaneView(RUNTIME_CLASS(CBreakdownsPane)));
+        if (pBreakdownsPane != NULL)
+            pBreakdownsPane->RegisterBuildCallbackEffect(Effect_GrantFeat, this);
+    }
     return 0;
 }
 
