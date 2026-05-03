@@ -34,7 +34,7 @@ namespace
 };
 
 CBonusesPane::CBonusesPane() :
-    CFormView(CBonusesPane::IDD),
+    CDDOFormView(CBonusesPane::IDD),
     m_pCharacter(NULL),
     m_pDocument(NULL),
     m_bHadInitialUpdate(false),
@@ -46,8 +46,8 @@ CBonusesPane::~CBonusesPane()
 {
 }
 
-IMPLEMENT_DYNCREATE(CBonusesPane, CFormView)
-BEGIN_MESSAGE_MAP(CBonusesPane, CFormView)
+IMPLEMENT_DYNCREATE(CBonusesPane, CDDOFormView)
+BEGIN_MESSAGE_MAP(CBonusesPane, CDDOFormView)
     ON_WM_CREATE()
     ON_WM_SIZE()
     ON_REGISTERED_MESSAGE(UWM_NEW_DOCUMENT, OnNewDocument)
@@ -65,7 +65,7 @@ void CBonusesPane::OnInitialUpdate()
     if (!m_bHadInitialUpdate)
     {
         m_bHadInitialUpdate = true;
-        CFormView::OnInitialUpdate();
+        CDDOFormView::OnInitialUpdate();
         UpdateFonts();
         m_buttonAdd.SetImage(IDB_BITMAP_ADD);
         m_buttonRemove.SetImage(IDB_BITMAP_REMOVE);
@@ -128,7 +128,7 @@ void CBonusesPane::DoDataExchange(CDataExchange* pDX)
 
 void CBonusesPane::OnSize(UINT nType, int cx, int cy)
 {
-    CFormView::OnSize(nType, cx, cy);
+    CDDOFormView::OnSize(nType, cx, cy);
     if (IsWindow(m_listBonuses.GetSafeHwnd())
             && IsWindowVisible())
     {
@@ -182,6 +182,7 @@ void CBonusesPane::OnSize(UINT nType, int cx, int cy)
 void CBonusesPane::UpdateFonts()
 {
     m_listBonuses.SetFont(&afxGlobalData.fontRegular);
+    ApplyDDOTheme(m_listBonuses);
 }
 
 BOOL CBonusesPane::OnEraseBkgnd(CDC* pDC)

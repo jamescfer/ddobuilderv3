@@ -16,10 +16,10 @@ namespace
     const size_t c_sizeY = 466;
 }
 
-IMPLEMENT_DYNCREATE(CReaperEnhancementsPane, CFormView)
+IMPLEMENT_DYNCREATE(CReaperEnhancementsPane, CDDOFormView)
 
 CReaperEnhancementsPane::CReaperEnhancementsPane() :
-    CFormView(CReaperEnhancementsPane::IDD),
+    CDDOFormView(CReaperEnhancementsPane::IDD),
     m_pDoc(NULL),
     m_pCharacter(NULL),
     m_bHadinitialUpdate(false)
@@ -41,7 +41,7 @@ void CReaperEnhancementsPane::DoDataExchange(CDataExchange* pDX)
 
 #pragma warning(push)
 #pragma warning(disable: 4407) // warning C4407: cast between different pointer to member representations, compiler may generate incorrect code
-BEGIN_MESSAGE_MAP(CReaperEnhancementsPane, CFormView)
+BEGIN_MESSAGE_MAP(CReaperEnhancementsPane, CDDOFormView)
     ON_WM_SIZE()
     ON_WM_ERASEBKGND()
     ON_REGISTERED_MESSAGE(UWM_NEW_DOCUMENT, OnNewDocument)
@@ -54,7 +54,7 @@ void CReaperEnhancementsPane::OnInitialUpdate()
     if (!m_bHadinitialUpdate)
     {
         m_bHadinitialUpdate = true;
-        CFormView::OnInitialUpdate();
+        CDDOFormView::OnInitialUpdate();
         UpdateWindowTitle();
     }
 }

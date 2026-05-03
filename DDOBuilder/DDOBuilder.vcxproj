@@ -9123,6 +9123,7 @@ echo.
     <ClInclude Include="ClassSpell.h" />
     <ClInclude Include="CMFCButtonEx.h" />
     <ClInclude Include="CMFCVisualManagerOffice2007DarkMode.h" />
+    <ClInclude Include="DDOFormView.h" />
     <ClInclude Include="ComboBoxTooltip.h" />
     <ClInclude Include="CompletedQuest.h" />
     <ClInclude Include="ConditionalGroup.h" />
@@ -9455,6 +9456,7 @@ makehm /h /a afxhh.h IDW_,HIDW_,0x50000 "%(FullPath)" &gt;&gt; "hlp\HTMLDefines.
     <ClCompile Include="ClassSpell.cpp" />
     <ClCompile Include="CMFCButtonEx.cpp" />
     <ClCompile Include="CMFCVisualManagerOffice2007DarkMode.cpp" />
+    <ClCompile Include="DDOFormView.cpp" />
     <ClCompile Include="ComboBoxTooltip.cpp" />
     <ClCompile Include="CompletedQuest.cpp" />
     <ClCompile Include="ConditionalGroup.cpp" />

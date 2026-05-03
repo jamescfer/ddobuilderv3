@@ -20,10 +20,10 @@ namespace
     const int c_windowSizeY = 48;
 }
 
-IMPLEMENT_DYNCREATE(CEquipmentPane, CFormView)
+IMPLEMENT_DYNCREATE(CEquipmentPane, CDDOFormView)
 
 CEquipmentPane::CEquipmentPane() :
-    CFormView(CEquipmentPane::IDD),
+    CDDOFormView(CEquipmentPane::IDD),
     m_pCharacter(NULL),
     m_pDocument(NULL),
     m_inventoryView(NULL),
@@ -72,7 +72,7 @@ void CEquipmentPane::DoDataExchange(CDataExchange* pDX)
 
 #pragma warning(push)
 #pragma warning(disable: 4407) // warning C4407: cast between different pointer to member representations, compiler may generate incorrect code
-BEGIN_MESSAGE_MAP(CEquipmentPane, CFormView)
+BEGIN_MESSAGE_MAP(CEquipmentPane, CDDOFormView)
     ON_WM_SIZE()
     ON_WM_ERASEBKGND()
     ON_REGISTERED_MESSAGE(UWM_NEW_DOCUMENT, OnNewDocument)
@@ -121,7 +121,7 @@ void CEquipmentPane::Dump(CDumpContext& dc) const
 
 void CEquipmentPane::OnInitialUpdate()
 {
-    CFormView::OnInitialUpdate();
+    CDDOFormView::OnInitialUpdate();
     if (!m_tipCreated)
     {
         m_tooltip.Create(this);

@@ -1,4 +1,5 @@
 #pragma once
+#include "DDOFormView.h"
 #include "Resource.h"
 #include "Character.h"
 #include "Attack.h"
@@ -18,7 +19,7 @@ enum AttackType
 };
 
 class CDPSPane :
-    public CFormView,
+    public CDDOFormView,
     public CharacterObserver,
     public LifeObserver,
     public BuildObserver

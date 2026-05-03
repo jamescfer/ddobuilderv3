@@ -17,7 +17,7 @@ static char THIS_FILE[] = __FILE__;
 // COutputBar
 
 CSelfAndPartyBuffsPane::CSelfAndPartyBuffsPane() :
-    CFormView(CSelfAndPartyBuffsPane::IDD),
+    CDDOFormView(CSelfAndPartyBuffsPane::IDD),
     m_pCharacter(NULL),
     m_pDocument(NULL),
     m_bPopulating(false),
@@ -33,8 +33,8 @@ CSelfAndPartyBuffsPane::~CSelfAndPartyBuffsPane()
 {
 }
 
-IMPLEMENT_DYNCREATE(CSelfAndPartyBuffsPane, CFormView)
-BEGIN_MESSAGE_MAP(CSelfAndPartyBuffsPane, CFormView)
+IMPLEMENT_DYNCREATE(CSelfAndPartyBuffsPane, CDDOFormView)
+BEGIN_MESSAGE_MAP(CSelfAndPartyBuffsPane, CDDOFormView)
     ON_WM_CREATE()
     ON_WM_SIZE()
     ON_REGISTERED_MESSAGE(UWM_NEW_DOCUMENT, OnNewDocument)
@@ -50,7 +50,7 @@ void CSelfAndPartyBuffsPane::OnInitialUpdate()
     if (!m_bHasInitialUpdate)
     {
         m_bHasInitialUpdate = true;
-        CFormView::OnInitialUpdate();
+        CDDOFormView::OnInitialUpdate();
         UpdateFonts();
         m_tooltip.Create(this);
         m_tipCreated = true;
@@ -117,7 +117,7 @@ void CSelfAndPartyBuffsPane::DoDataExchange(CDataExchange* pDX)
 
 void CSelfAndPartyBuffsPane::OnSize(UINT nType, int cx, int cy)
 {
-    CFormView::OnSize(nType, cx, cy);
+    CDDOFormView::OnSize(nType, cx, cy);
     if (IsWindow(m_listBuffs.GetSafeHwnd())
             && IsWindowVisible())
     {

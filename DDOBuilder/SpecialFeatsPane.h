@@ -1,6 +1,7 @@
 // SpecialFeatPane.h
 //
 #pragma once
+#include "DDOFormView.h"
 #include "Resource.h"
 #include <vector>
 #include <list>
@@ -12,7 +13,7 @@ class Feat;
 class CFeatSelectionDialog;
 
 class CSpecialFeatPane :
-    public CFormView,
+    public CDDOFormView,
     public CharacterObserver,
     public BuildObserver
 {

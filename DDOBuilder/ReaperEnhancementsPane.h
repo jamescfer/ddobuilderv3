@@ -1,6 +1,7 @@
 // ReaperEnhancementsPane.h
 //
 #pragma once
+#include "DDOFormView.h"
 #include "Resource.h"
 #include <vector>
 #include "EnhancementTree.h"
@@ -11,7 +12,7 @@ class Character;
 class CEnhancementTreeDialog;
 
 class CReaperEnhancementsPane :
-    public CFormView,
+    public CDDOFormView,
     public CharacterObserver,
     public LifeObserver,
     public BuildObserver

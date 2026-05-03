@@ -1,6 +1,7 @@
 // BreakdownsPane.h
 //
 #pragma once
+#include "DDOFormView.h"
 #include "Resource.h"
 
 #include "BreakdownTypes.h"
@@ -19,7 +20,7 @@
 class BreakdownItemWeaponEffects;
 
 class CBreakdownsPane :
-    public CFormView,
+    public CDDOFormView,
     public LifeObserver,
     public BuildObserver,
     BreakdownObserver

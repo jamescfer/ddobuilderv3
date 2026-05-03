@@ -2,12 +2,13 @@
 //
 
 #pragma once
+#include "DDOFormView.h"
 #include "resource.h"
 #include "Character.h"
 #include "MFCStaticEx.h"
 
 class CDDOBuilderView :
-    public CFormView,
+    public CDDOFormView,
     public CharacterObserver,
     public LifeObserver,
     public BuildObserver

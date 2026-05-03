@@ -7,10 +7,10 @@
 #include "GlobalSupportFunctions.h"
 #include "MainFrm.h"
 
-IMPLEMENT_DYNCREATE(CGrantedFeatsPane, CFormView)
+IMPLEMENT_DYNCREATE(CGrantedFeatsPane, CDDOFormView)
 
 CGrantedFeatsPane::CGrantedFeatsPane() :
-    CFormView(CGrantedFeatsPane::IDD),
+    CDDOFormView(CGrantedFeatsPane::IDD),
     m_pCharacter(NULL),
     m_bHadInitialUpdate(false),
     m_grantedHandle(0)
@@ -29,7 +29,7 @@ void CGrantedFeatsPane::DoDataExchange(CDataExchange* pDX)
 
 #pragma warning(push)
 #pragma warning(disable: 4407) // warning C4407: cast between different pointer to member representations, compiler may generate incorrect code
-BEGIN_MESSAGE_MAP(CGrantedFeatsPane, CFormView)
+BEGIN_MESSAGE_MAP(CGrantedFeatsPane, CDDOFormView)
     ON_WM_SIZE()
     ON_REGISTERED_MESSAGE(UWM_NEW_DOCUMENT, OnNewDocument)
     ON_REGISTERED_MESSAGE(UWM_LOAD_COMPLETE, OnLoadComplete)
@@ -95,7 +95,7 @@ void CGrantedFeatsPane::OnInitialUpdate()
     if (!m_bHadInitialUpdate)
     {
         m_bHadInitialUpdate = true;
-        CFormView::OnInitialUpdate();
+        CDDOFormView::OnInitialUpdate();
 
         CWnd* pWnd = AfxGetApp()->m_pMainWnd;
         CMainFrame* pMainWnd = dynamic_cast<CMainFrame*>(pWnd);

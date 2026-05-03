@@ -16,7 +16,7 @@ static char THIS_FILE[] = __FILE__;
 // COutputBar
 
 CContentPane::CContentPane() :
-    CFormView(CContentPane::IDD),
+    CDDOFormView(CContentPane::IDD),
     m_pCharacter(NULL),
     m_pDocument(NULL),
     m_bHadInitialUpdate(false),
@@ -28,8 +28,8 @@ CContentPane::~CContentPane()
 {
 }
 
-IMPLEMENT_DYNCREATE(CContentPane, CFormView)
-BEGIN_MESSAGE_MAP(CContentPane, CFormView)
+IMPLEMENT_DYNCREATE(CContentPane, CDDOFormView)
+BEGIN_MESSAGE_MAP(CContentPane, CDDOFormView)
     ON_WM_CREATE()
     ON_WM_SIZE()
     ON_REGISTERED_MESSAGE(UWM_NEW_DOCUMENT, OnNewDocument)
@@ -43,7 +43,7 @@ void CContentPane::OnInitialUpdate()
     if (!m_bHadInitialUpdate)
     {
         m_bHadInitialUpdate = true;
-        CFormView::OnInitialUpdate();
+        CDDOFormView::OnInitialUpdate();
         UpdateFonts();
     }
 }
@@ -111,7 +111,7 @@ void CContentPane::DoDataExchange(CDataExchange* pDX)
 
 void CContentPane::OnSize(UINT nType, int cx, int cy)
 {
-    CFormView::OnSize(nType, cx, cy);
+    CDDOFormView::OnSize(nType, cx, cy);
     if (IsWindow(m_listContent.GetSafeHwnd())
             && IsWindowVisible())
     {
@@ -131,6 +131,7 @@ void CContentPane::OnSize(UINT nType, int cx, int cy)
 void CContentPane::UpdateFonts()
 {
     m_listContent.SetFont(&afxGlobalData.fontRegular);
+    ApplyDDOTheme(m_listContent);
 }
 
 BOOL CContentPane::OnEraseBkgnd(CDC* pDC)

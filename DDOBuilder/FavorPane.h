@@ -1,5 +1,6 @@
 // CFavorPane form view
 #pragma once
+#include "DDOFormView.h"
 #include "Resource.h"
 #include "Character.h"
 #include "SortHeaderCtrl.h"
@@ -10,7 +11,7 @@
 class CDDOBuilderDoc;
 
 class CFavorPane :
-    public CFormView,
+    public CDDOFormView,
     CharacterObserver
 {
 public:
