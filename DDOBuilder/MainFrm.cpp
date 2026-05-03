@@ -546,6 +546,8 @@ CCustomDockablePane* CMainFrame::CreateDockablePane(
         UINT viewID,
         UINT nDockBarID)
 {
+    LOG_INFO("CreateDockablePane: \"%s\" (id=%u)", paneTitle, viewID);
+
     CCreateContext createContext;
     createContext.m_pCurrentDoc = doc;
     createContext.m_pNewViewClass = runtimeClass;
@@ -554,19 +556,24 @@ CCustomDockablePane* CMainFrame::CreateDockablePane(
     // Assorted functionality is applied to all panes
     m_dockablePanes.push_back(pane);
 
-    pane->Create(
+    BOOL ok = pane->Create(
             _T(paneTitle),
             this,
             CRect(0,0,400,400),
             TRUE,
             viewID,
-            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | CBRS_BOTTOM | CBRS_FLOAT_MULTI, 
+            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | CBRS_BOTTOM | CBRS_FLOAT_MULTI,
             32UL,
             15UL,
             &createContext);
+    if (!ok)
+        LOG_ERROR("CreateDockablePane: Create() failed for \"%s\"", paneTitle);
+
     pane->EnableDocking(CBRS_ALIGN_ANY);
+    LOG_INFO("CreateDockablePane: \"%s\" docking (dockBarID=%u)", paneTitle, nDockBarID);
     DockPane(pane, nDockBarID);
 
+    LOG_INFO("CreateDockablePane: \"%s\" done", paneTitle);
     return pane;
 }
 
