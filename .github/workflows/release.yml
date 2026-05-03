@@ -71,14 +71,46 @@ jobs:
           fi
 
       # ----------------------------------------------------------------
-      # 4. Set up MSBuild (ships with Visual Studio on windows-latest)
+      # 4. Install MFC libraries
+      #    MFC is not pre-installed on the windows-latest runner image.
+      #    The project uses the v142 (VS 2019) toolset so we install both
+      #    the general and the v142-specific MFC/ATL components.
+      # ----------------------------------------------------------------
+      - name: Install MFC libraries
+        if: steps.check.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          $installer = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
+          $vsPath    = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
+
+          $components = @(
+            "Microsoft.VisualStudio.Component.VC.ATLMFC",
+            "Microsoft.VisualStudio.Component.VC.14.29.16.11.MFC",
+            "Microsoft.VisualStudio.Component.VC.14.29.16.11.ATL"
+          )
+
+          foreach ($comp in $components) {
+            Write-Host "Installing $comp ..."
+            $proc = Start-Process -FilePath $installer -Wait -PassThru -ArgumentList @(
+              "modify",
+              "--installPath", $vsPath,
+              "--add", $comp,
+              "--quiet", "--norestart", "--force"
+            )
+            Write-Host "Exit code: $($proc.ExitCode)"
+          }
+
+          Write-Host "MFC installation complete."
+
+      # ----------------------------------------------------------------
+      # 5. Set up MSBuild
       # ----------------------------------------------------------------
       - name: Set up MSBuild
         if: steps.check.outputs.skip == 'false'
         uses: microsoft/setup-msbuild@v2
 
       # ----------------------------------------------------------------
-      # 5. Compile Release|Win32
+      # 6. Compile Release|Win32
       #    OutDir is $(SolutionDir)Output\ so the exe lands alongside the
       #    existing DataFiles/, Default.ini, Example Builds/, wget.exe.
       # ----------------------------------------------------------------
@@ -93,10 +125,9 @@ jobs:
             /nologo
 
       # ----------------------------------------------------------------
-      # 6. Bundle runtime DLLs into Output\
+      # 7. Bundle runtime DLLs into Output\
       #    - msxml.dll  (project dependency, checked in under 3rdPartyLibraries)
       #    - MFC / CRT  (Visual C++ 2019 x86 redistributables)
-      #      Searched in the VS redist path first, then SysWOW64 as fallback.
       # ----------------------------------------------------------------
       - name: Bundle DLLs into Output
         if: steps.check.outputs.skip == 'false'
@@ -105,7 +136,7 @@ jobs:
           # Project-supplied DLL
           Copy-Item "3rdPartyLibraries\MicrosoftIncludes\msxml.dll" "Output\" -Force
 
-          # Visual C++ 2019 x86 redist DLLs (v142 toolset → VC142 CRT)
+          # Visual C++ 2019 x86 redist DLLs (v142 toolset)
           $vsBase = "C:\Program Files (x86)\Microsoft Visual Studio"
           $dlls   = @("mfc140.dll","msvcp140.dll","vcruntime140.dll","vcruntime140_1.dll")
 
@@ -135,12 +166,11 @@ jobs:
             }
           }
 
-          # List what we're shipping
           Write-Host "`nOutput\ contents:"
           Get-ChildItem "Output\" | Select-Object Name, Length
 
       # ----------------------------------------------------------------
-      # 7. Zip up the entire Output\ folder
+      # 8. Zip up the entire Output\ folder
       # ----------------------------------------------------------------
       - name: Create release zip
         if: steps.check.outputs.skip == 'false'
@@ -152,7 +182,7 @@ jobs:
           Write-Host "Created ${zip} ($([math]::Round($size,1)) MB)"
 
       # ----------------------------------------------------------------
-      # 8. Build a changelog from the git log since the previous tag
+      # 9. Build a changelog from the git log since the previous tag
       # ----------------------------------------------------------------
       - name: Build changelog
         if: steps.check.outputs.skip == 'false'
@@ -184,7 +214,7 @@ jobs:
           cat "$NOTES"
 
       # ----------------------------------------------------------------
-      # 9. Create the GitHub release and upload the zip
+      # 10. Create the GitHub release and upload the zip
       # ----------------------------------------------------------------
       - name: Create GitHub release
         if: steps.check.outputs.skip == 'false'
