@@ -9122,7 +9122,7 @@ echo.
     <ClInclude Include="ClassAndFeatPane.h" />
     <ClInclude Include="ClassSpell.h" />
     <ClInclude Include="CMFCButtonEx.h" />
-    <ClInclude Include="CMFCVisualManagerOffice2007DarkMode.h" />
+    <ClInclude Include="CDDOVisualManager.h" />
     <ClInclude Include="DDOFormView.h" />
     <ClInclude Include="DDODialog.h" />
     <ClInclude Include="ComboBoxTooltip.h" />
@@ -9456,7 +9456,7 @@ makehm /h /a afxhh.h IDW_,HIDW_,0x50000 "%(FullPath)" &gt;&gt; "hlp\HTMLDefines.
     <ClCompile Include="ClassAndFeatPane.cpp" />
     <ClCompile Include="ClassSpell.cpp" />
     <ClCompile Include="CMFCButtonEx.cpp" />
-    <ClCompile Include="CMFCVisualManagerOffice2007DarkMode.cpp" />
+    <ClCompile Include="CDDOVisualManager.cpp" />
     <ClCompile Include="DDOFormView.cpp" />
     <ClCompile Include="DDODialog.cpp" />
     <ClCompile Include="ComboBoxTooltip.cpp" />

@@ -35,7 +35,7 @@
 #include "StancesPane.h"
 #include "CItemImageDialog.h"
 #include "CWeaponImageDialog.h"
-#include "CMFCVisualManagerOffice2007DarkMode.h"
+#include "CDDOVisualManager.h"
 #include "WikiLinkDlg.h"
 
 #ifdef _DEBUG
@@ -107,9 +107,7 @@ CMainFrame::CMainFrame() :
     m_bWikiProcessing(false)
 {
     CopyDefaultIniToDDOBuilderIni();
-    theApp.m_nAppLook = theApp.GetInt(
-            _T("ApplicationLook"),
-            ID_VIEW_APPLOOK_OFF_2007_BLACK);
+    theApp.m_nAppLook = ID_VIEW_APPLOOK_OFF_2007_BLACK; // kept for registry compat; ignored by new engine
 }
 
 CMainFrame::~CMainFrame()
@@ -129,8 +127,16 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
     AfxGetApp()->m_pMainWnd = this;
 
     BOOL bNameValid;
-    // set the visual manager and style based on persisted value
-    OnApplicationLook(theApp.m_nAppLook);
+    // Install the DDO visual engine and enable Win32 dark title bar.
+    CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CDDOVisualManager));
+    CDockingManager::SetDockingMode(DT_SMART);
+    {
+        BOOL bDark = TRUE;
+        ::DwmSetWindowAttribute(
+            GetSafeHwnd(),
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            &bDark, sizeof(bDark));
+    }
 
     if (!m_wndMenuBar.Create(this))
     {
@@ -447,93 +453,10 @@ LRESULT CMainFrame::OnToolbarCreateNew(WPARAM wp,LPARAM lp)
     return lres;
 }
 
-void CMainFrame::OnApplicationLook(UINT id)
+void CMainFrame::OnApplicationLook(UINT /*id*/)
 {
-    CWaitCursor wait;
-    BOOL bDark = FALSE;
-
-    theApp.m_nAppLook = id;
-
-    switch (theApp.m_nAppLook)
-    {
-    case ID_VIEW_APPLOOK_WIN_2000:
-        CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManager));
-        break;
-
-    case ID_VIEW_APPLOOK_OFF_XP:
-        CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerOfficeXP));
-        break;
-
-    case ID_VIEW_APPLOOK_WIN_XP:
-        CMFCVisualManagerWindows::m_b3DTabsXPTheme = TRUE;
-        CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerWindows));
-        break;
-
-    case ID_VIEW_APPLOOK_OFF_2003:
-        CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerOffice2003));
-        CDockingManager::SetDockingMode(DT_SMART);
-        break;
-
-    case ID_VIEW_APPLOOK_VS_2005:
-        CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerVS2005));
-        CDockingManager::SetDockingMode(DT_SMART);
-        break;
-
-    case ID_VIEW_APPLOOK_VS_2008:
-        CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerVS2008));
-        CDockingManager::SetDockingMode(DT_SMART);
-        break;
-
-    case ID_VIEW_APPLOOK_WINDOWS_7:
-        CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerWindows7));
-        CDockingManager::SetDockingMode(DT_SMART);
-        break;
-
-    default:
-        {
-            switch (theApp.m_nAppLook)
-            {
-            case ID_VIEW_APPLOOK_OFF_2007_BLUE:
-                CMFCVisualManagerOffice2007::SetStyle(CMFCVisualManagerOffice2007::Office2007_LunaBlue);
-                break;
-
-            case ID_VIEW_APPLOOK_OFF_2007_BLACK:
-                CMFCVisualManagerOffice2007::SetStyle(CMFCVisualManagerOffice2007::Office2007_ObsidianBlack);
-                bDark = TRUE;
-                break;
-
-            case ID_VIEW_APPLOOK_OFF_2007_SILVER:
-                CMFCVisualManagerOffice2007::SetStyle(CMFCVisualManagerOffice2007::Office2007_Silver);
-                break;
-
-            case ID_VIEW_APPLOOK_OFF_2007_AQUA:
-                CMFCVisualManagerOffice2007::SetStyle(CMFCVisualManagerOffice2007::Office2007_Aqua);
-                break;
-            }
-
-            // Always use immersive dark mode for the Win32 title bar when any
-            // Office-2007 style is active, since our DDO palette is dark.
-            BOOL bForceDark = TRUE;
-            ::DwmSetWindowAttribute(
-                GetSafeHwnd(),
-                DWMWA_USE_IMMERSIVE_DARK_MODE,
-                &bForceDark,
-                sizeof(bForceDark));
-            CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerOffice2007DarkMode));
-            CDockingManager::SetDockingMode(DT_SMART);
-            // Apply the DDO colour palette regardless of which Office-2007
-            // sub-style was selected; our overrides supersede them all.
-            {
-                CMFCVisualManager* pVisMan = CMFCVisualManager::GetInstance();
-                CMFCVisualManagerOffice2007DarkMode* pDarkVisMan =
-                    dynamic_cast<CMFCVisualManagerOffice2007DarkMode*>(pVisMan);
-                if (pDarkVisMan != nullptr)
-                    pDarkVisMan->UpdateColours();
-            }
-        }
-    }
-    // notify all windows that the theme has changed
-    // do the same for all docked windows also
+    // The DDO visual engine is the only look – no switching.
+    // Notify views so they can refresh any theme-dependent state.
     CDocument* pDoc = GetActiveDocument();
     if (pDoc != NULL)
     {
@@ -541,22 +464,16 @@ void CMainFrame::OnApplicationLook(UINT id)
         while (pos != NULL)
         {
             CView* pView = pDoc->GetNextView(pos);
-            // Treat any Office-2007 variant as dark so panes use light text
-            BOOL bIsDark = (bDark || theApp.m_nAppLook == ID_VIEW_APPLOOK_OFF_2007_BLUE
-                            || theApp.m_nAppLook == ID_VIEW_APPLOOK_OFF_2007_SILVER
-                            || theApp.m_nAppLook == ID_VIEW_APPLOOK_OFF_2007_AQUA);
-            pView->SendMessage(UWM_THEME_CHANGED, bIsDark, 0L);
+            pView->SendMessage(UWM_THEME_CHANGED, TRUE /*bDark*/, 0L);
         }
     }
-
     RedrawWindow(NULL, NULL, RDW_ALLCHILDREN | RDW_INVALIDATE | RDW_UPDATENOW | RDW_FRAME | RDW_ERASE);
-
-    theApp.WriteInt(_T("ApplicationLook"), theApp.m_nAppLook);
 }
 
 void CMainFrame::OnUpdateApplicationLook(CCmdUI* pCmdUI)
 {
-    pCmdUI->SetRadio(theApp.m_nAppLook == pCmdUI->m_nID);
+    // Single DDO look is always active; disable all the old look-switcher items.
+    pCmdUI->Enable(FALSE);
 }
 
 BOOL CMainFrame::LoadFrame(UINT nIDResource, DWORD dwDefaultStyle, CWnd* pParentWnd, CCreateContext* pContext)
