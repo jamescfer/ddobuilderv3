@@ -287,11 +287,6 @@ BOOL CMainFrame::CreateDockingWindows()
             AFX_IDW_DOCKBAR_BOTTOM);
     pGrantedFeatsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
 
-    // Tab all bottom-strip panes into the Log host
-    pStancesPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
-    pAutomaticFeatsPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
-    pGrantedFeatsPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
-
     // ---- Right column: ClassAndLevel group + Enhancements group + Breakdowns
     CCustomDockablePane * pClassAndLevel = CreateDockablePane(
             "Class and Levels",
@@ -333,12 +328,6 @@ BOOL CMainFrame::CreateDockingWindows()
             AFX_IDW_DOCKBAR_RIGHT);
     pSpellsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
 
-    // Tab leveling panes into ClassAndLevel host
-    pSkills->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
-    pEquipmentPane->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
-    pSpellsPane->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
-    pSpecialFeats->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
-
     CCustomDockablePane* pEnhancementsPane = CreateDockablePane(
             "Enhancements",
             GetActiveDocument(),
@@ -362,10 +351,6 @@ BOOL CMainFrame::CreateDockingWindows()
             ID_DOCK_DESTINY,
             AFX_IDW_DOCKBAR_RIGHT);
     pDestinyPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
-
-    // Tab enhancement panes into Enhancements host
-    pReaperEnhancementsPane->AttachToTabWnd(pEnhancementsPane, DM_UNKNOWN, FALSE);
-    pDestinyPane->AttachToTabWnd(pEnhancementsPane, DM_UNKNOWN, FALSE);
 
     // Breakdowns docks to the right on its own
     // has to be created before builds pane for correct operation on build switch/load
@@ -593,7 +578,7 @@ BOOL CMainFrame::LoadFrame(UINT nIDResource, DWORD dwDefaultStyle, CWnd* pParent
 
     // If the coded layout version has changed since the user last ran the app,
     // force the new default layout to become active and persist it as "Workspace".
-    const int c_layoutVersion = 3;
+    const int c_layoutVersion = 4;
     int nSavedVersion = theApp.GetProfileInt(_T("Settings"), _T("LayoutVersion"), 0);
     if (nSavedVersion != c_layoutVersion)
     {
