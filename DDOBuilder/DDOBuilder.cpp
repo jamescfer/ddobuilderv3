@@ -33,6 +33,7 @@
 #include "LocalSettingsStore.h"
 #include "LogPane.h"
 #include <HtmlHelp.h>
+#include "DDOLog.h"
 
 // CDDOBuilderApp
 
@@ -116,6 +117,16 @@ BOOL CDDOBuilderApp::InitInstance()
     InitCommonControlsEx(&InitCtrls);
 
     CWinAppEx::InitInstance();
+
+    // Open the file logger – derive the exe directory from m_iniFileFilename
+    {
+        std::string exeDir = m_iniFileFilename;
+        size_t lastSlash = exeDir.find_last_of("\\/");
+        if (lastSlash != std::string::npos)
+            exeDir = exeDir.substr(0, lastSlash + 1);
+        DDO_LogOpen(exeDir.c_str());
+    }
+    LOG_INFO("DDOBuilder InitInstance started");
 
     // Initialize OLE libraries
     if (!AfxOleInit())
@@ -211,6 +222,7 @@ BOOL CDDOBuilderApp::InitInstance()
 
     NotifyLoadComplete();
     GetLog().AddLogEntry("Ready");
+    LOG_INFO("DDOBuilder InitInstance complete – application ready");
 
     m_dwHtmlHelpCookie = NULL;
     ::HtmlHelp(NULL, NULL, HH_INITIALIZE, (DWORD)&m_dwHtmlHelpCookie); // Cookie returned by Hhctrl.ocx used to uninitialise
@@ -220,6 +232,7 @@ BOOL CDDOBuilderApp::InitInstance()
 
 int CDDOBuilderApp::ExitInstance()
 {
+    LOG_INFO("DDOBuilder ExitInstance – shutting down");
     m_bKillItemLoadThread = true;
     // wait for the load item thread to terminate if closed during start up
     while (m_bItemLoadThreadRunning)
@@ -235,6 +248,7 @@ int CDDOBuilderApp::ExitInstance()
     // release the COM library
     CoUninitialize();
 
+    DDO_LogClose();
     return CWinAppEx::ExitInstance();
 }
 
