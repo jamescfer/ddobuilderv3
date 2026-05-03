@@ -239,7 +239,7 @@ LRESULT CDDOBuilderView::OnLoadComplete(WPARAM, LPARAM)
 LRESULT CDDOBuilderView::OnThemeChanged(WPARAM wParam, LPARAM)
 {
     // wParam = 1 for dark mode, else = 0 for all others
-    bool bDark = (wParam != 0);
+    UNREFERENCED_PARAMETER(wParam);
     COLORREF clrText = CLR_DDO_TEXT;
     m_staticBuildDescription.SetTextColour(clrText);
     m_staticAvailableSpend.SetTextColour(clrText);

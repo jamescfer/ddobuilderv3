@@ -174,6 +174,8 @@ void CMFCVisualManagerOffice2007DarkMode::OnFillBarBackground(
         TRIVERTEX tv[2];
         tv[0].x     = rectClient.left;
         tv[0].y     = rectClient.top;
+#pragma warning(push)
+#pragma warning(disable: 4310)
         tv[0].Red   = (COLOR16)((WORD)GetRValue(CLR_DDO_CAP_TOP)  << 8);
         tv[0].Green = (COLOR16)((WORD)GetGValue(CLR_DDO_CAP_TOP)  << 8);
         tv[0].Blue  = (COLOR16)((WORD)GetBValue(CLR_DDO_CAP_TOP)  << 8);
@@ -183,6 +185,7 @@ void CMFCVisualManagerOffice2007DarkMode::OnFillBarBackground(
         tv[1].Red   = (COLOR16)((WORD)GetRValue(CLR_DDO_CAP_BTM) << 8);
         tv[1].Green = (COLOR16)((WORD)GetGValue(CLR_DDO_CAP_BTM) << 8);
         tv[1].Blue  = (COLOR16)((WORD)GetBValue(CLR_DDO_CAP_BTM) << 8);
+#pragma warning(pop)
         tv[1].Alpha = 0;
         GRADIENT_RECT gr = { 0, 1 };
         ::GradientFill(pDC->GetSafeHdc(), tv, 2, &gr, 1, GRADIENT_FILL_RECT_V);
