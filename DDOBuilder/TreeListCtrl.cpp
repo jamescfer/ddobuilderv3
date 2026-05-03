@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "TreeListCtrl.h"
+#include "DDOTheme.h"
 #include "MemoryDC.h"
 
 using MfcControls::CTreeListCtrl;
@@ -161,7 +162,7 @@ BOOL CTreeListCtrl::EnableWindow(BOOL bEnable)
 {
     m_Header.EnableWindow(bEnable);
     m_Tree.EnableWindow(bEnable);
-    m_Tree.SetBkColor(GetSysColor(bEnable ? COLOR_WINDOW: COLOR_3DFACE)); // enabled / disabled colour
+    m_Tree.SetBkColor(bEnable ? CLR_DDO_BG_DARK : CLR_DDO_BG_DARKEST);
     return CWnd::EnableWindow(bEnable);
 }
 
@@ -821,7 +822,7 @@ BOOL CTreeListCtrl::OnEraseBkgnd(CDC *  pDC)
 
     CRect clip;
     pDC->GetClipBox(&clip);
-    pDC->FillSolidRect(clip, GetSysColor(COLOR_WINDOW));
+    pDC->FillSolidRect(clip, CLR_DDO_BG_DARK);
 
     pDC->RestoreDC(-1);
 
@@ -1004,10 +1005,10 @@ using MfcControls::CTLItem;
 
 CTLItem::CTLItem()
 {
-    m_cEnding = '¶';
+    m_cEnding = 'ï¿½';
     m_itemString = "";
     m_Bold = FALSE;
-    m_Color = ::GetSysColor(COLOR_WINDOWTEXT);
+    m_Color = CLR_DDO_TEXT;
 }
 
 CTLItem::CTLItem(CTLItem &copyItem)
@@ -1132,7 +1133,7 @@ CTlcTree::CTlcTree()
     m_nColumns = m_nColumnsWidth = 0;
     m_nOffset = 0;
     m_selectedItem=NULL;
-    m_wndColor = GetSysColor(COLOR_WINDOW);
+    m_wndColor = CLR_DDO_BG_DARK;
     m_pHeader = NULL;
     m_nItems = 0;
     m_nHoverTimerID = 0;
@@ -1170,7 +1171,7 @@ BOOL CTlcTree::OnEraseBkgnd(CDC *  pDC)
 
     CRect clip;
     pDC->GetClipBox(&clip);
-    pDC->FillSolidRect(clip, GetSysColor(COLOR_WINDOW));
+    pDC->FillSolidRect(clip, CLR_DDO_BG_DARK);
 
     pDC->RestoreDC(-1);
 
@@ -1506,7 +1507,7 @@ void CTlcTree::OnPaint()
                                 GetColumnAlign(i));
                     }
 
-                    memDc.SetTextColor(::GetSysColor (COLOR_WINDOWTEXT ));
+                    memDc.SetTextColor(CLR_DDO_TEXT);
 
                     if(pItem->Bold())
                     {
@@ -1528,7 +1529,7 @@ void CTlcTree::OnPaint()
 
                     // If the item is selected, paint the rectangle with the system color
                     // COLOR_HIGHLIGHT
-                    COLORREF m_highlightColor = ::GetSysColor (COLOR_HIGHLIGHT);
+                    COLORREF m_highlightColor = CLR_DDO_SELECT;
                     CBrush brush(m_highlightColor);
                     memDc.FillRect (rect, &brush);
 
@@ -1536,7 +1537,7 @@ void CTlcTree::OnPaint()
                     memDc.DrawFocusRect (rect);
                     pItem = (CTLItem *)CTreeCtrl::GetItemData(hItem);
                     memDc.SetBkColor(m_highlightColor);
-                    memDc.SetTextColor(::GetSysColor (COLOR_HIGHLIGHTTEXT));
+                    memDc.SetTextColor(CLR_DDO_GOLD_BRIGHT);
 
                     if(pItem->Bold())
                     {
