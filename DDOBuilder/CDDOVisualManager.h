@@ -19,9 +19,6 @@ public:
         CRect rectClient, CRect rectClip,
         BOOL bNCArea = FALSE) override;
 
-    virtual void OnDrawBarBorder(
-        CDC* pDC, CBasePane* pBar, CRect& rect) override;
-
     virtual void OnDrawSeparator(
         CDC* pDC, CBasePane* pBar, CRect rect, BOOL bHorz) override;
 
@@ -57,17 +54,10 @@ public:
         CDC* pDC, CMFCToolBarMenuButton* pButton,
         CRect rect, BOOL bHighlight, BOOL bIsRadio) override;
 
-    virtual void OnDrawMenuCheckMarkArea(
-        CDC* pDC, CMFCToolBarMenuButton* pButton,
-        CRect rect, BOOL bHighlight) override;
-
     // ---- Popup / floating panel background ------------------------------
     virtual void OnFillPopupWindowBackground(CDC* pDC, CRect rect) override;
 
     // ---- Tabs -----------------------------------------------------------
-    virtual void OnDrawTabsFrame(
-        CDC* pDC, CMFCBaseTabCtrl* pTabWnd, CRect rectClient) override;
-
     virtual void OnEraseTabsArea(
         CDC* pDC, CRect rect, const CMFCBaseTabCtrl* pTabWnd) override;
 
@@ -89,32 +79,8 @@ public:
         BOOL bIsDropped, BOOL bIsHighlighted,
         CMFCToolBarComboBoxButton* pButton) override;
 
-    virtual void OnFillComboBoxItem(
-        CDC* pDC, CWnd* pWnd, CRect rect, BOOL bIsHighligheted) override;
-
-    // ---- Status bar -----------------------------------------------------
-    virtual void OnDrawStatusBarPaneBorder(
-        CDC* pDC, CMFCStatusBar* pBar,
-        CRect rectPane, int iPane, UINT nStyle) override;
-
-    // ---- Scroll bars ----------------------------------------------------
-    virtual void OnScrollBarDrawThumb(
-        CDC* pDC, CMFCScrollBar* pScrollBar,
-        CRect rect, BOOL bHorz,
-        BOOL bHighlighted, BOOL bPressed) override;
-
-    virtual void OnScrollBarDrawButton(
-        CDC* pDC, CMFCScrollBar* pScrollBar,
-        CRect rect, BOOL bHorz,
-        BOOL bHighlighted, BOOL bPressed, BOOL bFirst) override;
-
-    virtual void OnScrollBarFillBackground(
-        CDC* pDC, CMFCScrollBar* pScrollBar,
-        CRect rect, BOOL bHorz,
-        BOOL bHighlighted, BOOL bPressed, BOOL bFirst) override;
-
     // ---- System color refresh -------------------------------------------
-    virtual BOOL OnUpdateSystemColors() override;
+    virtual void OnUpdateSystemColors() override;
 
 private:
     CBrush m_brDarkest;
