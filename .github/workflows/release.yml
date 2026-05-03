@@ -1,0 +1,117 @@
+name: Auto Release on Version Bump
+
+# Runs whenever BuildInfo.h or VERSION changes on main.
+# If the version tag doesn't already exist, creates a tag and GitHub release
+# with an auto-generated changelog from the git log.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - BuildInfo.h
+      - VERSION
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create release if version changed
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history needed for changelog + tag checks
+
+      # ------------------------------------------------------------------
+      # Parse the four version components out of BuildInfo.h and write them
+      # back to VERSION so both files stay in sync.
+      # ------------------------------------------------------------------
+      - name: Read version from BuildInfo.h
+        id: ver
+        run: |
+          MAJOR=$(grep -m1 'BUILDINFO_VERSION_MAJOR' BuildInfo.h | grep -oE '[0-9]+$')
+          MINOR=$(grep -m1 'BUILDINFO_VERSION_MINOR' BuildInfo.h | grep -oE '[0-9]+$')
+          MODIF=$(grep -m1 'BUILDINFO_VERSION_MODIF' BuildInfo.h | grep -oE '[0-9]+$')
+          BUILD=$(grep -m1 'BUILDINFO_VERSION_BUILD' BuildInfo.h | grep -oE '[0-9]+$')
+
+          TAG="v${MAJOR}.${MINOR}.${MODIF}.${BUILD}"
+          NAME="DDOBuilder ${MAJOR}.${MINOR}.${MODIF}.${BUILD}"
+
+          echo "tag=${TAG}"   >> "$GITHUB_OUTPUT"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+
+          # Keep VERSION file in sync
+          printf '%s.%s.%s.%s\n' "$MAJOR" "$MINOR" "$MODIF" "$BUILD" > VERSION
+          echo "Detected version: ${TAG}"
+
+      # ------------------------------------------------------------------
+      # Skip everything if this tag was already released (e.g. re-running
+      # the workflow on an unrelated commit that also touched BuildInfo.h).
+      # ------------------------------------------------------------------
+      - name: Check whether release already exists
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${{ steps.ver.outputs.tag }}" --repo "${{ github.repository }}" \
+              > /dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Release ${{ steps.ver.outputs.tag }} already exists — skipping."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "No existing release for ${{ steps.ver.outputs.tag }} — will create one."
+          fi
+
+      # ------------------------------------------------------------------
+      # Build the changelog: everything since the last semver tag, or the
+      # last 50 commits if this is the first release.
+      # ------------------------------------------------------------------
+      - name: Build changelog
+        if: steps.check.outputs.skip == 'false'
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]' | head -1)
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "Changelog since ${PREV_TAG}"
+            git log "${PREV_TAG}..HEAD" \
+              --pretty=format:"- %s" \
+              --no-merges \
+              | head -100 > /tmp/changelog.md
+          else
+            echo "First release — using last 50 commits"
+            git log HEAD \
+              --pretty=format:"- %s" \
+              --no-merges \
+              | head -50 > /tmp/changelog.md
+          fi
+
+          # Prepend a header
+          {
+            echo "## What's changed"
+            echo ""
+            cat /tmp/changelog.md
+          } > /tmp/release_notes.md
+
+          echo "--- Release notes preview ---"
+          cat /tmp/release_notes.md
+
+      # ------------------------------------------------------------------
+      # Create the tag and GitHub release.
+      # ------------------------------------------------------------------
+      - name: Create GitHub release
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.ver.outputs.tag }}" \
+            --repo     "${{ github.repository }}" \
+            --title    "${{ steps.ver.outputs.name }}" \
+            --notes-file /tmp/release_notes.md \
+            --target   main
+
+          echo "✓ Release ${{ steps.ver.outputs.tag }} created."
