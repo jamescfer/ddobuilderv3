@@ -1,8 +1,11 @@
-import { CharacterProvider, useCharacter } from './context/CharacterContext'
+import { CharacterProvider } from './context/CharacterContext'
 import Layout from './components/layout/Layout'
+import CharacterInfo from './components/builder/CharacterInfo'
 import RaceSelector from './components/builder/RaceSelector'
 import ClassSelector from './components/builder/ClassSelector'
 import AbilityScores from './components/builder/AbilityScores'
+import StatsPanel from './components/builder/StatsPanel'
+import FeatSlots from './components/builder/FeatSlots'
 import styles from './App.module.css'
 
 export default function App() {
@@ -11,44 +14,17 @@ export default function App() {
       <Layout>
         <div className={styles.builder}>
           <section className={styles.sidebar}>
+            <CharacterInfo />
             <RaceSelector />
             <ClassSelector />
             <AbilityScores />
+            <StatsPanel />
           </section>
           <section className={styles.content}>
-            <div className="panel">
-              <div className="panel-header">Character Summary</div>
-              <div className="panel-body">
-                <CharacterSummary />
-              </div>
-            </div>
+            <FeatSlots />
           </section>
         </div>
       </Layout>
     </CharacterProvider>
-  )
-}
-
-function CharacterSummary() {
-  const { build } = useCharacter()
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <Row label="Name" value={build.name || '—'} />
-      <Row label="Race" value={build.race || '—'} />
-      <Row label="Alignment" value={build.alignment} />
-      <Row label="Total Level" value={String(build.totalLevel)} />
-      {build.classes.filter(c => c.name).map((c, i) => (
-        <Row key={i} label={`Class ${i + 1}`} value={`${c.name} ${c.levels}`} />
-      ))}
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', gap: 8 }}>
-      <span style={{ color: 'var(--color-text-secondary)', width: 90, flexShrink: 0 }}>{label}</span>
-      <span>{value}</span>
-    </div>
   )
 }

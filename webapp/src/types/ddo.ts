@@ -197,6 +197,7 @@ export interface CharacterBuild {
   baseAbilities: AbilityScores
   abilityLevelUps: Partial<Record<4 | 8 | 12 | 16 | 20 | 24 | 28 | 32 | 36 | 40, Ability>>
   purchasedPoints: number
+  featChoices: Record<string, string>
 }
 
 export function emptyBuild(): CharacterBuild {
@@ -214,6 +215,7 @@ export function emptyBuild(): CharacterBuild {
     baseAbilities: { Strength: 8, Dexterity: 8, Constitution: 8, Intelligence: 8, Wisdom: 8, Charisma: 8 },
     abilityLevelUps: {},
     purchasedPoints: 0,
+    featChoices: {},
   }
 }
 

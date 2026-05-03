@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { CharacterBuild, Ability, AbilityScores } from '../types/ddo'
+import type { CharacterBuild, Ability } from '../types/ddo'
 import { emptyBuild } from '../types/ddo'
 
 type Action =
@@ -10,6 +10,7 @@ type Action =
   | { type: 'SET_CLASS_LEVELS'; index: 0 | 1 | 2; levels: number }
   | { type: 'SET_ABILITY'; ability: Ability; score: number }
   | { type: 'SET_ABILITY_LEVELUP'; level: 4 | 8 | 12 | 16 | 20 | 24 | 28 | 32 | 36 | 40; ability: Ability }
+  | { type: 'SET_FEAT'; slotKey: string; featName: string }
   | { type: 'RESET' }
 
 function reducer(state: CharacterBuild, action: Action): CharacterBuild {
@@ -35,6 +36,8 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       return { ...state, baseAbilities: { ...state.baseAbilities, [action.ability]: action.score } }
     case 'SET_ABILITY_LEVELUP':
       return { ...state, abilityLevelUps: { ...state.abilityLevelUps, [action.level]: action.ability } }
+    case 'SET_FEAT':
+      return { ...state, featChoices: { ...state.featChoices, [action.slotKey]: action.featName } }
     case 'RESET':
       return emptyBuild()
     default:
