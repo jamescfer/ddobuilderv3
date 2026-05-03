@@ -567,7 +567,10 @@ CCustomDockablePane* CMainFrame::CreateDockablePane(
             15UL,
             &createContext);
     if (!ok)
-        LOG_ERROR("CreateDockablePane: Create() failed for \"%s\"", paneTitle);
+    {
+        LOG_ERROR("CreateDockablePane: Create() failed for \"%s\" – aborting pane", paneTitle);
+        return pane;   // pane returned but m_view==NULL; SetDocumentAndCharacter guards against this
+    }
 
     pane->EnableDocking(CBRS_ALIGN_ANY);
     LOG_INFO("CreateDockablePane: \"%s\" docking (dockBarID=%u)", paneTitle, nDockBarID);

@@ -2,6 +2,7 @@
 //
 #include "stdafx.h"
 #include "CustomDockablePane.h"
+#include "DDOLog.h"
 #include "CustomTabbedPane.h"
 #include "CustomMultiPaneFrameWnd.h"
 #include "CustomContextMenuManager.h"
@@ -56,21 +57,24 @@ int CCustomDockablePane::OnCreate(LPCREATESTRUCT lpCreateStruct)
         return -1;
     }
 
-    CCreateContext* createContext = (CCreateContext*)(lpCreateStruct->lpCreateParams);
-    CRuntimeClass* viewRuntimeClass = createContext->m_pNewViewClass;
+    if (!lpCreateStruct->lpCreateParams)
+        return -1;
 
-    CView* theView = (CView*)(viewRuntimeClass->CreateObject());
+    CCreateContext* createContext = (CCreateContext*)(lpCreateStruct->lpCreateParams);
+    if (!createContext->m_pNewViewClass)
+        return -1;
+
+    CView* theView = (CView*)(createContext->m_pNewViewClass->CreateObject());
+    if (!theView)
+        return -1;
 
     CRect r;
     GetClientRect(r);
-    theView->Create(
-            0,
-            0,
-            WS_CHILD | WS_VISIBLE,
-            r,
-            this,
-            0,
-            createContext);
+    if (!theView->Create(0, 0, WS_CHILD | WS_VISIBLE, r, this, 0, createContext))
+    {
+        delete theView;
+        return -1;
+    }
     SetView(theView, true);
     theView->SendMessage(WM_INITIALUPDATE, 0, 0);
 
@@ -93,7 +97,8 @@ void CCustomDockablePane::SetDocumentAndCharacter(
 {
     m_document = pDoc;
     m_pCharacter = pCharacter;
-    m_view->SendMessage(UWM_NEW_DOCUMENT, (WPARAM)pDoc, (LPARAM)pCharacter);
+    if (m_view)
+        m_view->SendMessage(UWM_NEW_DOCUMENT, (WPARAM)pDoc, (LPARAM)pCharacter);
 }
 
 //---------------------------------------------------------------------------
@@ -138,7 +143,7 @@ BOOL CCustomDockablePane::OnCmdMsg(
 {
     BOOL handled = false;
 
-    if (IsWindow(m_view->GetSafeHwnd()))
+    if (m_view != NULL && IsWindow(m_view->GetSafeHwnd()))
     {
         handled = m_view->OnCmdMsg(nID, nCode, pExtra, pHandlerInfo);
     }
@@ -274,7 +279,7 @@ LRESULT CCustomDockablePane::OnHelpHitTest(WPARAM, LPARAM)
 void CCustomDockablePane::OnShowWindow(BOOL bShow, UINT nStatus)
 {
     CDockablePane::OnShowWindow(bShow, nStatus);
-    if (TRUE == bShow)
+    if (TRUE == bShow && m_view != NULL)
     {
         CRect rctWindow;
         GetClientRect(&rctWindow);
