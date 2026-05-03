@@ -28,7 +28,8 @@ void CCustomTabbedPane::DrawCaption(CDC* pDC, CRect rectCaption)
 {
     const int iconW = ::GetSystemMetrics(SM_CXSMICON);
     const int iconH = ::GetSystemMetrics(SM_CYSMICON);
-    const BOOL bActive = IsActive();
+    const CWnd* pFocus = GetFocus();
+    const BOOL bActive = (pFocus != NULL) && (pFocus == this || IsChild(pFocus));
 
     const COLORREF clrTop = bActive ? CLR_DDO_CAP_ACTIVE_TOP : CLR_DDO_CAP_TOP;
     const COLORREF clrBtm = bActive ? CLR_DDO_CAP_ACTIVE_BTM : CLR_DDO_CAP_BTM;
