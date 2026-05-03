@@ -1,8 +1,10 @@
 name: Auto Release on Version Bump
 
 # Fires when BuildInfo.h or VERSION changes on main.
-# Compiles a Release|Win32 build, bundles it with the data files and
-# required DLLs, and publishes a GitHub release with the zip attached.
+# VERSION is the single source of truth for the release version number.
+# The workflow reads VERSION, patches BuildInfo.h so the compiled binary
+# carries the correct version, then compiles, bundles, and publishes a
+# GitHub release with the zip attached.
 
 on:
   push:
@@ -30,16 +32,24 @@ jobs:
           fetch-depth: 0
 
       # ----------------------------------------------------------------
-      # 2. Parse the four version parts from BuildInfo.h and sync VERSION
+      # 2. Read version from VERSION file (single source of truth).
+      #    If VERSION is e.g. "2.0.0.84", parse into MAJOR/MINOR/MODIF/BUILD
+      #    and patch BuildInfo.h so the compiled binary carries the right
+      #    version strings.
       # ----------------------------------------------------------------
-      - name: Read version from BuildInfo.h
+      - name: Read version and patch BuildInfo.h
         id: ver
         shell: bash
         run: |
-          MAJOR=$(grep -m1 'BUILDINFO_VERSION_MAJOR' BuildInfo.h | grep -oE '[0-9]+$')
-          MINOR=$(grep -m1 'BUILDINFO_VERSION_MINOR' BuildInfo.h | grep -oE '[0-9]+$')
-          MODIF=$(grep -m1 'BUILDINFO_VERSION_MODIF' BuildInfo.h | grep -oE '[0-9]+$')
-          BUILD=$(grep -m1 'BUILDINFO_VERSION_BUILD' BuildInfo.h | grep -oE '[0-9]+$')
+          VERSION_STR=$(cat VERSION | tr -d '[:space:]')
+          echo "VERSION file contains: ${VERSION_STR}"
+
+          IFS='.' read -r MAJOR MINOR MODIF BUILD <<< "$VERSION_STR"
+
+          if [[ -z "$MAJOR" || -z "$MINOR" || -z "$MODIF" || -z "$BUILD" ]]; then
+            echo "ERROR: VERSION file '${VERSION_STR}' is not in MAJOR.MINOR.MODIF.BUILD format"
+            exit 1
+          fi
 
           TAG="v${MAJOR}.${MINOR}.${MODIF}.${BUILD}"
           NAME="DDOBuilder ${MAJOR}.${MINOR}.${MODIF}.${BUILD}"
@@ -49,8 +59,14 @@ jobs:
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
           echo "zip=${ZIP}"   >> "$GITHUB_OUTPUT"
 
-          printf '%s.%s.%s.%s\n' "$MAJOR" "$MINOR" "$MODIF" "$BUILD" > VERSION
-          echo "Version detected: ${TAG}"
+          # Patch BuildInfo.h so the compiled .exe carries the correct version
+          sed -i "s/\(#define BUILDINFO_VERSION_MAJOR\s*\)[0-9]*/\1${MAJOR}/" BuildInfo.h
+          sed -i "s/\(#define BUILDINFO_VERSION_MINOR\s*\)[0-9]*/\1${MINOR}/" BuildInfo.h
+          sed -i "s/\(#define BUILDINFO_VERSION_MODIF\s*\)[0-9]*/\1${MODIF}/" BuildInfo.h
+          sed -i "s/\(#define BUILDINFO_VERSION_BUILD\s*\)[0-9]*/\1${BUILD}/" BuildInfo.h
+
+          echo "Patched BuildInfo.h to ${TAG}"
+          grep 'BUILDINFO_VERSION_' BuildInfo.h | grep -v BLDSTR | grep -v VV | grep -v '"'
 
       # ----------------------------------------------------------------
       # 3. Skip everything if this exact release already exists
@@ -98,9 +114,9 @@ jobs:
             /nologo
 
       # ----------------------------------------------------------------
-      # 7. Bundle runtime DLLs into Output\
+      # 6. Bundle runtime DLLs into Output\
       #    - msxml.dll  (project dependency, checked in under 3rdPartyLibraries)
-      #    - MFC / CRT  (Visual C++ 2019 x86 redistributables)
+      #    - MFC / CRT  (Visual C++ 2022 x86 redistributables)
       # ----------------------------------------------------------------
       - name: Bundle DLLs into Output
         if: steps.check.outputs.skip == 'false'
@@ -109,7 +125,7 @@ jobs:
           # Project-supplied DLL
           Copy-Item "3rdPartyLibraries\MicrosoftIncludes\msxml.dll" "Output\" -Force
 
-          # Visual C++ 2019 x86 redist DLLs (v142 toolset)
+          # Visual C++ x86 redist DLLs
           $vsBase = "C:\Program Files (x86)\Microsoft Visual Studio"
           $dlls   = @("mfc140.dll","msvcp140.dll","vcruntime140.dll","vcruntime140_1.dll")
 
@@ -143,7 +159,7 @@ jobs:
           Get-ChildItem "Output\" | Select-Object Name, Length
 
       # ----------------------------------------------------------------
-      # 8. Zip up the entire Output\ folder
+      # 7. Zip up the entire Output\ folder
       # ----------------------------------------------------------------
       - name: Create release zip
         if: steps.check.outputs.skip == 'false'
@@ -155,7 +171,7 @@ jobs:
           Write-Host "Created ${zip} ($([math]::Round($size,1)) MB)"
 
       # ----------------------------------------------------------------
-      # 9. Build a changelog from the git log since the previous tag
+      # 8. Build a changelog from the git log since the previous tag
       # ----------------------------------------------------------------
       - name: Build changelog
         if: steps.check.outputs.skip == 'false'
@@ -187,7 +203,7 @@ jobs:
           cat "$NOTES"
 
       # ----------------------------------------------------------------
-      # 10. Create the GitHub release and upload the zip
+      # 9. Create the GitHub release and upload the zip
       # ----------------------------------------------------------------
       - name: Create GitHub release
         if: steps.check.outputs.skip == 'false'
