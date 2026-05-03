@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "DestinyTreeDialog.h"
+#include "DDODialog.h"
 #include "GlobalSupportFunctions.h"
 #include "SelectionSelectDialog.h"
 #include "MouseHook.h"
@@ -99,7 +100,7 @@ void CDestinyTreeDialog::InitialiseStaticImages()
 
 #pragma warning(push)
 #pragma warning(disable: 4407) // warning C4407: cast between different pointer to member representations, compiler may generate incorrect code
-BEGIN_MESSAGE_MAP(CDestinyTreeDialog, CDialog)
+BEGIN_MESSAGE_MAP(CDestinyTreeDialog, CDDODialog)
     //{{AFX_MSG_MAP(CDestinyTreeDialog)
     ON_WM_ERASEBKGND()
     ON_WM_PAINT()
@@ -117,7 +118,7 @@ CDestinyTreeDialog::CDestinyTreeDialog(
         Character * pCharacter,
         const EnhancementTree & tree,
         TreeType type) :
-    CDialog(CDestinyTreeDialog::IDD, pParent),
+    CDDODialog(CDestinyTreeDialog::IDD, pParent),
     m_tree(tree),
     m_type(type),
     m_pCharacter(pCharacter),

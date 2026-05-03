@@ -1,8 +1,9 @@
 // AboutDlg.h
 //
 #include "Resource.h"
+#include "DDODialog.h"
 
-class CAboutDlg : public CDialogEx
+class CAboutDlg : public CDDODialogEx
 {
 public:
     CAboutDlg();

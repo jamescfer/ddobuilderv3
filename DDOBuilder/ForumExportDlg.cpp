@@ -1,6 +1,7 @@
 // ForumExportDlg.cpp
 //
 #include "stdafx.h"
+#include "DDODialog.h"
 #include "ForumExportDlg.h"
 #include "BreakdownItem.h"
 #include "BreakdownItemMRR.h"
@@ -39,7 +40,7 @@ namespace
 };
 
 CForumExportDlg::CForumExportDlg(Build* pBuild) :
-    CDialogEx(CForumExportDlg::IDD),
+    CDDODialogEx(CForumExportDlg::IDD),
     m_pBuild(pBuild),
     m_bPopulatingControl(false),
     m_exportType(0) // default to Forum BB code
@@ -81,7 +82,7 @@ void CForumExportDlg::DoDataExchange(CDataExchange* pDX)
     DDX_Control(pDX, IDC_BUTTON_DEMOTE, m_buttonMoveDown);
 }
 
-BEGIN_MESSAGE_MAP(CForumExportDlg, CDialogEx)
+BEGIN_MESSAGE_MAP(CForumExportDlg, CDDODialogEx)
     ON_NOTIFY(LVN_ITEMCHANGED, IDC_LIST_SECTIONS, OnItemchangedListConfigureExport)
     ON_BN_CLICKED(IDC_BUTTON_PROMOTE, OnMoveUp)
     ON_BN_CLICKED(IDC_BUTTON_DEMOTE, OnMoveDown)
@@ -959,7 +960,7 @@ void CForumExportDlg::AddSkills(std::stringstream& forumExport)
                 }
                 else
                 {
-                    // its a cross class skill, show in multiples of ½
+                    // its a cross class skill, show in multiples of ï¿½
                     text = "";
                     int fullRanks = (skillRanks[skill] / 2);
                     if (fullRanks > 0)
@@ -968,7 +969,7 @@ void CForumExportDlg::AddSkills(std::stringstream& forumExport)
                     }
                     if (skillRanks[skill] % 2 != 0)
                     {
-                        text += "½";
+                        text += "ï¿½";
                     }
                 }
                 forumExport.fill(' ');

@@ -5,10 +5,11 @@
 #include "SetBonusButton.h"
 #include "Character.h"
 #include "GlobalSupportFunctions.h"
+#include "DDOTheme.h"
 
 namespace
 {
-    COLORREF f_selectedColor = RGB(128, 0, 0);
+    COLORREF f_selectedColor = CLR_DDO_SELECT;
 }
 
 #pragma warning(push)
@@ -58,7 +59,7 @@ void CSetBonusButton::OnPaint()
     rect -= rect.TopLeft(); // convert to client rectangle
 
     // fill the background
-    pdc.FillSolidRect(rect, GetSysColor(COLOR_BTNFACE));
+    pdc.FillSolidRect(rect, CLR_DDO_BG_PANEL);
     m_image.TransparentBlt(
             pdc.GetSafeHdc(),
             3,

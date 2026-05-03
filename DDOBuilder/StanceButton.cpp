@@ -7,10 +7,11 @@
 #include "GlobalSupportFunctions.h"
 #include "StancesPane.h"
 #include "MainFrm.h"
+#include "DDOTheme.h"
 
 namespace
 {
-    COLORREF f_selectedColor = RGB(128, 0, 0);
+    COLORREF f_selectedColor = CLR_DDO_SELECT;
 }
 
 #pragma warning(push)
@@ -131,15 +132,15 @@ void CStanceButton::OnPaint()
     // fill the background
     if (m_bDisabled)
     {
-        pdc.FillSolidRect(rect, RGB(255, 0, 0));
+        pdc.FillSolidRect(rect, CLR_DDO_RED_DARK);
     }
     else if (m_bSelected)
     {
-        pdc.FillSolidRect(rect, GetSysColor(COLOR_HIGHLIGHT));
+        pdc.FillSolidRect(rect, CLR_DDO_ORANGE_DIM);
     }
     else
     {
-        pdc.FillSolidRect(rect, GetSysColor(COLOR_BTNFACE));
+        pdc.FillSolidRect(rect, CLR_DDO_BG_PANEL);
     }
     long size = static_cast<LONG>(32 * dScaleFactor);
     m_image.Draw(

@@ -1,11 +1,12 @@
 // AboutDlg.cpp
 //
 #include "stdafx.h"
+#include "DDODialog.h"
 #include "AboutDlg.h"
 #include "BuildInfo.h"
 #include "GlobalSupportFunctions.h"
 
-CAboutDlg::CAboutDlg() : CDialogEx(CAboutDlg::IDD)
+CAboutDlg::CAboutDlg() : CDDODialogEx(CAboutDlg::IDD)
 {
 }
 
@@ -221,7 +222,7 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
     m_bugReporters.SetSel((DWORD)-1);    // nothing starts selected
 }
 
-BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
+BEGIN_MESSAGE_MAP(CAboutDlg, CDDODialogEx)
 END_MESSAGE_MAP()
 
 

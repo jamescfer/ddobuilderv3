@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Resource.h"
+#include "DDODialog.h"
 #include "EnhancementTree.h"
 #include "InfoTip.h"
 #include "Build.h"
@@ -39,7 +40,7 @@ class EnhancementHitBox
 
 // this dialog handles buying and revoking enhancements from enhancement and reaper trees
 class CEnhancementTreeDialog :
-    public CDialog,
+    public CDDODialog,
     public LifeObserver,
     public BuildObserver
 {

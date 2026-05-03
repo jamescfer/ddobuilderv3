@@ -2,6 +2,7 @@
 //
 #include "stdafx.h"
 #include "FeatsClassControl.h"
+#include "DDOTheme.h"
 
 #include "AutomaticFeatsPane.h"
 #include "GlobalSupportFunctions.h"
@@ -17,11 +18,11 @@ namespace
 {
     const int c_FeatColumnWidth = 200;      // pixels
     const int c_dudLevel = MAX_BUILDER_LEVEL + 1;
-    COLORREF f_selectedColour = ::GetSysColor(COLOR_HIGHLIGHT);
-    COLORREF f_backgroundColour = ::GetSysColor(COLOR_BTNFACE); // grey
-    COLORREF f_backgroundColourDark = RGB(83, 83, 83);
-    COLORREF f_white = RGB(255, 255, 255);                      // white
-    COLORREF f_black = RGB(0, 0, 0);                            // black
+    COLORREF f_selectedColour       = CLR_DDO_SELECT;
+    COLORREF f_backgroundColour     = CLR_DDO_BG_DARK;
+    COLORREF f_backgroundColourDark = CLR_DDO_BG_DARKEST;
+    COLORREF f_white                = CLR_DDO_TEXT;
+    COLORREF f_black                = CLR_DDO_BG_DARKEST;
     const int c_NumComboItems = 28;                             // seems to show 27 items at this setting
 }
 
@@ -273,8 +274,8 @@ void CFeatsClassControl::OnPaint()
     memoryDc.FillRect(rctWindow, &normalBackgroundBrush);
     memoryDc.Draw3dRect(
             rctWindow,
-            bDarkMode ? ::GetSysColor(COLOR_BTNSHADOW) : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-            bDarkMode ? ::GetSysColor(COLOR_BTNHIGHLIGHT) : ::GetSysColor(COLOR_BTNSHADOW));
+            bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
+            bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
     memoryDc.SetTextColor(bDarkMode ? f_white : f_black);
 
     if (m_pCharacter != NULL)
@@ -336,8 +337,8 @@ size_t CFeatsClassControl::DrawTopLine(CDC* pDC)
         rctItem.right = rctItem.left + static_cast<LONG>(32 * dScaleFactor) + 3;
         pDC->Draw3dRect(
                 rctItem,
-                bDarkMode ? ::GetSysColor(COLOR_BTNSHADOW) : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-                bDarkMode ? ::GetSysColor(COLOR_BTNHIGHLIGHT) : ::GetSysColor(COLOR_BTNSHADOW));
+                bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
+                bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
         const std::string& ct = (m_pCharacter->ActiveBuild() != NULL)
                 ? m_pCharacter->ActiveBuild()->Class(cc)
                 : "Unknown";
@@ -365,8 +366,8 @@ size_t CFeatsClassControl::DrawTopLine(CDC* pDC)
         rctItem.right = rctItem.left + static_cast<int>(c_FeatColumnWidth * dScaleFactor);
         pDC->Draw3dRect(
                 rctItem,
-                bDarkMode ? ::GetSysColor(COLOR_BTNSHADOW) : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-                bDarkMode ? ::GetSysColor(COLOR_BTNHIGHLIGHT) : ::GetSysColor(COLOR_BTNSHADOW));
+                bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
+                bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
         CSize csText = pDC->GetTextExtent("1"); // just need the height of text
         pDC->TextOut(
                 rctItem.left,
@@ -396,8 +397,8 @@ size_t CFeatsClassControl::DrawTopLine(CDC* pDC)
             rctItem.right = rctItem.left + csText.cx;
             pDC->Draw3dRect(
                     rctItem,
-                    bDarkMode ? ::GetSysColor(COLOR_BTNSHADOW) : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-                    bDarkMode ? ::GetSysColor(COLOR_BTNHIGHLIGHT) : ::GetSysColor(COLOR_BTNSHADOW));
+                    bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
+                    bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
             pDC->TextOut(
                     rctItem.left,
                     rctItem.top + (rctItem.Height() - csText.cy) / 2,
@@ -418,8 +419,8 @@ size_t CFeatsClassControl::DrawTopLine(CDC* pDC)
             rctItem.right = rctItem.left + csText.cx;
             pDC->Draw3dRect(
                     rctItem,
-                    bDarkMode ? ::GetSysColor(COLOR_BTNSHADOW) : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-                    bDarkMode ? ::GetSysColor(COLOR_BTNHIGHLIGHT) : ::GetSysColor(COLOR_BTNSHADOW));
+                    bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
+                    bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
             pDC->TextOut(
                     rctItem.left,
                     rctItem.top + (rctItem.Height() - csText.cy) / 2,
@@ -492,8 +493,8 @@ size_t CFeatsClassControl::DrawLevelLine(
     }
     pDC->Draw3dRect(
             rctItem,
-            bDarkMode ? ::GetSysColor(COLOR_BTNSHADOW) : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-            bDarkMode ? ::GetSysColor(COLOR_BTNHIGHLIGHT) : ::GetSysColor(COLOR_BTNSHADOW));
+            bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
+            bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
     {
         CRect rctFill(rctItem);
         rctFill.DeflateRect(1, 1, 1, 1);
@@ -516,8 +517,8 @@ size_t CFeatsClassControl::DrawLevelLine(
         rctItem.right = m_classRects[cc].right;
         pDC->Draw3dRect(
                 rctItem,
-                bDarkMode ? ::GetSysColor(COLOR_BTNSHADOW) : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-                bDarkMode ? ::GetSysColor(COLOR_BTNHIGHLIGHT) : ::GetSysColor(COLOR_BTNSHADOW));
+                bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
+                bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
         CRect rctFill(rctItem);
         rctFill.DeflateRect(1, 1, 1, 1);
         pDC->FillRect(rctFill, &fillBrush);
@@ -569,8 +570,8 @@ size_t CFeatsClassControl::DrawLevelLine(
         rctItem.right = m_featRects[fc].right;
         pDC->Draw3dRect(
                 rctItem,
-                bDarkMode ? ::GetSysColor(COLOR_BTNSHADOW) : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-                bDarkMode ? ::GetSysColor(COLOR_BTNHIGHLIGHT) : ::GetSysColor(COLOR_BTNSHADOW));
+                bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
+                bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
         CRect rctFill(rctItem);
         rctFill.DeflateRect(1, 1, 1, 1);
         pDC->FillRect(rctFill, &fillBrush);
@@ -585,8 +586,8 @@ size_t CFeatsClassControl::DrawLevelLine(
             rctItem.right = m_statRects[stats].right;
             pDC->Draw3dRect(
                     rctItem,
-                    bDarkMode ? ::GetSysColor(COLOR_BTNSHADOW) : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-                    bDarkMode ? ::GetSysColor(COLOR_BTNHIGHLIGHT) : ::GetSysColor(COLOR_BTNSHADOW));
+                    bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
+                    bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
             CRect rctFill(rctItem);
             rctFill.DeflateRect(1, 1, 1, 1);
             pDC->FillRect(rctFill, &fillBrush);
@@ -619,8 +620,8 @@ size_t CFeatsClassControl::DrawLevelLine(
             rctItem.right = m_statRects[spellLevel].right;
             pDC->Draw3dRect(
                     rctItem,
-                    bDarkMode ? ::GetSysColor(COLOR_BTNSHADOW) : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-                    bDarkMode ? ::GetSysColor(COLOR_BTNHIGHLIGHT) : ::GetSysColor(COLOR_BTNSHADOW));
+                    bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
+                    bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
             CRect rctFill(rctItem);
             rctFill.DeflateRect(1, 1, 1, 1);
             pDC->FillRect(rctFill, &fillBrush);

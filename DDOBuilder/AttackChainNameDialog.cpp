@@ -2,18 +2,19 @@
 //
 #include "stdafx.h"
 #include "AttackChainNameDialog.h"
+#include "DDODialog.h"
 
 #include "Character.h"
 
 // CAttackChainNameDialog dialog
 
-IMPLEMENT_DYNAMIC(CAttackChainNameDialog, CDialog)
+IMPLEMENT_DYNAMIC(CAttackChainNameDialog, CDDODialog)
 
 CAttackChainNameDialog::CAttackChainNameDialog(
         CWnd* pParent,
         const Character* pCharacter,
         const std::string& defaultName) :
-    CDialog(CAttackChainNameDialog::IDD, pParent),
+    CDDODialog(CAttackChainNameDialog::IDD, pParent),
     m_pCharacter(pCharacter),
     m_name(defaultName)
 {
@@ -29,7 +30,7 @@ void CAttackChainNameDialog::DoDataExchange(CDataExchange* pDX)
     DDX_Control(pDX, IDC_EDIT_GEAR_SET_NAME, m_editAttackChainName);
 }
 
-BEGIN_MESSAGE_MAP(CAttackChainNameDialog, CDialog)
+BEGIN_MESSAGE_MAP(CAttackChainNameDialog, CDDODialog)
 END_MESSAGE_MAP()
 
 // CAttackChainNameDialog message handlers
