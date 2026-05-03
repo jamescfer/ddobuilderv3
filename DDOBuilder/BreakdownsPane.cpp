@@ -44,10 +44,10 @@ namespace
     const char * f_treeSizeEntry = "TreeSize";
 }
 
-IMPLEMENT_DYNCREATE(CBreakdownsPane, CFormView)
+IMPLEMENT_DYNCREATE(CBreakdownsPane, CDDOFormView)
 
 CBreakdownsPane::CBreakdownsPane() :
-    CFormView(CBreakdownsPane::IDD),
+    CDDOFormView(CBreakdownsPane::IDD),
     m_pCharacter(NULL),
     m_itemBreakdownTree(true, true),
     m_bDraggingDivider(false),
@@ -84,7 +84,7 @@ void CBreakdownsPane::DoDataExchange(CDataExchange* pDX)
 
 #pragma warning(push)
 #pragma warning(disable: 4407) // warning C4407: cast between different pointer to member representations, compiler may generate incorrect code
-BEGIN_MESSAGE_MAP(CBreakdownsPane, CFormView)
+BEGIN_MESSAGE_MAP(CBreakdownsPane, CDDOFormView)
     ON_WM_SIZE()
     ON_REGISTERED_MESSAGE(UWM_NEW_DOCUMENT, OnNewDocument)
     ON_REGISTERED_MESSAGE(UWM_LOAD_COMPLETE, OnLoadComplete)
@@ -207,7 +207,7 @@ void CBreakdownsPane::OnInitialUpdate()
     if (!m_bHadInitialUpdate)
     {
         m_bHadInitialUpdate = true;
-        CFormView::OnInitialUpdate();
+        CDDOFormView::OnInitialUpdate();
 
         m_treeSizePercent = AfxGetApp()->GetProfileInt(f_treeSizeKey, f_treeSizeEntry, 75);
         m_itemBreakdownTree.CreateEx(

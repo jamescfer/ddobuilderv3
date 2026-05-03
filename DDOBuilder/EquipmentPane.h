@@ -1,6 +1,7 @@
 // EquipmentPane.h
 //
 #pragma once
+#include "DDOFormView.h"
 #include "Resource.h"
 #include "Character.h"
 #include "InventoryDialog.h"
@@ -8,7 +9,7 @@
 #include "CMFCButtonEx.h"
 
 class CEquipmentPane :
-    public CFormView,
+    public CDDOFormView,
     public InventoryObserver,
     public CharacterObserver,
     public LifeObserver,

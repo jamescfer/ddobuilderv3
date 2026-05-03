@@ -27,11 +27,11 @@ namespace
     COLORREF f_abilityOverspendColour = RGB(0xE9, 0x96, 0x7A); // dark salmon
 }
 
-IMPLEMENT_DYNCREATE(CDDOBuilderView, CFormView)
+IMPLEMENT_DYNCREATE(CDDOBuilderView, CDDOFormView)
 
 #pragma warning(push)
 #pragma warning(disable: 4407) // warning C4407: cast between different pointer to member representations, compiler may generate incorrect code
-BEGIN_MESSAGE_MAP(CDDOBuilderView, CFormView)
+BEGIN_MESSAGE_MAP(CDDOBuilderView, CDDOFormView)
     ON_WM_CONTEXTMENU()
     ON_WM_RBUTTONUP()
     ON_WM_ERASEBKGND()
@@ -91,7 +91,7 @@ END_MESSAGE_MAP()
 // CDDOBuilderView construction/destruction
 
 CDDOBuilderView::CDDOBuilderView() :
-    CFormView(CDDOBuilderView::IDD),
+    CDDOFormView(CDDOBuilderView::IDD),
     m_pCharacter(NULL),
     m_bIgnoreFocus(false),
     m_bHadIntialUpdate(false)
@@ -104,7 +104,7 @@ CDDOBuilderView::~CDDOBuilderView()
 
 void CDDOBuilderView::DoDataExchange(CDataExchange* pDX)
 {
-    CFormView::DoDataExchange(pDX);
+    CDDOFormView::DoDataExchange(pDX);
     DDX_Control(pDX, IDC_STATIC_BUILD, m_staticBuildDescription);
     DDX_Control(pDX, IDC_RADIO_28PT, m_button28Pt);
     DDX_Control(pDX, IDC_RADIO_32PT, m_button32Pt);
@@ -187,7 +187,7 @@ void CDDOBuilderView::OnInitialUpdate()
 {
     if (!m_bHadIntialUpdate)
     {
-        CFormView::OnInitialUpdate();
+        CDDOFormView::OnInitialUpdate();
         m_pCharacter = GetDocument()->GetCharacter();
         m_pCharacter->AttachObserver(this);
         // controls disabled until data load complete on program startup
@@ -372,12 +372,12 @@ BOOL CDDOBuilderView::OnEraseBkgnd(CDC* pDC)
 #ifdef _DEBUG
 void CDDOBuilderView::AssertValid() const
 {
-    CFormView::AssertValid();
+    CDDOFormView::AssertValid();
 }
 
 void CDDOBuilderView::Dump(CDumpContext& dc) const
 {
-    CFormView::Dump(dc);
+    CDDOFormView::Dump(dc);
 }
 
 CDDOBuilderDoc* CDDOBuilderView::GetDocument() const // non-debug version is inline
@@ -753,7 +753,7 @@ void CDDOBuilderView::UpdateAvailableSpend()
 
 HBRUSH CDDOBuilderView::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor) 
 {
-    HBRUSH hbr = CFormView::OnCtlColor(pDC, pWnd, nCtlColor);
+    HBRUSH hbr = CDDOFormView::OnCtlColor(pDC, pWnd, nCtlColor);
     // colour the control based on whether the user has over spent
     // the number of build points available. This can happen
     // if they adjust down the number of past lives

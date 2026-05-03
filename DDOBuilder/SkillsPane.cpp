@@ -4,10 +4,10 @@
 #include "SkillsPane.h"
 #include "GlobalSupportFunctions.h"
 
-IMPLEMENT_DYNCREATE(CSkillsPane, CFormView)
+IMPLEMENT_DYNCREATE(CSkillsPane, CDDOFormView)
 
 CSkillsPane::CSkillsPane() :
-    CFormView(CSkillsPane::IDD),
+    CDDOFormView(CSkillsPane::IDD),
     m_pCharacter(NULL),
     m_pDocument(NULL)
 {
@@ -29,7 +29,7 @@ void CSkillsPane::DoDataExchange(CDataExchange* pDX)
 
 #pragma warning(push)
 #pragma warning(disable: 4407) // warning C4407: cast between different pointer to member representations, compiler may generate incorrect code
-BEGIN_MESSAGE_MAP(CSkillsPane, CFormView)
+BEGIN_MESSAGE_MAP(CSkillsPane, CDDOFormView)
     ON_WM_SIZE()
     ON_WM_ERASEBKGND()
     ON_REGISTERED_MESSAGE(UWM_NEW_DOCUMENT, OnNewDocument)
@@ -39,7 +39,7 @@ END_MESSAGE_MAP()
 
 void CSkillsPane::OnInitialUpdate()
 {
-    CFormView::OnInitialUpdate();
+    CDDOFormView::OnInitialUpdate();
 }
 
 LRESULT CSkillsPane::OnLoadComplete(WPARAM, LPARAM)
@@ -66,7 +66,7 @@ void CSkillsPane::OnSize(UINT nType, int cx, int cy)
         m_skillCtrl.MoveWindow(rctControl, TRUE);
         SetScrollSizes(MM_TEXT, requiredSize);
     }
-    CFormView::OnSize(nType, cx, cy);
+    CDDOFormView::OnSize(nType, cx, cy);
 }
 
 LRESULT CSkillsPane::OnNewDocument(WPARAM wParam, LPARAM lParam)

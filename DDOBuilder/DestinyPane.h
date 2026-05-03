@@ -1,6 +1,7 @@
 // DestinyPane.h
 //
 #pragma once
+#include "DDOFormView.h"
 #include "Resource.h"
 #include <list>
 #include "Character.h"
@@ -13,7 +14,7 @@ class EnhancementTree;
 class CEnhancementTreeDialog;
 
 class CDestinyPane :
-    public CFormView,
+    public CDDOFormView,
     public CharacterObserver,
     public LifeObserver,
     public BuildObserver,
