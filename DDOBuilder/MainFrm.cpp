@@ -143,7 +143,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
     // prevent the menu bar from taking the focus on activation
     CMFCPopupMenu::SetForceMenuFocus(FALSE);
 
-    if (!m_wndToolBar.CreateEx(this, TBSTYLE_FLAT, WS_CHILD | WS_VISIBLE | CBRS_TOP | CBRS_GRIPPER | CBRS_TOOLTIPS | CBRS_FLYBY | CBRS_SIZE_DYNAMIC) ||
+    if (!m_wndToolBar.CreateEx(this, TBSTYLE_FLAT, WS_CHILD | WS_VISIBLE | CBRS_LEFT | CBRS_GRIPPER | CBRS_TOOLTIPS | CBRS_FLYBY | CBRS_SIZE_DYNAMIC) ||
         !m_wndToolBar.LoadToolBar(theApp.m_bHiColorIcons ? IDR_MAINFRAME_256 : IDR_MAINFRAME))
     {
         TRACE0("Failed to create tool bar\n");
@@ -175,7 +175,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
     m_wndToolBar.EnableDocking(CBRS_ALIGN_ANY);
     EnableDocking(CBRS_ALIGN_ANY);
     DockPane(&m_wndMenuBar);
-    DockPane(&m_wndToolBar);
+    DockPane(&m_wndToolBar, AFX_IDW_DOCKBAR_LEFT);
 
     // enable Visual Studio 2005 style docking window behavior
     CDockingManager::SetDockingMode(DT_SMART);
@@ -396,6 +396,25 @@ BOOL CMainFrame::CreateDockingWindows()
             RUNTIME_CLASS(CBuildsPane),
             ID_DOCK_BUILDS);
     pBuildsPane->SetDocumentAndCharacter(GetActiveDocument(), NULL);
+
+    // ---- Default pane groupings ----------------------------------------
+    // Group 1 (right): Character leveling panel
+    //   Host: ClassAndLevel; tabs: Skills, Spells, Equipment, Past Lives
+    pSkills->AttachToTabWnd(pClassAndLevel, AFX_DOCK_METHOD_DRAG, FALSE);
+    pSpellsPane->AttachToTabWnd(pClassAndLevel, AFX_DOCK_METHOD_DRAG, FALSE);
+    pEquipmentPane->AttachToTabWnd(pClassAndLevel, AFX_DOCK_METHOD_DRAG, FALSE);
+    pSpecialFeats->AttachToTabWnd(pClassAndLevel, AFX_DOCK_METHOD_DRAG, FALSE);
+
+    // Group 2 (right): Enhancement panel
+    //   Host: Enhancements; tabs: Reaper, Destiny
+    pReaperEnhancementsPane->AttachToTabWnd(pEnhancementsPane, AFX_DOCK_METHOD_DRAG, FALSE);
+    pDestinyPane->AttachToTabWnd(pEnhancementsPane, AFX_DOCK_METHOD_DRAG, FALSE);
+
+    // Group 3 (bottom): Log and tracking panel
+    //   Host: Log; tabs: Stances, Automatic Feats, Granted Feats
+    pStancesPane->AttachToTabWnd(pLogPane, AFX_DOCK_METHOD_DRAG, FALSE);
+    pAutomaticFeatsPane->AttachToTabWnd(pLogPane, AFX_DOCK_METHOD_DRAG, FALSE);
+    pGrantedFeatsPane->AttachToTabWnd(pLogPane, AFX_DOCK_METHOD_DRAG, FALSE);
 
     return TRUE;
 }
