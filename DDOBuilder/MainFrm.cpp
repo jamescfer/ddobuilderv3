@@ -400,21 +400,21 @@ BOOL CMainFrame::CreateDockingWindows()
     // ---- Default pane groupings ----------------------------------------
     // Group 1 (right): Character leveling panel
     //   Host: ClassAndLevel; tabs: Skills, Spells, Equipment, Past Lives
-    pSkills->AttachToTabWnd(pClassAndLevel, AFX_DOCK_METHOD_DRAG, FALSE);
-    pSpellsPane->AttachToTabWnd(pClassAndLevel, AFX_DOCK_METHOD_DRAG, FALSE);
-    pEquipmentPane->AttachToTabWnd(pClassAndLevel, AFX_DOCK_METHOD_DRAG, FALSE);
-    pSpecialFeats->AttachToTabWnd(pClassAndLevel, AFX_DOCK_METHOD_DRAG, FALSE);
+    pSkills->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
+    pSpellsPane->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
+    pEquipmentPane->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
+    pSpecialFeats->AttachToTabWnd(pClassAndLevel, DM_UNKNOWN, FALSE);
 
     // Group 2 (right): Enhancement panel
     //   Host: Enhancements; tabs: Reaper, Destiny
-    pReaperEnhancementsPane->AttachToTabWnd(pEnhancementsPane, AFX_DOCK_METHOD_DRAG, FALSE);
-    pDestinyPane->AttachToTabWnd(pEnhancementsPane, AFX_DOCK_METHOD_DRAG, FALSE);
+    pReaperEnhancementsPane->AttachToTabWnd(pEnhancementsPane, DM_UNKNOWN, FALSE);
+    pDestinyPane->AttachToTabWnd(pEnhancementsPane, DM_UNKNOWN, FALSE);
 
     // Group 3 (bottom): Log and tracking panel
     //   Host: Log; tabs: Stances, Automatic Feats, Granted Feats
-    pStancesPane->AttachToTabWnd(pLogPane, AFX_DOCK_METHOD_DRAG, FALSE);
-    pAutomaticFeatsPane->AttachToTabWnd(pLogPane, AFX_DOCK_METHOD_DRAG, FALSE);
-    pGrantedFeatsPane->AttachToTabWnd(pLogPane, AFX_DOCK_METHOD_DRAG, FALSE);
+    pStancesPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
+    pAutomaticFeatsPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
+    pGrantedFeatsPane->AttachToTabWnd(pLogPane, DM_UNKNOWN, FALSE);
 
     return TRUE;
 }

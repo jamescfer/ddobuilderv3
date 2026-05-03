@@ -155,7 +155,8 @@ void CCustomDockablePane::DrawCaption(CDC* pDC, CRect rectCaption)
 {
     const int iconW = ::GetSystemMetrics(SM_CXSMICON);
     const int iconH = ::GetSystemMetrics(SM_CYSMICON);
-    const BOOL bActive = IsActive();
+    const CWnd* pFocus = GetFocus();
+    const BOOL bActive = (pFocus != NULL) && (pFocus == this || IsChild(pFocus));
 
     // Choose gradient colours based on active state:
     //   Active   → warm orange glow gradient

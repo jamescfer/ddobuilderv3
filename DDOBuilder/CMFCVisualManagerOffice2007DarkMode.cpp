@@ -36,14 +36,6 @@ void CMFCVisualManagerOffice2007DarkMode::UpdateColours()
     // Separator line in menus/toolbars
     m_clrSeparator              = CLR_DDO_RED_DARK;
 
-    // Active-caption bar on floated windows (blue → red)
-    m_clrActiveCaption          = CLR_DDO_RED_DARK;
-    m_clrInactiveCaption        = CLR_DDO_BG_DARK;
-    m_clrActiveCaptionGradient  = CLR_DDO_RED_DIM;
-    m_clrInactiveCaptionGradient = CLR_DDO_BG_DARKEST;
-    m_clrActiveCaptionText      = CLR_DDO_GOLD_BRIGHT;
-    m_clrInactiveCaptionText    = CLR_DDO_TEXT_DIM;
-
     m_brMenuLight.DeleteObject();
     m_brMenuLight.CreateSolidBrush(CLR_DDO_BG_MID);
 
