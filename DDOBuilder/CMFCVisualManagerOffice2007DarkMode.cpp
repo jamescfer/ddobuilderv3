@@ -20,12 +20,12 @@ CMFCVisualManagerOffice2007DarkMode::CMFCVisualManagerOffice2007DarkMode()
 void CMFCVisualManagerOffice2007DarkMode::UpdateColours()
 {
     // Tooltips
-    m_ToolTipParams.m_clrText       = CLR_DDO_TIP_TEXT;
-    m_ToolTipParams.m_clrFill       = CLR_DDO_TIP_BG;
+    m_ToolTipParams.m_clrText         = CLR_DDO_TIP_TEXT;
+    m_ToolTipParams.m_clrFill         = CLR_DDO_TIP_BG;
     m_ToolTipParams.m_clrFillGradient = CLR_DDO_BG_MID;
-    m_ToolTipParams.m_clrBorder     = CLR_DDO_TIP_BORDER;
+    m_ToolTipParams.m_clrBorder       = CLR_DDO_TIP_BORDER;
 
-    // Menu
+    // Menu backgrounds – replace Office blue with DDO dark-red
     m_clrMenuLight              = CLR_DDO_BG_MID;
     m_clrHighlight              = CLR_DDO_HOVER;
     m_clrHighlightDn            = CLR_DDO_PRESSED;
@@ -33,15 +33,31 @@ void CMFCVisualManagerOffice2007DarkMode::UpdateColours()
     m_clrMenuBorder             = CLR_DDO_BORDER_LT;
     m_clrMenuItemBorder         = CLR_DDO_BORDER;
 
+    // Separator line in menus/toolbars
+    m_clrSeparator              = CLR_DDO_RED_DARK;
+
+    // Active-caption bar on floated windows (blue → red)
+    m_clrActiveCaption          = CLR_DDO_RED_DARK;
+    m_clrInactiveCaption        = CLR_DDO_BG_DARK;
+    m_clrActiveCaptionGradient  = CLR_DDO_RED_DIM;
+    m_clrInactiveCaptionGradient = CLR_DDO_BG_DARKEST;
+    m_clrActiveCaptionText      = CLR_DDO_GOLD_BRIGHT;
+    m_clrInactiveCaptionText    = CLR_DDO_TEXT_DIM;
+
     m_brMenuLight.DeleteObject();
     m_brMenuLight.CreateSolidBrush(CLR_DDO_BG_MID);
 
     m_brMainClientArea.DeleteObject();
     m_brMainClientArea.CreateSolidBrush(CLR_DDO_BG_DARKEST);
 
-    // Toolbar
+    // Toolbar – warm dark-red instead of the Office2007 blue-grey
     m_clrToolBarGradientDark    = CLR_DDO_BG_DARK;
     m_clrToolBarGradientLight   = CLR_DDO_BG_MID;
+    m_clrToolBarGradientVertLight = CLR_DDO_BG_MID;
+    m_clrToolBarGradientVertDark  = CLR_DDO_BG_DARK;
+    m_clrToolBarBottomLine      = CLR_DDO_RED_DARK;
+    m_clrCustomizeButtonGradientLight = CLR_DDO_BG_LIGHT;
+    m_clrCustomizeButtonGradientDark  = CLR_DDO_BG_MID;
 
     // App caption (title bar)
     m_clrAppCaptionActiveText   = CLR_DDO_GOLD_BRIGHT;
