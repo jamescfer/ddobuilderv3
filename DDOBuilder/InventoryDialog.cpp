@@ -267,8 +267,8 @@ void CInventoryDialog::OnPaint()
                         PS_SOLID,
                         1,
                         ait.HasSelectedAugment()
-                            ? RGB(0, 0, 0)              // black border if we have an augment
-                            : RGB(255, 255, 255));      // white border if the no augment
+                            ? CLR_DDO_BG_DARKEST        // near-black border over augment icon
+                            : CLR_DDO_BORDER_LT);       // crimson border for empty slot
                     memoryDc.SelectObject(augmentBorder);
                     COLORREF augmentColour = RGB(255, 255, 255);
                     if (colour == "Yellow") augmentColour = RGB(255, 255, 0);

@@ -274,8 +274,8 @@ void CFeatsClassControl::OnPaint()
     memoryDc.FillRect(rctWindow, &normalBackgroundBrush);
     memoryDc.Draw3dRect(
             rctWindow,
-            bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-            bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
+            CLR_DDO_BORDER,
+            CLR_DDO_BORDER_LT);
     memoryDc.SetTextColor(bDarkMode ? f_white : f_black);
 
     if (m_pCharacter != NULL)
@@ -445,13 +445,13 @@ size_t CFeatsClassControl::DrawLevelLine(
     {
         if (level == m_highlightedLevelLine)
         {
-            pDC->SetTextColor(::GetSysColor(COLOR_HIGHLIGHTTEXT));
-            fillBrush.CreateSolidBrush(::GetSysColor(COLOR_HIGHLIGHT));
+            pDC->SetTextColor(CLR_DDO_GOLD_BRIGHT);
+            fillBrush.CreateSolidBrush(CLR_DDO_SELECT);
         }
         else if (level == m_alternateHighlightedLevelLine)
         {
-            pDC->SetTextColor(::GetSysColor(COLOR_HIGHLIGHTTEXT));
-            fillBrush.CreateSolidBrush(RGB(0xFF, 0xB6, 0xC1)); // light pink
+            pDC->SetTextColor(CLR_DDO_GOLD_BRIGHT);
+            fillBrush.CreateSolidBrush(CLR_DDO_RED_DARK);
         }
         else
         {
@@ -463,13 +463,13 @@ size_t CFeatsClassControl::DrawLevelLine(
     {
         if (level == m_highlightedLevelLine)
         {
-            pDC->SetTextColor(::GetSysColor(COLOR_HIGHLIGHTTEXT));
-            fillBrush.CreateSolidBrush(::GetSysColor(COLOR_HIGHLIGHT));
+            pDC->SetTextColor(CLR_DDO_GOLD_BRIGHT);
+            fillBrush.CreateSolidBrush(CLR_DDO_SELECT);
         }
         else if (level == m_alternateHighlightedLevelLine)
         {
-            pDC->SetTextColor(::GetSysColor(COLOR_HIGHLIGHTTEXT));
-            fillBrush.CreateSolidBrush(RGB(0xFF, 0xB6, 0xC1)); // light pink
+            pDC->SetTextColor(CLR_DDO_GOLD_BRIGHT);
+            fillBrush.CreateSolidBrush(CLR_DDO_RED_DARK);
         }
         else
         {
@@ -493,8 +493,8 @@ size_t CFeatsClassControl::DrawLevelLine(
     }
     pDC->Draw3dRect(
             rctItem,
-            bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-            bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
+            CLR_DDO_BORDER,
+            CLR_DDO_BORDER_LT);
     {
         CRect rctFill(rctItem);
         rctFill.DeflateRect(1, 1, 1, 1);

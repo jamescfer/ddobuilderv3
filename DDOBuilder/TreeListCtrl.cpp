@@ -2496,7 +2496,7 @@ void CTreeListCtrl::OnSysColorChange()
     CWnd::OnSysColorChange();
     m_Tree.SendMessage(WM_SYSCOLORCHANGE, 0, 0L);
     m_Header.SendMessage(WM_SYSCOLORCHANGE, 0, 0L);
-    m_Tree.SetBkColor(GetSysColor(m_Tree.IsWindowEnabled() ? COLOR_WINDOW: COLOR_3DFACE)); // enabled / disabled colour
+    m_Tree.SetBkColor(m_Tree.IsWindowEnabled() ? CLR_DDO_BG_DARK : CLR_DDO_BG_DARKEST);
     m_Tree.Invalidate(TRUE);
     m_Header.Invalidate(TRUE);
 }

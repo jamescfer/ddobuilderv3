@@ -127,8 +127,8 @@ void CAutomaticFeatListControl::OnPaint()
     memoryDc.FillSolidRect(rctWindow, bDarkMode ? f_backgroundColourDark : f_backgroundColour);
     memoryDc.Draw3dRect(
             rctWindow,
-            bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-            bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
+            CLR_DDO_BORDER,
+            CLR_DDO_BORDER_LT);
 
     m_headerItemSize.cx = rctWindow.Width();
     m_featItemSize.cx = rctWindow.Width();
@@ -138,8 +138,8 @@ void CAutomaticFeatListControl::OnPaint()
     CRect rctItem(0, top, m_headerItemSize.cx, top + m_headerItemSize.cy);
     memoryDc.Draw3dRect(
             rctItem,
-            bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-            bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
+            CLR_DDO_BORDER,
+            CLR_DDO_BORDER_LT);
     CSize strSize = memoryDc.GetTextExtent(m_label.c_str());
     memoryDc.TextOut(
             rctItem.left + (rctItem.Width() - strSize.cx) / 2,

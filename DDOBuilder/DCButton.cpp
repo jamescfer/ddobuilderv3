@@ -5,6 +5,7 @@
 #include "DCButton.h"
 #include "Character.h"
 #include "GlobalSupportFunctions.h"
+#include "DDOTheme.h"
 
 #pragma warning(push)
 #pragma warning(disable: 4407) // warning C4407: cast between different pointer to member representations, compiler may generate incorrect code
@@ -54,7 +55,8 @@ void CDCButton::OnPaint()
     rect -= rect.TopLeft(); // convert to client rectangle
 
     // fill the background
-    pdc.FillSolidRect(rect, GetSysColor(COLOR_BTNFACE));
+    pdc.FillSolidRect(rect, CLR_DDO_BG_PANEL);
+    pdc.SetTextColor(CLR_DDO_TEXT);
     m_image.Draw(pdc.GetSafeHdc(), 3, 3, static_cast<LONG>(32 * dScaleFactor), static_cast<LONG>(32 * dScaleFactor));
     // also show the current DC value under the icon
     int dc = m_dc.CalculateDC(m_pCharacter->ActiveBuild());

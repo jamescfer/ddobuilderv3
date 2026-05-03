@@ -5,6 +5,7 @@
 #include "DestinyTreeDialog.h"
 #include "DDODialog.h"
 #include "GlobalSupportFunctions.h"
+#include "DDOTheme.h"
 #include "SelectionSelectDialog.h"
 #include "MouseHook.h"
 
@@ -209,7 +210,7 @@ void CDestinyTreeDialog::OnPaint()
                 32);
         CSize textSize = memoryDc.GetTextExtent(m_tree.Name().c_str());
         memoryDc.SetBkMode(TRANSPARENT);
-        memoryDc.SetTextColor(RGB(255, 255, 255));  // white
+        memoryDc.SetTextColor(CLR_DDO_TEXT);
         memoryDc.TextOut(
                 c_iconLeft + 32 + c_controlSpacing,
                 c_iconTop + (32 - textSize.cy) / 2,

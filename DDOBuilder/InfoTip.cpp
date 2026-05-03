@@ -13,6 +13,7 @@
 #include "Filigree.h"
 #include "Gem.h"
 #include "GlobalSupportFunctions.h"
+#include "DDOTheme.h"
 #include "Item.h"
 #include "LevelTraining.h"
 #include "Patron.h"
@@ -171,8 +172,8 @@ void CInfoTip::OnPaint()
     GetClientRect(rc);
 
     // Create the brushes
-    frameBrush.CreateSolidBrush(::GetSysColor(COLOR_INFOTEXT));
-    tooltipColourBrush.CreateSolidBrush(::GetSysColor(COLOR_INFOBK));
+    frameBrush.CreateSolidBrush(CLR_DDO_TIP_BORDER);
+    tooltipColourBrush.CreateSolidBrush(CLR_DDO_TIP_BG);
 
     // Draw the frame
     dc.FillRect(rc, &tooltipColourBrush);

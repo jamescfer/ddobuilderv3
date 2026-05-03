@@ -3,6 +3,7 @@
 #include "MFCPaintDC.h"
 #include "WinSystem.h"
 #include <Uxtheme.h>
+#include "DDOTheme.h"
 
 CMFCCheckBox::CMFCCheckBox(
 ) noexcept
@@ -47,7 +48,7 @@ void CMFCCheckBox::ButtonPaint(CDC *pDC)
     if (FALSE == bWindowEnabled)
     {
         uDFCState |= DFCS_INACTIVE;
-        pobDeviceContext->SetTextColor(GetSysColor(COLOR_INACTIVECAPTIONTEXT));
+        pobDeviceContext->SetTextColor(CLR_DDO_TEXT_DEAD);
     }
 
     int nChecked = GetCheck();

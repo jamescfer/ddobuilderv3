@@ -83,10 +83,11 @@ protected:
 
     BOOL CreateDockingWindows();
     CCustomDockablePane* CreateDockablePane(
-            const char* paneTitle, 
-            CDocument* doc, 
+            const char* paneTitle,
+            CDocument* doc,
             CRuntimeClass* runtimeClass,
-            UINT viewID);
+            UINT viewID,
+            UINT nDockBarID = 0);
     void CopyDefaultIniToDDOBuilderIni();
     void AddSmallClassImageMenuIcons();
     CCustomDockablePane* GetPane(UINT nID);

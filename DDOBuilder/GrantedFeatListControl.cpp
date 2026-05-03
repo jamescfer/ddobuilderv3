@@ -194,8 +194,8 @@ size_t CGrantedFeatListControl::DrawSection(CDC* pDC, size_t iSection, size_t to
         rctItem = CRect(0, top, m_headerItemSize.cx, top + m_featItemSize.cy);
         pDC->Draw3dRect(
                 rctItem,
-                bDarkMode ? CLR_DDO_BORDER : ::GetSysColor(COLOR_BTNHIGHLIGHT),
-                bDarkMode ? CLR_DDO_BORDER_LT : ::GetSysColor(COLOR_BTNSHADOW));
+                CLR_DDO_BORDER,
+                CLR_DDO_BORDER_LT);
         if ((int)iSection == m_selectedSection
                 && (int)iItemIndex == m_selectedSectionItem)
         {

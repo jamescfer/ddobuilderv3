@@ -2,6 +2,7 @@
 //
 #include "stdafx.h"
 #include "CustomMultiPaneFrameWnd.h"
+#include "DDOTheme.h"
 
 //---------------------------------------------------------------------------
 #pragma warning(push)
@@ -64,9 +65,7 @@ void CCustomMultiPaneFrameWnd::OnNcPaint()
     rctIcon.top -= 2;
     rctIcon.bottom = rctIcon.top + ::GetSystemMetrics(SM_CYSMICON) + 4;
     rctIcon.right = rctIcon.bottom;
-    pDC->Draw3dRect(rctIcon,
-                ::GetSysColor(COLOR_BTNHIGHLIGHT),
-                ::GetSysColor(COLOR_BTNSHADOW));
+    pDC->Draw3dRect(rctIcon, CLR_DDO_BORDER_LT, CLR_DDO_BORDER);
                 pDC->SetBkMode(TRANSPARENT);
     CFont* pDefaultGUIFont = CFont::FromHandle(
             (HFONT)GetStockObject(DEFAULT_GUI_FONT));
