@@ -209,18 +209,24 @@ BOOL CDDOBuilderApp::InitInstance()
     AfxGetApp()->m_pMainWnd = m_pMainWnd;
     // The one and only window has been initialized, so show and update it
     m_pMainWnd->ShowWindow(SW_SHOWMAXIMIZED);
+    LOG_INFO("InitInstance: ShowWindow done");
     m_pMainWnd->UpdateWindow();
+    LOG_INFO("InitInstance: UpdateWindow done");
     // call DragAcceptFiles only if there's a suffix
     //  In an SDI app, this should occur after ProcessShellCommand
     // Enable drag/drop open
     m_pMainWnd->DragAcceptFiles();
     CMainFrame* pMainWnd = dynamic_cast<CMainFrame*>(m_pMainWnd);
     pMainWnd->ResizeWindows();    // ensure dock windows show content
+    LOG_INFO("InitInstance: ResizeWindows done");
 
     OnIdle(0);  // get UI to update
+    LOG_INFO("InitInstance: OnIdle done");
     LoadData();
+    LOG_INFO("InitInstance: LoadData done");
 
     NotifyLoadComplete();
+    LOG_INFO("InitInstance: NotifyLoadComplete done");
     GetLog().AddLogEntry("Ready");
     LOG_INFO("DDOBuilder InitInstance complete – application ready");
 
