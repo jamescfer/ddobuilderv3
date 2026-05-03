@@ -37,6 +37,7 @@
 #include "CWeaponImageDialog.h"
 #include "CDDOVisualManager.h"
 #include "WikiLinkDlg.h"
+#include "DDOLog.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -128,6 +129,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
     BOOL bNameValid;
     // Install the DDO visual engine and enable Win32 dark title bar.
+    LOG_INFO("OnCreate: installing CDDOVisualManager");
     CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CDDOVisualManager));
     CDockingManager::SetDockingMode(DT_SMART);
     {
@@ -140,6 +142,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
     if (!m_wndMenuBar.Create(this))
     {
+        LOG_ERROR("OnCreate: failed to create menu bar");
         TRACE0("Failed to create menu bar\n");
         return -1;      // fail to create
     }
@@ -152,6 +155,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
     if (!m_wndToolBar.CreateEx(this, TBSTYLE_FLAT, WS_CHILD | WS_VISIBLE | CBRS_LEFT | CBRS_GRIPPER | CBRS_TOOLTIPS | CBRS_FLYBY | CBRS_SIZE_DYNAMIC) ||
         !m_wndToolBar.LoadToolBar(theApp.m_bHiColorIcons ? IDR_MAINFRAME_256 : IDR_MAINFRAME))
     {
+        LOG_ERROR("OnCreate: failed to create toolbar");
         TRACE0("Failed to create tool bar\n");
         return -1;      // fail to create
     }
@@ -196,8 +200,10 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
     EnableAutoHidePanes(CBRS_ALIGN_RIGHT);
 
     // create docking windows
+    LOG_INFO("OnCreate: creating docking windows");
     if (!CreateDockingWindows())
     {
+        LOG_ERROR("OnCreate: failed to create docking windows");
         TRACE0("Failed to create docking windows\n");
         return -1;
     }
@@ -217,6 +223,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
         }
     }
     CMFCPopupMenu::SetSendMenuSelectMsg(TRUE);
+    LOG_INFO("OnCreate: complete");
     return 0;
 }
 
