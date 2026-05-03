@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "MFCStaticEx.h"
+#include "DDOTheme.h"
 
 BEGIN_MESSAGE_MAP(CMFCStaticEx, CStatic)
     ON_WM_PAINT()
@@ -8,7 +9,7 @@ END_MESSAGE_MAP()
 
 CMFCStaticEx::CMFCStaticEx() noexcept
 {
-    m_obTextColour = RGB(0, 0, 0);
+    m_obTextColour = CLR_DDO_TEXT;
 }
 
 //---------------------------------------------------------------------------
