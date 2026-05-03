@@ -1,0 +1,36 @@
+:root {
+  --color-bg-primary: #1a1612;
+  --color-bg-secondary: #231f1a;
+  --color-bg-panel: #2a2520;
+  --color-bg-input: #1e1a16;
+  --color-bg-hover: #332e28;
+  --color-bg-active: #3d3630;
+
+  --color-border: #4a3f30;
+  --color-border-light: #5a4f3f;
+  --color-border-focus: #c8882a;
+
+  --color-text-primary: #e8d8b0;
+  --color-text-secondary: #a89060;
+  --color-text-muted: #706050;
+  --color-text-disabled: #504540;
+
+  --color-gold: #c8882a;
+  --color-gold-light: #e8a040;
+  --color-gold-dark: #a06820;
+
+  --color-red: #c84040;
+  --color-green: #50a050;
+  --color-blue: #4080c0;
+  --color-purple: #9060c0;
+
+  --font-main: 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Consolas', monospace;
+
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+
+  --shadow-panel: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.7);
+}

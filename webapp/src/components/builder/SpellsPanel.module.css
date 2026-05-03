@@ -1,0 +1,116 @@
+.empty {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* Class selector tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.tab:hover:not(.tabActive) {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-light);
+  color: var(--color-text-primary);
+}
+
+.tabActive {
+  background: rgba(200, 136, 42, 0.15);
+  border-color: var(--color-gold);
+  color: var(--color-gold);
+}
+
+/* Scrollable spell list */
+.spellList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.spellList::-webkit-scrollbar {
+  width: 5px;
+}
+
+.spellList::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.spellList::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.spellList::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-light);
+}
+
+/* Spell level group */
+.levelGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.levelHeader {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-blue);
+  padding: 2px 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 3px;
+}
+
+/* Individual spell row */
+.spellRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.1s;
+}
+
+.spellRow:hover {
+  background: var(--color-bg-hover);
+}
+
+.spellName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.spellSchool {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-style: italic;
+}
