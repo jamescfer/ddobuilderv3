@@ -194,32 +194,3 @@ void CMFCVisualManagerOffice2007DarkMode::OnFillPopupWindowBackground(CDC* pDC, 
     ASSERT_VALID(pDC);
     pDC->FillSolidRect(rect, CLR_DDO_BG_PANEL);
 }
-
-// ---------------------------------------------------------------------------
-// OnDrawControlBorder
-// Draws DDO gold border around edit boxes, list controls, etc.
-// ---------------------------------------------------------------------------
-void CMFCVisualManagerOffice2007DarkMode::OnDrawControlBorder(
-    CDC* pDC, CRect rect, CWnd* /*pWndCtrl*/, BOOL /*bDrawOnGlass*/)
-{
-    ASSERT_VALID(pDC);
-    pDC->Draw3dRect(rect, CLR_DDO_BORDER_LT, CLR_DDO_BORDER);
-}
-
-// ---------------------------------------------------------------------------
-// OnHighlightMenuItem
-// Paints the DDO hover colour behind highlighted menu items.
-// ---------------------------------------------------------------------------
-void CMFCVisualManagerOffice2007DarkMode::OnHighlightMenuItem(
-    CDC* pDC, CMFCToolBarMenuButton* pButton,
-    CSize sizeMenuItem, int& nHighlightedItem)
-{
-    ASSERT_VALID(pDC);
-    ASSERT_VALID(pButton);
-
-    CRect rcHighlight(CPoint(0, 0), sizeMenuItem);
-    pDC->FillSolidRect(rcHighlight, CLR_DDO_HOVER);
-    pDC->Draw3dRect(rcHighlight, CLR_DDO_GOLD_DARK, CLR_DDO_GOLD_DARK);
-
-    CMFCVisualManagerOffice2007::OnHighlightMenuItem(pDC, pButton, sizeMenuItem, nHighlightedItem);
-}

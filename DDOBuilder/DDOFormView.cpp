@@ -90,7 +90,7 @@ HBRUSH CDDOFormView::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
         DWORD dwStyle = pWnd ? pWnd->GetStyle() : 0;
         DWORD dwType  = dwStyle & SS_TYPEMASK;
 
-        if (dwType == SS_GROUPBOX)
+        if (dwType == 0x00000007L) // SS_GROUPBOX
         {
             // Group box frame: gold text on transparent bg so the parent
             // panel colour shows through the interior.

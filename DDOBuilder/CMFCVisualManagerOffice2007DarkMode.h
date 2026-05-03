@@ -18,11 +18,4 @@ public:
 
     // Popup / dialog / form-view client area fill (used by OnEraseBackground helper)
     virtual void OnFillPopupWindowBackground(CDC* pDC, CRect rect) override;
-
-    // List-control header background
-    virtual void OnDrawControlBorder(CDC* pDC, CRect rect, CWnd* pWndCtrl, BOOL bDrawOnGlass) override;
-
-    // Highlighted / selected button inside a toolbar
-    virtual void OnHighlightMenuItem(CDC* pDC, CMFCToolBarMenuButton* pButton,
-        CSize sizeMenuItem, int& nHighlightedItem) override;
 };
