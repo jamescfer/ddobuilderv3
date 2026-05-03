@@ -1,0 +1,527 @@
+DDOBuilder V2 - Program Overview
+=================================
+How the Program Works: Top to Bottom
+=====================================
+
+
+1. PROJECT OVERVIEW
+-------------------
+DDOBuilder is a character builder tool for Dungeons & Dragons Online (DDO). It is
+written in C++ using the Microsoft Foundation Classes (MFC) framework with a Single
+Document Interface (SDI) architecture. It allows players to design DDO characters,
+calculate stats, select feats and enhancements, manage gear, and track quest favor.
+
+Version: 2.0.0.80 (defined in BuildInfo.h)
+Solution file: DDOBuilder.sln
+
+
+2. TOP-LEVEL DIRECTORY STRUCTURE
+---------------------------------
+DDOBuilderV3/
+  DDOBuilder/            Main source code (~271 headers, ~241 .cpp files)
+  XmlLib/                Custom XML SAX parser library
+  3rdPartyLibraries/     External dependencies
+  Output/
+    DataFiles/           All game data stored as XML files
+    Example Builds/      Sample .DDOBuild character files
+  BuildInfo.h            Version number definition
+  DDOBuilder.sln         Visual Studio solution file
+  ChangeHistory.txt      Changelog
+  InProgressNotes.txt    Developer notes
+  KnownBugs.txt          Bug tracking
+  Issues.txt             Issue tracking
+
+
+3. APPLICATION ENTRY POINT
+---------------------------
+File: DDOBuilder/DDOBuilder.h and DDOBuilder.cpp
+Class: CDDOBuilderApp (derives from MFC's CWinAppEx)
+
+CDDOBuilderApp is the global application singleton (theApp). Its InitInstance()
+method is the program entry point. It is responsible for:
+
+  a. Initializing the MFC framework and OLE/COM subsystems
+  b. Registering the document template (.DDOBuild file association)
+  c. Loading all XML game data files from Output/DataFiles/
+  d. Validating loaded data for consistency
+  e. Spawning a background thread to load item images
+  f. Creating the main frame window (CMainFrame)
+  g. Processing any command-line file argument (open on launch)
+  h. Posting a WM_LOADCOMPLETE message so the UI knows data is ready
+
+The application stores all game data in memory caches:
+
+  m_bonusTypes         Bonus stacking rules (from BonusTypes.xml)
+  m_races              All playable races
+  m_classes            All playable classes
+  m_allFeats           Map<name, Feat> of every feat in the game
+  m_enhancementTrees   Enhancement talent trees
+  m_augments           Item augment definitions
+  m_items              Full equipment database
+  m_itemsForSlot[]     Items indexed by equipment slot
+  m_spells             Spell database
+  m_stances            Character stance definitions
+  m_setBonuses         Item set bonus definitions
+  m_guildBuffs         Guild house buff definitions
+  m_patrons            Favor system patrons
+  m_quests             Quest data for favor tracking
+  m_sentientGems       Sentient gem slot data
+
+
+4. MFC SDI ARCHITECTURE (Document/View)
+----------------------------------------
+The application follows MFC's Document/View pattern:
+
+  CMainFrame       The main window frame; creates and manages all dockable panes.
+                   File: MainFrm.h / MainFrm.cpp
+
+  CDDOBuilderDoc   The document; owns the single Character object and handles
+                   file save/load.
+                   File: DDOBuilderDoc.h / DDOBuilderDoc.cpp
+
+  CDDOBuilderView  The main form view; displays base ability scores and reacts
+                   to Character/Life/Build changes.
+                   File: DDOBuilderView.h / DDOBuilderView.cpp
+
+On File > New or File > Open, the document creates or loads a Character object.
+All panes then subscribe to change notifications from that Character.
+
+
+5. CORE DATA MODEL HIERARCHY
+------------------------------
+The data model is a nested hierarchy owned by CDDOBuilderDoc:
+
+  Character
+  ├── Ability tomes (StrTome, DexTome, ConTome, etc.)
+  ├── SpecialFeats (feats spanning all lives, e.g., past life feats)
+  ├── SkillTomes (cross-life skill rank bonuses)
+  └── Lives[]
+      └── Life
+          ├── Name, Race, Alignment
+          ├── AbilityTomes (per-life overrides)
+          ├── CompletedQuests[] (for favor tracking)
+          └── Builds[]
+              └── Build
+                  ├── Level (1-30)
+                  ├── Alignment
+                  ├── Levels[] (one LevelTraining per character level)
+                  │   └── LevelTraining
+                  │       ├── Class (e.g., Barbarian, Cleric)
+                  │       ├── SkillPointsAvailable / SkillPointsSpent
+                  │       ├── TrainedFeats[]  (feats chosen at this level)
+                  │       └── TrainedSkills[] (skill point assignments)
+                  ├── GearSetups[] (named gear configurations)
+                  │   └── EquippedGear
+                  │       ├── Slots: Helmet, Necklace, Trinket, Cloak, Belt,
+                  │       │         Goggles, Gloves, Boots, Bracers, Armor,
+                  │       │         MainHand, OffHand, Quiver, Arrow,
+                  │       │         Ring1, Ring2, Waist, Feet, Shoulders
+                  │       ├── Filigrees[]          (cosmetic/functional augments)
+                  │       └── ArtifactFiligrees[]
+                  ├── ActiveGear (name of the currently active gear set)
+                  ├── EnhancementSpends
+                  │   └── Enhancement_SelectedTrees
+                  │       ├── TreeName[]    (active trees, max 6)
+                  │       ├── Tier5Tree     (which tree has Tier 5 unlocked)
+                  │       └── EnhancementSpendInTree[]
+                  │           ├── TreeName, TreeVersion
+                  │           └── TrainedEnhancement[] (trained selections + ranks)
+                  ├── DestinySpends    (same structure, for Epic Destiny trees)
+                  ├── ReaperSpends     (same structure, for Reaper trees)
+                  ├── ActiveStances[]  (currently toggled stances)
+                  ├── TrainedSpells[]  (selected spells for caster classes)
+                  ├── CompletedQuests[] (for this build's favor)
+                  ├── AttackChains[]   (custom melee/ranged attack combos)
+                  ├── DCs[]            (Difficulty Class definitions)
+                  └── FavorFeats       (feats unlocked through patron favor)
+
+At runtime, a parallel tree of BreakdownItem objects holds all calculated stats.
+See Section 8 for details.
+
+
+6. XML DATA LOADING
+--------------------
+All game data is loaded at startup from Output/DataFiles/ using a custom SAX XML
+parser in the XmlLib library.
+
+Each data type has a dedicated file loader class:
+
+  ClassFile           Loads Classes/*.class.xml    -> Class objects
+  RaceFile            Loads Races/*.race.xml        -> Race objects
+  FeatsFile           Loads Feats.xml               -> map<name, Feat>
+  EnhancementsFile    Loads EnhancementTrees/*.xml  -> EnhancementTree objects
+  SetBonusFile        Loads SetBonuses.xml          -> SetBonus objects
+  ItemsFile           Loads Items/*.xml             -> Item objects (multithreaded)
+  StancesFile         Loads Stances.xml
+  SpellsFile          Loads Spells.xml
+  AugmentsFile        Loads Augments/*.xml
+  PatronsFile         Loads Patrons.xml
+  QuestsFile          Loads Quests.xml
+  GuildBuffsFile      Loads GuildBuffs.xml
+  SentientGemsFile    Loads SentientGems.xml
+
+Items are the largest dataset and are loaded multithreaded using
+MultiFileObjectLoader for performance.
+
+XmlLib (XmlLib/ directory):
+  SaxContentElement   Base class for all XML-serializable objects
+  SaxReader           Reads XML files using SAX events
+  SaxWriter           Writes objects back to XML
+  DLMacros.h          Macro system (DL_SIMPLE, DL_OBJECT, DL_STRING_LIST, etc.)
+                      that auto-generates read/write methods for each field
+
+
+7. EFFECT SYSTEM
+-----------------
+File: DDOBuilder/Effect.h
+
+The Effect system is the core of all stat calculations. An Effect represents
+a numeric bonus from some source (a feat, an enhancement, an item, a buff, etc.)
+that contributes to a character stat.
+
+Each Effect carries:
+  - EffectType  (one of 150+ enum values, e.g., Effect_AbilityBonus, Effect_ACBonus,
+                 Effect_DR, Effect_DoubleStrike, Effect_SpellPower, etc.)
+  - BonusType   (how the bonus stacks: Enhancement, Equipment, Competence, etc.)
+  - Value       (numeric amount)
+  - Conditions  (optional: only applies when in a specific stance, class, etc.)
+
+Effect Sources:
+  1. Feats          - Trained feats apply effects when trained
+  2. Enhancements   - Talent tree selections apply effects
+  3. Items          - Equipped gear applies effects from their buff lists
+  4. Set Bonuses    - Multiple items from a named set apply extra effects
+  5. Buffs          - Self-buffs (SelfAndPartyBuffs.xml) and guild house buffs
+  6. Stances        - Toggled active stances apply conditional effects
+  7. Spells         - Some spells contribute permanent effects to the build
+
+Bonus Stacking Rules (from BonusTypes.xml):
+  - "Highest Only" types (Enhancement, Equipment, Circumstance, etc.):
+    only the single largest value of that type applies.
+  - "Always Stack" types (Destiny, Artifact, Profane, etc.):
+    all values of that type are summed.
+  - Special multiplier handling exists for Spell Power schools.
+
+
+8. BREAKDOWN SYSTEM (Dynamic Stat Calculation)
+------------------------------------------------
+Files: DDOBuilder/BreakdownItem.h and BreakdownItem*.h (50+ derived types)
+
+BreakdownItem is the base class for every calculable character stat. There are
+over 50 derived types, one per tracked stat:
+
+  BreakdownItemHitpoints     Total hit points
+  BreakdownItemAC            Armor class
+  BreakdownItemAbility       Each of the 6 ability scores
+  BreakdownItemBAB            Base Attack Bonus
+  BreakdownItemSaves         Fortitude / Reflex / Will saves
+  BreakdownItemSkills        Each skill (Balance, Concentration, UMD, etc.)
+  BreakdownItemSpellPower    Spell damage per school (Fire, Force, etc.)
+  BreakdownItemCasterLevel   Caster level for each spell school
+  BreakdownItemDodge         Dodge chance
+  BreakdownItemDR            Damage reduction (by damage type)
+  BreakdownItemMRR           Magical Resistance Rating
+  BreakdownItemPRR           Physical Resistance Rating
+  ... and many more
+
+How Breakdowns Work:
+  - Each BreakdownItem observes the Build for effects of its EffectType.
+  - When any source adds/removes an effect (item equipped, feat trained, etc.),
+    the BreakdownItem receives a notification.
+  - It re-reads all active effects of its type, applies stacking rules per
+    BonusType, and computes a new total.
+  - Dependent breakdowns are also notified (e.g., HP depends on Constitution,
+    so HP recalculates whenever Constitution changes).
+  - The BonusesPane displays each BreakdownItem in a tree-list showing each
+    contributing source, its bonus type, and its value.
+
+
+9. OBSERVER PATTERN
+--------------------
+Change notification flows through four observer interfaces:
+
+  CharacterObserver   Notified when: active Life changes, active Build changes.
+  LifeObserver        Notified when: race changes, ability tome changes,
+                      feats trained, action points spent.
+  BuildObserver       Notified when: class/level changes, feat trained/removed,
+                      enhancement trained/removed, item equipped/unequipped,
+                      stance activated/deactivated, spell selected, gear set
+                      changed, and 15+ other build-level events.
+  BreakdownObserver   Notified when: a breakdown's computed total changes.
+
+All 24 UI panes and all BreakdownItem objects implement one or more of these
+interfaces and subscribe on construction. When a user makes any change, a
+notification chain propagates through observers automatically.
+
+Example Flow - User equips a helmet:
+  1. User selects an item in EquipmentPane.
+  2. EquippedGear.SetItem(Helmet, item) is called on the active Build.
+  3. Build publishes a BuildObserver notification (item equipped).
+  4. All subscribed BreakdownItems that track relevant effect types recalculate.
+  5. BreakdownObserver notifications fire for each changed breakdown.
+  6. BonusesPane receives the total-changed notification and redraws.
+  7. Other panes (e.g., DC pane, DPS pane) also update if affected.
+
+
+10. USER INTERFACE - DOCKABLE PANES
+-------------------------------------
+CMainFrame creates 24 dockable panes. Each is a CFormView subclass that also
+implements observer interfaces to stay in sync with the current build.
+
+Key panes:
+
+  ClassAndFeatPane          Class selection per level; feat training at each level
+  EquipmentPane             Item slot management; named gear set switching
+  SkillsPane                Skill point allocation per level
+  EnhancementsPane          Enhancement tree selection (max 6 trees); AP spending
+  DestinyPane               Epic Destiny tree selection and AP spending
+  ReaperEnhancementsPane    Reaper tree selection and spending
+  SpellsPane                Spell selection for arcane/divine casters
+  BonusesPane               Tree-list display of all BreakdownItem totals
+  DCPane                    Difficulty Class customization per ability
+  BuildsPane                Life and Build management (create/switch/delete)
+  GrantedFeatsPane          Display auto-granted feats from class/race
+  StancesPane               Toggle active stances on/off
+  FavorPane                 Track quest completion and patron favor
+  ContentPane               Mark owned adventure packs (affects item availability)
+  NotesPane                 Free-text notes for the character
+  DPSPane                   Damage and attack rate calculations
+
+Each pane subscribes to the appropriate observers on document load and
+unsubscribes on document close. Panes are rearrangeable and can be docked,
+floated, or tabbed.
+
+
+11. FEAT SYSTEM
+----------------
+File: DDOBuilder/Feat.h
+
+A Feat definition includes:
+  - Name, description, icon
+  - RequirementsToTrain (class levels, BAB threshold, ability scores, other feats)
+  - Effects[] (list of Effect objects applied when the feat is trained)
+  - MaxTimesAcquire (some feats can be taken multiple times)
+  - AutomaticGrantLevel (feats granted automatically at a given level)
+  - FeatType (General, Fighter, Metamagic, Destiny, etc.)
+
+Feat Validation:
+  When a user tries to train a feat, the Build checks RequirementsToTrain against
+  the current build state. If not met, the feat is shown as unavailable with a
+  tooltip listing which requirements are missing. CreateRequirementStrings()
+  generates this display text.
+
+Automatic Feats:
+  Classes and races can grant feats automatically at specific levels. These are
+  listed in the Class XML files. The Build collects all automatic feats at each
+  level and adds their effects without requiring user action.
+
+
+12. ENHANCEMENT TREE SYSTEM
+-----------------------------
+File: DDOBuilder/EnhancementTree.h
+
+An EnhancementTree contains:
+  - TreeName, TreeType (Enhancement / Destiny / Reaper)
+  - Version (to detect stale saved data)
+  - Tiers[] of EnhancementTreeItem entries
+
+Each EnhancementTreeItem has:
+  - Name, Description, Icon
+  - Cost (AP cost to train)
+  - MaxRanks (some enhancements have multiple ranks)
+  - Requirements (minimum AP spent in tree, prerequisites)
+  - Effects[] applied per rank
+
+Three Tree Systems (all use the same structure):
+  Enhancement Trees   Up to 6 active trees; 80 AP pool
+  Destiny Trees       Epic Destiny trees; 24+ AP pool
+  Reaper Trees        Reaper XP trees; unlimited but slow to fill
+
+Tier 5 Restriction:
+  Only one Enhancement tree may have Tier 5 enhancements trained at a time.
+  The Tier5Tree field in Enhancement_SelectedTrees enforces this.
+
+
+13. ITEM & GEAR SYSTEM
+-----------------------
+Files: DDOBuilder/Item.h, DDOBuilder/EquippedGear.h
+
+An Item definition includes:
+  - Name, description, icon
+  - Slot (Helmet, Armor, Ring, etc.)
+  - MinimumLevel
+  - Buffs[] (list of Effect objects the item grants)
+  - Augment slots (Colorless, Yellow, Blue, Red, etc.)
+  - SetBonus membership
+
+EquippedGear is a named configuration of items (one per slot). A Build can
+have multiple named EquippedGear sets (e.g., "DPS Set", "Survivability Set").
+The ActiveGear field stores which set is currently active.
+
+When an item is equipped:
+  1. Previous item's effects are removed from the Build.
+  2. New item's effects are added to the Build.
+  3. Set bonus checks run: if the required number of set items are now equipped,
+     the set bonus effects are also added.
+  4. All affected BreakdownItems recalculate.
+
+Augments:
+  Items have typed augment slots. Augments from Augments.xml can be slotted
+  to add additional effects. Filigrees (from FiligreeSets.xml) are a separate
+  augment-like system that applies to a dedicated filigree panel on the gear set.
+
+Content Filtering:
+  The ContentPane lets users mark which adventure packs they own. Items from
+  unowned content are filtered from selection lists.
+
+
+14. FILE SAVE & LOAD
+---------------------
+File format: XML with root element DDOBuilderCharacterData
+Extension: .DDOBuild
+
+On Save (CDDOBuilderDoc::OnSaveDocument):
+  1. Open output file for writing.
+  2. XmlLib SaxWriter serializes the Character tree to XML.
+  3. Every SaxContentElement subclass writes its fields using DL_ macros.
+  4. File is written atomically (temp file then rename).
+
+On Load (CDDOBuilderDoc::OnOpenDocument):
+  1. If a .backup file exists from a previous crash, offer to restore it.
+  2. Open the .DDOBuild XML file.
+  3. XmlLib SaxReader fires SAX events; Character and all sub-objects
+     reconstruct themselves from the element stream.
+  4. Post-load validation patches any data that became stale
+     (e.g., an enhancement tree version mismatch clears that tree).
+  5. Backup copy is written as filename.DDOBuild.backup.
+  6. All observers are notified that a new document is loaded.
+
+Legacy Import:
+  LegacyCharacter handles loading old-format builds from previous DDOBuilder
+  versions and converts them to the current data model.
+
+
+15. DPS & ATTACK CALCULATIONS
+-------------------------------
+File: DDOBuilder/DPSPane.h (and related attack chain classes)
+
+The DPS pane calculates theoretical damage output. It reads:
+  - Weapon stats from equipped MainHand/OffHand items
+  - Attack bonuses from BreakdownItemBAB + STR/DEX modifiers
+  - Damage bonuses from BreakdownItem entries for WeaponDamage
+  - Double Strike / Double Shot percentages
+  - Spell power multipliers for elemental/spell damage
+  - Attack chains (user-defined sequences of attacks)
+
+Users can define AttackChains: ordered lists of attacks (melee, ranged, or
+spell) with names and sequences. The DPS pane simulates these chains against
+an assumed target AC and reports expected DPS.
+
+
+16. DC (DIFFICULTY CLASS) SYSTEM
+----------------------------------
+Files: DDOBuilder/DCPane.h, DDOBuilder/DC.h
+
+A DC entry represents a target difficulty for a specific class ability or spell
+(e.g., "Stunning Blow", "Wail of the Banshee"). Each DC is calculated as:
+
+  DC = Base + Key Ability Modifier + Enhancement bonuses + Item bonuses + ...
+
+Users can define named DCs and the builder calculates the current total from
+all relevant BreakdownItems. The DCPane lists all defined DCs with their
+computed values and the source of each component.
+
+
+17. FAVOR SYSTEM
+-----------------
+Files: DDOBuilder/FavorPane.h, DDOBuilder/Patron.h, DDOBuilder/Quest.h
+
+DDO awards favor points per patron based on quest completion at different
+difficulty levels. Accumulated favor unlocks special feats and rewards.
+
+The FavorPane:
+  1. Lists all quests grouped by patron.
+  2. User marks which quests are completed at which difficulty.
+  3. Total favor per patron is computed.
+  4. When a favor threshold is crossed, the corresponding FavorFeat is
+     automatically granted to the Build and its effects are applied.
+
+
+18. PROGRAM STARTUP FLOW (SUMMARY)
+------------------------------------
+  1.  WinMain calls CDDOBuilderApp::InitInstance().
+  2.  MFC framework initializes (OLE, common controls, visual manager).
+  3.  Settings loaded from DDOBuilder.ini (window positions, last file, etc.).
+  4.  All XML data files loaded from Output/DataFiles/ into memory caches.
+  5.  Data integrity verified (cross-references between feats, classes, etc.).
+  6.  Background thread spawned to preload item icons.
+  7.  Document template registered (.DDOBuild <-> CDDOBuilderDoc).
+  8.  CMainFrame created; 24 dockable panes instantiated.
+  9.  Command line parsed: if a file path was given, it is opened; otherwise
+      File > New creates a blank Character.
+  10. WM_LOADCOMPLETE fires; UI enables and shows the character.
+  11. User interacts with panes; each interaction triggers the observer chain,
+      which propagates through BreakdownItems and updates all pane displays.
+  12. On File > Save, the Character tree is serialized to XML.
+  13. On exit, window layout and settings are saved to DDOBuilder.ini.
+
+
+19. KEY SOURCE FILE REFERENCE
+-------------------------------
+Application core:
+  DDOBuilder/DDOBuilder.h/.cpp        App singleton, data caches, startup
+  DDOBuilder/DDOBuilderDoc.h/.cpp     Document, file I/O, owns Character
+  DDOBuilder/MainFrm.h/.cpp           Main window, pane management
+  DDOBuilder/DDOBuilderView.h/.cpp    Primary view, ability score display
+
+Data model:
+  DDOBuilder/Character.h              Top-level character container
+  DDOBuilder/Life.h                   One incarnation of the character
+  DDOBuilder/Build.h                  A single build within a life
+  DDOBuilder/LevelTraining.h          Per-level class and feat choices
+  DDOBuilder/EquippedGear.h           Gear set (one complete set of items)
+
+Game data objects:
+  DDOBuilder/Feat.h                   Feat definition + requirements
+  DDOBuilder/Class.h                  Class definition + level table
+  DDOBuilder/Race.h                   Race definition + racial traits
+  DDOBuilder/Item.h                   Equipment definition + buffs
+  DDOBuilder/EnhancementTree.h        Talent tree + tier items
+  DDOBuilder/Spell.h                  Spell definition
+  DDOBuilder/SetBonus.h               Item set bonus definition
+  DDOBuilder/Augment.h                Augment/gem definition
+  DDOBuilder/Stance.h                 Stance definition
+  DDOBuilder/GuildBuff.h              Guild house buff definition
+  DDOBuilder/Effect.h                 Effect type + value + bonus type
+
+Calculation engine:
+  DDOBuilder/BreakdownItem.h          Base class for all stat calculations
+  DDOBuilder/BreakdownItem*.h         50+ derived types (one per tracked stat)
+
+XML loading:
+  DDOBuilder/*File.h                  One loader class per data type
+  XmlLib/SaxContentElement.h          Base for all serializable objects
+  XmlLib/SaxReader.h                  SAX XML reader
+  XmlLib/SaxWriter.h                  SAX XML writer
+  XmlLib/DLMacros.h                   Code-generation macros for serialization
+
+UI panes:
+  DDOBuilder/*Pane.h                  24 dockable pane definitions
+
+
+20. DESIGN PATTERNS IN USE
+----------------------------
+  Observer / Subject   Change notifications between model and all UI panes
+                       and between BreakdownItems.
+  Document / View      MFC SDI pattern; CDDOBuilderDoc owns model, panes are views.
+  Singleton            theApp (CDDOBuilderApp) is the global application object
+                       and data cache.
+  SAX Visitor          XmlLib SAX callbacks visit each XML element to reconstruct
+                       objects without loading the entire DOM into memory.
+  Strategy             Different BreakdownItem subclasses implement different
+                       calculation strategies for different stat types.
+  Composite            EnhancementTree contains tiers which contain items;
+                       Character contains Lives which contain Builds.
+
+
+=== END OF DOCUMENT ===

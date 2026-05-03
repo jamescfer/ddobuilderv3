@@ -109,7 +109,7 @@ CMainFrame::CMainFrame() :
     CopyDefaultIniToDDOBuilderIni();
     theApp.m_nAppLook = theApp.GetInt(
             _T("ApplicationLook"),
-            ID_VIEW_APPLOOK_OFF_2007_BLUE);
+            ID_VIEW_APPLOOK_OFF_2007_BLACK);
 }
 
 CMainFrame::~CMainFrame()
@@ -493,18 +493,24 @@ void CMainFrame::OnApplicationLook(UINT id)
                 break;
             }
 
+            // Always use immersive dark mode for the Win32 title bar when any
+            // Office-2007 style is active, since our DDO palette is dark.
+            BOOL bForceDark = TRUE;
             ::DwmSetWindowAttribute(
                 GetSafeHwnd(),
                 DWMWA_USE_IMMERSIVE_DARK_MODE,
-                &bDark,
-                sizeof(bDark));
+                &bForceDark,
+                sizeof(bForceDark));
             CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerOffice2007DarkMode));
             CDockingManager::SetDockingMode(DT_SMART);
-            if (bDark == TRUE)
+            // Apply the DDO colour palette regardless of which Office-2007
+            // sub-style was selected; our overrides supersede them all.
             {
                 CMFCVisualManager* pVisMan = CMFCVisualManager::GetInstance();
-                CMFCVisualManagerOffice2007DarkMode* pDarkVisMan = dynamic_cast<CMFCVisualManagerOffice2007DarkMode*>(pVisMan);
-                pDarkVisMan->UpdateColours();
+                CMFCVisualManagerOffice2007DarkMode* pDarkVisMan =
+                    dynamic_cast<CMFCVisualManagerOffice2007DarkMode*>(pVisMan);
+                if (pDarkVisMan != nullptr)
+                    pDarkVisMan->UpdateColours();
             }
         }
     }
@@ -517,7 +523,11 @@ void CMainFrame::OnApplicationLook(UINT id)
         while (pos != NULL)
         {
             CView* pView = pDoc->GetNextView(pos);
-            pView->SendMessage(UWM_THEME_CHANGED, bDark, 0L);
+            // Treat any Office-2007 variant as dark so panes use light text
+            BOOL bIsDark = (bDark || theApp.m_nAppLook == ID_VIEW_APPLOOK_OFF_2007_BLUE
+                            || theApp.m_nAppLook == ID_VIEW_APPLOOK_OFF_2007_SILVER
+                            || theApp.m_nAppLook == ID_VIEW_APPLOOK_OFF_2007_AQUA);
+            pView->SendMessage(UWM_THEME_CHANGED, bIsDark, 0L);
         }
     }
 
