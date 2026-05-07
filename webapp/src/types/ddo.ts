@@ -78,8 +78,8 @@ export interface FeatSlot {
 }
 
 export interface AutomaticFeat {
-  Level: number
-  Feats?: { Feat?: string | string[] }
+  Level?: number
+  Feats?: string | string[]
 }
 
 export interface DDOClass {

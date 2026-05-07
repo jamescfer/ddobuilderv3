@@ -39,8 +39,8 @@ function buildFeatGroups(
     if (!cls?.AutomaticFeats) continue
 
     for (const autoFeat of cls.AutomaticFeats) {
-      if (autoFeat.Level > bc.levels) continue
-      const featNames = toArray(autoFeat.Feats?.Feat).filter(Boolean)
+      if ((autoFeat.Level ?? 1) > bc.levels) continue
+      const featNames = toArray(autoFeat.Feats).filter(Boolean)
       if (featNames.length === 0) continue
       groups.push({
         source: `${bc.name} Lv ${autoFeat.Level}`,

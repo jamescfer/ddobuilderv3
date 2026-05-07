@@ -103,7 +103,15 @@ function loadEnhancementTrees() {
   return files.flatMap(f => {
     try {
       const parsed = readXml(path.join(dir, f)) as { Enhancements?: { EnhancementTree?: unknown[] } }
-      return (parsed?.Enhancements?.EnhancementTree ?? []) as unknown[]
+      const trees = (parsed?.Enhancements?.EnhancementTree ?? []) as Record<string, unknown>[]
+      // fast-xml-parser represents self-closing empty tags like <IsReaperTree/> as ""
+      // Normalize these to explicit booleans so client-side filtering is unambiguous
+      return trees.map(tree => ({
+        ...tree,
+        IsReaperTree: 'IsReaperTree' in tree ? true : undefined,
+        IsEpicDestiny: 'IsEpicDestiny' in tree ? true : undefined,
+        IsRacialTree: 'IsRacialTree' in tree ? true : undefined,
+      }))
     } catch { return [] }
   })
 }
@@ -419,6 +427,21 @@ for (const dir of IMAGE_DIRS) {
   if (fs.existsSync(imgPath)) {
     app.use(`/images/${dir}`, express.static(imgPath))
   }
+}
+
+// Flat ItemImages lookup: /images/ItemImages/<name>.png searches all subdirectories
+const itemImagesDir = path.join(DATA_DIR, 'ItemImages')
+if (fs.existsSync(itemImagesDir)) {
+  const itemImageSubdirs = fs.readdirSync(itemImagesDir)
+    .filter(d => fs.statSync(path.join(itemImagesDir, d)).isDirectory())
+  app.get('/images/ItemImages/:name', (req, res, next) => {
+    const name = req.params.name
+    for (const sub of itemImageSubdirs) {
+      const fp = path.join(itemImagesDir, sub, name)
+      if (fs.existsSync(fp)) return res.sendFile(fp)
+    }
+    next()
+  })
 }
 
 // Serve React build in production
