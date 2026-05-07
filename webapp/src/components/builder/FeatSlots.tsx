@@ -10,39 +10,35 @@ interface SlotEntry {
   level: number
   featType: string
   className: string
+  featUpdateList?: string[]   // whitelist from class XML FeatUpdateList
 }
 
 const EPIC_FEAT_LEVELS = [21, 24, 27, 30, 33, 36, 39]
 
-// Map from FeatType in class XML FeatSlot → Group name(s) that exist in feats.xml
-// All unique Group values: Standard, Epic Feat, Deity, Human Bonus Feat, Follower Of,
-// Purple Dragon Knight Bonus Feat, Metamagics, Martial, Arcane, Primal, Divine, User,
-// Ranged Stance, Beloved Of, Child Of
+// Fallback group-based filter (used when FeatUpdateList is absent)
 const FEAT_TYPE_TO_GROUPS: Record<string, string[]> = {
-  // Universal heroic slots
   'Heroic':                              ['Standard'],
-  // Epic
   'Epic Feat':                           ['Epic Feat'],
   'Epic Destiny Feat':                   ['Epic Feat'],
-  // Class bonus feats — all draw from Standard (+ Martial for fighter/monk)
   'Fighter Bonus Feat':                  ['Standard', 'Martial'],
   'Artificer Bonus Feat':               ['Standard'],
   'Alchemist Bonus Feat':               ['Standard'],
   'Monk Bonus':                          ['Standard', 'Martial'],
   'Bonus Magical Feat':                  ['Arcane', 'Divine', 'Primal'],
   'Rogue Special Ability':               ['User'],
-  // Metamagics
   'Metamagic Feat':                      ['Metamagics'],
-  // Race-gated
   'Human Bonus Feat':                    ['Human Bonus Feat', 'Standard'],
   'Purple Dragon Knight Bonus Feat':    ['Purple Dragon Knight Bonus Feat', 'Standard'],
-  // Deity / religion
   'Deity':                               ['Deity'],
   'Follower Of':                         ['Follower Of'],
   'Child Of':                            ['Child Of'],
   'Beloved Of':                          ['Beloved Of'],
-  // Divine domain
   'Domain Feat':                         ['Divine'],
+}
+
+function toArray<T>(v: T | T[] | undefined): T[] {
+  if (v == null) return []
+  return Array.isArray(v) ? v : [v]
 }
 
 function buildSlots(classes: { name: string; levels: number }[], allClasses: DDOClass[], totalLevel: number): SlotEntry[] {
@@ -57,11 +53,15 @@ function buildSlots(classes: { name: string; levels: number }[], allClasses: DDO
     if (!cls?.FeatSlot) continue
     cls.FeatSlot.forEach((fs, idx) => {
       if (fs.Level <= bc.levels) {
+        const featUpdateList = fs.FeatUpdateList
+          ? toArray(fs.FeatUpdateList).filter(Boolean)
+          : undefined
         slots.push({
           key: `${bc.name}-${fs.Level}-${fs.FeatType}-${idx}`,
           level: fs.Level,
           featType: fs.FeatType,
           className: bc.name,
+          featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
         })
       }
     })
@@ -76,22 +76,20 @@ function buildSlots(classes: { name: string; levels: number }[], allClasses: DDO
 }
 
 // ---------------------------------------------------------------------------
-// BAB helpers
+// BAB helpers — parse class BAB array (e.g. "0 1 2 3 ... 20")
 // ---------------------------------------------------------------------------
-function babPerLevel(babStr: string | undefined): number {
-  switch (babStr) {
-    case 'Full': return 1
-    case '3/4': return 0.75
-    case '1/2': return 0.5
-    default: return 0.75
-  }
+function classBABAtLevel(cls: DDOClass | undefined, levels: number): number {
+  if (!cls?.BAB) return Math.floor(levels * 0.75)
+  const arr = String(cls.BAB).trim().split(/\s+/).map(Number)
+  // BAB array is 0-indexed from level 0: arr[0]=0, arr[1]=1, etc.
+  return arr[levels] ?? arr[arr.length - 1] ?? Math.floor(levels * 0.75)
 }
 
 function totalBAB(classes: BuildClass[], allClasses: DDOClass[]): number {
   return classes.reduce((sum, bc) => {
     if (!bc.name || !bc.levels) return sum
     const cls = allClasses.find(c => c.Name === bc.name)
-    return sum + Math.floor(bc.levels * babPerLevel(cls?.BAB))
+    return sum + classBABAtLevel(cls, bc.levels)
   }, 0)
 }
 
@@ -122,7 +120,6 @@ function meetsSingleRequirement(req: Requirement, build: CharacterBuild, allClas
       return (bc?.levels ?? 0) >= value
     }
     case 'ClassMinLevel': {
-      // Any class with at least `value` levels
       return build.classes.some(c => c.levels >= value)
     }
     case 'BaseClassMinLevel': {
@@ -214,24 +211,31 @@ interface FeatOption {
 }
 
 function getOptions(
-  featType: string,
+  slot: SlotEntry,
   feats: Feat[],
   build: CharacterBuild,
   allClasses: DDOClass[],
-  currentSlotKey: string,
 ): FeatOption[] {
-  const groups = FEAT_TYPE_TO_GROUPS[featType] ?? ['Standard']
-
   // Exclude already-chosen feats in other slots
   const chosenElsewhere = new Set(
     Object.entries(build.featChoices)
-      .filter(([k, v]) => k !== currentSlotKey && v)
+      .filter(([k, v]) => k !== slot.key && v)
       .map(([, v]) => v)
   )
+
+  const updateList = slot.featUpdateList
 
   return feats
     .filter(f => {
       if (chosenElsewhere.has(f.Name)) return false
+
+      // If the slot has an explicit FeatUpdateList, it's the authoritative whitelist
+      if (updateList && updateList.length > 0) {
+        return updateList.includes(f.Name)
+      }
+
+      // Fallback: filter by Group
+      const groups = FEAT_TYPE_TO_GROUPS[slot.featType] ?? ['Standard']
       const featGroups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
       return featGroups.some(g => groups.includes(g))
     })
@@ -341,7 +345,7 @@ export default function FeatSlots() {
 
   const openSlot = openSlotKey ? slots.find(s => s.key === openSlotKey) : null
   const pickerOptions = openSlot
-    ? getOptions(openSlot.featType, feats, build, allClasses, openSlotKey)
+    ? getOptions(openSlot, feats, build, allClasses)
     : []
 
   return (

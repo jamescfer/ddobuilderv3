@@ -85,7 +85,7 @@ export default function ClassSelector() {
     }
     const seen: string[] = []
     for (const cls of next) {
-      if (cls && !seen.includes(cls)) seen.push(cls)
+      if (cls && !seen.includes(cls) && seen.length < 3) seen.push(cls)
     }
     for (let i = 0; i < 3; i++) {
       dispatch({ type: 'SET_CLASS', index: i as 0 | 1 | 2, name: seen[i] ?? '' })
@@ -95,6 +95,7 @@ export default function ClassSelector() {
 
   const heroicClasses = classes.filter(c => !c.NotHeroic)
   const heroicAssigned = levelClasses.filter(Boolean).length
+  const classCountFull = usedClassNames.length >= 3
 
   return (
     <div className="panel">
@@ -107,17 +108,18 @@ export default function ClassSelector() {
           <span className={styles.loading}>Loading classes…</span>
         ) : (
           <>
-            {/* Summary chips */}
-            {usedClassNames.length > 0 && (
-              <div className={styles.chips}>
-                {usedClassNames.map((name, i) => (
-                  <span key={name} className={styles.chip}
-                    style={{ borderColor: CLASS_COLORS[i], color: CLASS_COLORS[i] }}>
-                    {name} {totals[name] ?? 0}
-                  </span>
-                ))}
-              </div>
-            )}
+            {/* Summary chips + class count */}
+            <div className={styles.chips}>
+              {usedClassNames.map((name, i) => (
+                <span key={name} className={styles.chip}
+                  style={{ borderColor: CLASS_COLORS[i], color: CLASS_COLORS[i] }}>
+                  {name} {totals[name] ?? 0}
+                </span>
+              ))}
+              <span className={`${styles.classCountBadge} ${classCountFull ? styles.classCountFull : ''}`}>
+                {usedClassNames.length}/3 classes
+              </span>
+            </div>
 
             {/* Quick-fill */}
             <div className={styles.quickFill}>
@@ -150,9 +152,11 @@ export default function ClassSelector() {
                       style={cls ? { borderColor: CLASS_COLORS[clsIdx], color: CLASS_COLORS[clsIdx] } : {}}
                     >
                       <option value="">—</option>
-                      {heroicClasses.map(c => (
-                        <option key={c.Name} value={c.Name}>{c.Name}</option>
-                      ))}
+                      {heroicClasses
+                        .filter(c => usedClassNames.includes(c.Name) || !classCountFull || c.Name === cls)
+                        .map(c => (
+                          <option key={c.Name} value={c.Name}>{c.Name}</option>
+                        ))}
                     </select>
                   </div>
                 )

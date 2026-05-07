@@ -11,7 +11,8 @@ import styles from './EnhancementTreePanel.module.css'
 // ---------------------------------------------------------------------------
 
 const ENH_AP = 80
-const MAX_VISIBLE = 6
+const MAX_VISIBLE = 6       // max trees for enhancements & reaper tabs
+const DESTINY_MAX_VISIBLE = 3  // DDO allows investing in 3 active destiny trees
 
 type Tab = 'enhancements' | 'destiny' | 'reaper'
 
@@ -21,23 +22,25 @@ type Tab = 'enhancements' | 'destiny' | 'reaper'
 
 function normalizeCostPerRank(raw: unknown): string {
   if (raw == null) return '1'
-  if (typeof raw === 'number') return String(raw)
-  if (typeof raw === 'string') return raw
-  if (typeof raw === 'object' && '#text' in (raw as object)) {
+  if (typeof raw === 'number' && isFinite(raw)) return String(raw)
+  if (typeof raw === 'string') return raw || '1'
+  if (typeof raw === 'object' && !Array.isArray(raw) && '#text' in (raw as object)) {
     const t = (raw as Record<string, unknown>)['#text']
-    return t != null ? String(t) : '1'
+    if (t != null) return String(t) || '1'
   }
   return '1'
 }
 
 function costUpToRank(item: EnhancementTreeItem, rank: number): number {
   if (rank <= 0) return 0
-  const maxRanks = item.Ranks ?? 1
+  const maxRanks = typeof item.Ranks === 'number' ? item.Ranks : 1
   const str = normalizeCostPerRank(item.CostPerRank)
-  const raw = str.trim().split(/\s+/).map(Number)
-  const costs = raw.length === 1
-    ? Array(maxRanks).fill(raw[0])
-    : Array.from({ length: maxRanks }, (_, i) => raw[i] ?? raw[raw.length - 1])
+  const parts = str.trim().split(/\s+/).map(Number).filter(isFinite)
+  const costs = parts.length === 0
+    ? Array(maxRanks).fill(1)
+    : parts.length === 1
+    ? Array(maxRanks).fill(parts[0])
+    : Array.from({ length: maxRanks }, (_, i) => parts[i] ?? parts[parts.length - 1])
   return costs.slice(0, rank).reduce((a: number, b: number) => a + b, 0)
 }
 
@@ -85,13 +88,14 @@ function treeCategory(tree: EnhancementTree): Tab {
 interface TreePickerProps {
   allTrees: EnhancementTree[]
   selected: string[]
+  maxVisible: number
   tab: Tab
   build: { race: string; classes: { name: string; levels: number }[] }
   onToggle: (name: string) => void
   onClose: () => void
 }
 
-function TreePicker({ allTrees, selected, tab, build, onToggle, onClose }: TreePickerProps) {
+function TreePicker({ allTrees, selected, maxVisible, tab, build, onToggle, onClose }: TreePickerProps) {
   const classNames = build.classes.map(c => c.name).filter(Boolean)
   const raceName = build.race
 
@@ -121,7 +125,7 @@ function TreePicker({ allTrees, selected, tab, build, onToggle, onClose }: TreeP
         <div className={styles.pickerTreeGrid}>
           {trees.map(tree => {
             const on = selected.includes(tree.Name)
-            const full = !on && selected.length >= MAX_VISIBLE
+            const full = !on && selected.length >= maxVisible
             const matchesRace = tree.IsRacialTree && treeMatchesName(tree.Name, raceName)
             const matchesClass = !tree.IsRacialTree && classNames.some(cn => treeMatchesName(tree.Name, cn))
             const baseClass = treeRequiresClassType(tree, ['BaseClass', 'Class'])
@@ -156,7 +160,7 @@ function TreePicker({ allTrees, selected, tab, build, onToggle, onClose }: TreeP
     <div className={styles.pickerOverlay} onClick={onClose}>
       <div className={styles.pickerModal} onClick={e => e.stopPropagation()}>
         <div className={styles.pickerModalHeader}>
-          <span>Select {tabLabel} Trees ({selected.length}/{MAX_VISIBLE})</span>
+          <span>Select {tabLabel} Trees ({selected.length}/{maxVisible})</span>
           <button className={styles.pickerClose} onClick={onClose}>✕</button>
         </div>
         <div className={styles.pickerBody}>
@@ -265,10 +269,12 @@ export default function EnhancementTreePanel() {
   const setPinned = activeTab === 'enhancements' ? setPinnedEnh
     : activeTab === 'destiny' ? setPinnedDst : setPinnedRpr
 
+  const tabMax = activeTab === 'destiny' ? DESTINY_MAX_VISIBLE : MAX_VISIBLE
+
   function toggleTree(name: string) {
     setPinned(prev => {
       if (prev.includes(name)) return prev.filter(n => n !== name)
-      if (prev.length >= MAX_VISIBLE) return prev
+      if (prev.length >= tabMax) return prev
       return [...prev, name]
     })
   }
@@ -333,7 +339,7 @@ export default function EnhancementTreePanel() {
           <>
             <div className={styles.toolbar}>
               <button className={styles.addTreeBtn} onClick={() => setPickerOpen(true)}>
-                + Add Tree ({pinned.length}/{MAX_VISIBLE})
+                + Add Tree ({pinned.length}/{tabMax})
               </button>
               <span className={styles.toolbarHint}>
                 {activeTab === 'enhancements'
@@ -400,6 +406,7 @@ export default function EnhancementTreePanel() {
         <TreePicker
           allTrees={allTrees}
           selected={pinned}
+          maxVisible={tabMax}
           tab={activeTab}
           build={build}
           onToggle={toggleTree}
