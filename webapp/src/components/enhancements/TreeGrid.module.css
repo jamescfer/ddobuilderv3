@@ -1,10 +1,10 @@
-/* ── TreeGrid layout ─────────────────────────────────────────────────── */
-.grid {
-  display: grid;
-  gap: 4px;
-  padding: 8px;
+/* ── Grid wrapper ─────────────────────────────────────────────────────── */
+.gridWrapper {
+  display: flex;
+  flex-direction: column;
   overflow: auto;
-  /* columns/rows set inline from item positions */
+  background: radial-gradient(ellipse at 50% 20%, rgba(80,40,10,0.35) 0%, rgba(14,10,6,0.85) 100%);
+  padding: 4px 0;
 }
 
 .empty {
@@ -14,99 +14,175 @@
   font-style: italic;
 }
 
+/* ── Tier row (label + cell row) ──────────────────────────────────────── */
+.tierRow {
+  display: flex;
+  align-items: stretch;
+}
+
+.tierLabel {
+  width: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-gold-dark);
+  background: rgba(0,0,0,0.3);
+  border-right: 1px solid rgba(200,136,42,0.2);
+  letter-spacing: 0.04em;
+}
+
+.coreTierLabel {
+  color: var(--color-text-muted);
+  font-size: 9px;
+  background: rgba(0,0,0,0.45);
+}
+
+.cellRow {
+  display: grid;
+  gap: 3px;
+  padding: 3px;
+}
+
+.cellEmpty {
+  width: 90px;
+  height: 90px;
+}
+
 /* ── Enhancement cells ───────────────────────────────────────────────── */
 .cell {
   position: relative;
+  width: 90px;
+  height: 90px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 4px 6px;
-  border-radius: var(--radius-sm);
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 4px;
+  border-radius: 6px;
   border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  font-size: 11px;
+  background: rgba(30,20,10,0.7);
+  font-size: 10px;
   overflow: hidden;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
   user-select: none;
-  min-width: 0;
 }
 
-.cell:hover.available,
-.cell:hover.active {
-  background: var(--color-bg-hover);
-  border-color: var(--color-border-light);
+.tierCell {
+  border-color: rgba(80,55,20,0.6);
+}
+
+.coreCell {
+  width: 90px;
+  height: 80px;
+  border-color: rgba(60,80,40,0.6);
+  background: rgba(20,28,14,0.75);
 }
 
 /* Purchased at least 1 rank */
 .active {
-  border-color: var(--color-gold-dark);
-  background: var(--color-bg-active);
+  border-color: var(--color-gold);
+  box-shadow: 0 0 8px rgba(200,136,42,0.45), inset 0 0 6px rgba(200,136,42,0.12);
+  background: rgba(50,30,6,0.85);
 }
 
-/* Available but not yet purchased */
+/* Available but not purchased */
 .available {
-  background: var(--color-bg-secondary);
+  border-color: rgba(120,85,30,0.7);
+  background: rgba(30,20,10,0.7);
+}
+
+.available:hover {
+  border-color: var(--color-gold-dark);
+  background: rgba(50,30,8,0.8);
+  box-shadow: 0 0 5px rgba(200,136,42,0.2);
+}
+
+/* Can't buy (but not locked) */
+.unavailable {
+  opacity: 0.5;
+  cursor: default;
+  border-color: rgba(60,40,15,0.4);
 }
 
 /* MinSpent gate not met */
 .locked {
-  opacity: 0.45;
+  opacity: 0.35;
   cursor: not-allowed;
   border-style: dashed;
+  border-color: rgba(60,50,30,0.4);
 }
 
-/* ── Cell contents ───────────────────────────────────────────────────── */
-.cellName {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* ── Cell icon ───────────────────────────────────────────────────────── */
+.cellIconWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  width: 100%;
 }
 
+.cellIcon {
+  opacity: 0.7;
+  transition: opacity 0.12s, filter 0.12s;
+  filter: saturate(0.7);
+}
+
+.cellIconActive {
+  opacity: 1;
+  filter: saturate(1.2) drop-shadow(0 0 4px rgba(220,150,40,0.6));
+}
+
+.lockOverlay {
+  position: absolute;
+  bottom: 0;
+  right: 2px;
+  font-size: 12px;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+/* ── Rank pips ───────────────────────────────────────────────────────── */
 .rankRow {
   display: flex;
   gap: 2px;
-  margin-top: 2px;
+  margin-bottom: 1px;
 }
 
 .rankPipFilled,
 .rankPipEmpty {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  border: 1px solid var(--color-border-light);
+  border: 1px solid rgba(200,136,42,0.5);
 }
 
 .rankPipFilled {
   background: var(--color-gold);
-  border-color: var(--color-gold-light);
+  border-color: var(--color-gold-light, #f0c060);
+  box-shadow: 0 0 3px rgba(200,136,42,0.5);
 }
 
 .rankPipEmpty {
-  background: var(--color-bg-input);
+  background: rgba(30,20,10,0.8);
 }
 
-.cellMeta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 2px;
+/* ── Cost label ──────────────────────────────────────────────────────── */
+.costLabel {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--color-gold-dark);
+  letter-spacing: 0.03em;
+  line-height: 1;
 }
 
-.rankText {
-  color: var(--color-text-secondary);
-  font-size: 10px;
-}
-
-.costText {
+.active .costLabel {
   color: var(--color-gold);
-  font-size: 10px;
-  font-weight: 600;
 }
 
 /* ── Decrement button ────────────────────────────────────────────────── */
@@ -114,15 +190,15 @@
   position: absolute;
   top: 2px;
   right: 2px;
-  padding: 0 4px;
-  font-size: 12px;
+  padding: 0 3px;
+  font-size: 13px;
   line-height: 14px;
-  min-width: 16px;
-  height: 16px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-panel);
-  color: var(--color-text-secondary);
-  border-radius: var(--radius-sm);
+  min-width: 15px;
+  height: 15px;
+  border: 1px solid rgba(200,136,42,0.35);
+  background: rgba(40,20,5,0.75);
+  color: var(--color-gold-dark);
+  border-radius: 3px;
   opacity: 0;
   transition: opacity 0.1s;
   z-index: 2;
@@ -133,29 +209,19 @@
 }
 
 .decrementBtn:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text-primary);
-  border-color: var(--color-border-light);
-}
-
-/* ── Lock badge ──────────────────────────────────────────────────────── */
-.lockBadge {
-  position: absolute;
-  bottom: 2px;
-  right: 4px;
-  font-size: 10px;
-  opacity: 0.7;
-  pointer-events: none;
+  background: rgba(80,30,5,0.9);
+  color: var(--color-gold);
+  border-color: var(--color-gold-dark);
 }
 
 /* ── Arrow connectors ────────────────────────────────────────────────── */
 .arrowRight {
   position: absolute;
-  right: -10px;
+  right: -7px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--color-gold-dark);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
   z-index: 3;
   pointer-events: none;
@@ -163,7 +229,7 @@
 
 .arrowUp {
   position: absolute;
-  top: -10px;
+  top: -8px;
   left: 50%;
   transform: translateX(-50%);
   color: var(--color-gold-dark);

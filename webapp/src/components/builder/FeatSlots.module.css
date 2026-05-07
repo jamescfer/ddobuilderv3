@@ -6,19 +6,21 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .slot {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
 }
 
 .slotMeta {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 180px;
+  flex-shrink: 0;
 }
 
 .slotLevel {
@@ -29,19 +31,198 @@
   border: 1px solid var(--color-gold-dark);
   border-radius: var(--radius-sm);
   padding: 1px 5px;
+  white-space: nowrap;
 }
 
 .slotType {
   font-size: 11px;
   color: var(--color-text-secondary);
+  white-space: nowrap;
 }
 
 .slotClass {
   font-size: 11px;
-  color: var(--color-blue);
-  margin-left: auto;
+  color: var(--color-blue, #6ab0de);
+  white-space: nowrap;
 }
 
-.select {
-  width: 100%;
+/* ── Icon picker trigger button ─────────────────────────────────────── */
+.featPickerBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.featPickerBtn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-light);
+}
+
+.featPickerBtnChosen {
+  border-style: solid;
+  border-color: var(--color-gold-dark);
+  background: var(--color-bg-active, rgba(200,136,42,0.08));
+  color: var(--color-text-primary);
+}
+
+.chosenIcon {
+  flex-shrink: 0;
+}
+
+.chosenName {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emptySlotLabel {
+  font-style: italic;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.clearBtn {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  font-size: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.clearBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+/* ── Icon picker modal ───────────────────────────────────────────────── */
+.pickerOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pickerModal {
+  width: min(680px, 95vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+
+.pickerHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.pickerSearch {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-input);
+  color: var(--color-text-primary);
+}
+
+.pickerSearch:focus {
+  outline: none;
+  border-color: var(--color-gold-dark);
+}
+
+.pickerClose {
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.pickerClose:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.pickerGrid {
+  overflow-y: auto;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+}
+
+.pickerItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  text-align: center;
+}
+
+.pickerItem:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-light);
+}
+
+.pickerItemActive {
+  border-color: var(--color-gold);
+  background: rgba(200,136,42,0.15);
+}
+
+.pickerIcon {
+  flex-shrink: 0;
+}
+
+.pickerName {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  line-height: 1.3;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.pickerEmpty {
+  grid-column: 1 / -1;
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 13px;
 }

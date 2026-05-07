@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { BuildClass, CharacterBuild, DDOClass, Feat, Requirement, RequiresOneOf } from '../../types/ddo'
+import DdoIcon from '../DdoIcon'
 import styles from './FeatSlots.module.css'
 
 interface SlotEntry {
@@ -12,6 +13,30 @@ interface SlotEntry {
 }
 
 const EPIC_FEAT_LEVELS = [21, 24, 27, 30, 33, 36, 39]
+
+// Map from FeatType in XML FeatSlot → Group name(s) in feat data
+const FEAT_TYPE_TO_GROUPS: Record<string, string[]> = {
+  'Heroic':           ['Standard'],
+  'Epic Feat':        ['Epic Feat'],
+  'Fighter':          ['Fighter Bonus Feat', 'Fighter', 'Standard'],
+  'Wizard':           ['Wizard Bonus Feat', 'Wizard', 'Standard'],
+  'Rogue':            ['Rogue Bonus Feat', 'Rogue', 'Standard'],
+  'Ranger':           ['Ranger Bonus Feat', 'Ranger', 'Standard'],
+  'Cleric':           ['Cleric Bonus Feat', 'Cleric', 'Standard'],
+  'Druid':            ['Druid Bonus Feat', 'Druid', 'Standard'],
+  'Paladin':          ['Paladin Bonus Feat', 'Paladin', 'Standard'],
+  'Barbarian':        ['Barbarian Bonus Feat', 'Barbarian', 'Standard'],
+  'Bard':             ['Bard Bonus Feat', 'Bard', 'Standard'],
+  'Monk':             ['Monk Bonus Feat', 'Monk', 'Standard'],
+  'Sorcerer':         ['Sorcerer Bonus Feat', 'Sorcerer', 'Standard'],
+  'Favored Soul':     ['Favored Soul Bonus Feat', 'Favored Soul', 'Standard'],
+  'Artificer':        ['Artificer Bonus Feat', 'Artificer', 'Standard'],
+  'Alchemist':        ['Alchemist Bonus Feat', 'Alchemist', 'Standard'],
+  'Warlock':          ['Warlock Bonus Feat', 'Warlock', 'Standard'],
+  'Stormsinger':      ['Stormsinger Bonus Feat', 'Standard'],
+  'Racial':           ['Racial'],
+  'Deity':            ['Deity'],
+}
 
 function buildSlots(classes: { name: string; levels: number }[], allClasses: DDOClass[], totalLevel: number): SlotEntry[] {
   const slots: SlotEntry[] = []
@@ -44,7 +69,7 @@ function buildSlots(classes: { name: string; levels: number }[], allClasses: DDO
 }
 
 // ---------------------------------------------------------------------------
-// BAB helpers (mirrors StatsPanel logic)
+// BAB helpers
 // ---------------------------------------------------------------------------
 function babPerLevel(babStr: string | undefined): number {
   switch (babStr) {
@@ -89,8 +114,19 @@ function meetsSingleRequirement(req: Requirement, build: CharacterBuild, allClas
       const bc = build.classes.find(c => c.name === item)
       return (bc?.levels ?? 0) >= value
     }
+    case 'ClassMinLevel': {
+      // Any class with at least `value` levels
+      return build.classes.some(c => c.levels >= value)
+    }
+    case 'BaseClassMinLevel': {
+      // Primary class (index 0) with at least `value` levels
+      return (build.classes[0]?.levels ?? 0) >= value
+    }
     case 'Level':
       return build.totalLevel >= value
+    case 'Skill':
+    case 'StartingWorld':
+      return true
     default:
       return true
   }
@@ -105,19 +141,16 @@ function meetsRequirements(feat: Feat, build: CharacterBuild, allClasses: DDOCla
   const reqs = feat.Requirements
   if (!reqs) return true
 
-  // ALL Requirement entries must pass (AND)
   if (reqs.Requirement) {
     const list = Array.isArray(reqs.Requirement) ? reqs.Requirement : [reqs.Requirement]
     if (!list.every(r => meetsSingleRequirement(r, build, allClasses))) return false
   }
 
-  // RequiresOneOf: at least one group must have >=1 passing requirement
   if (reqs.RequiresOneOf) {
     const groups = Array.isArray(reqs.RequiresOneOf) ? reqs.RequiresOneOf : [reqs.RequiresOneOf]
     if (!groups.every(g => meetsOneOfGroup(g, build, allClasses))) return false
   }
 
-  // RequiresNoneOf: none of the requirements in any group may pass
   if (reqs.RequiresNoneOf) {
     const groups = Array.isArray(reqs.RequiresNoneOf) ? reqs.RequiresNoneOf : [reqs.RequiresNoneOf]
     if (groups.some(g => meetsOneOfGroup(g, build, allClasses))) return false
@@ -129,31 +162,106 @@ function meetsRequirements(feat: Feat, build: CharacterBuild, allClasses: DDOCla
 // ---------------------------------------------------------------------------
 // Option filtering
 // ---------------------------------------------------------------------------
-function getOptions(featType: string, feats: Feat[], build: CharacterBuild, allClasses: DDOClass[]): Feat[] {
+function getOptions(
+  featType: string,
+  feats: Feat[],
+  build: CharacterBuild,
+  allClasses: DDOClass[],
+  currentSlotKey: string,
+): Feat[] {
+  const allowedGroups = FEAT_TYPE_TO_GROUPS[featType]
   let filtered: Feat[]
-  if (featType === 'Heroic') {
+
+  if (allowedGroups) {
     filtered = feats.filter(f => {
       const groups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
-      return groups.includes('Feat') || groups.includes('General Feat')
-    })
-  } else if (featType === 'Epic Feat') {
-    filtered = feats.filter(f => {
-      const groups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
-      return groups.includes('Epic Feat')
+      return groups.some(g => allowedGroups.includes(g))
     })
   } else {
+    // Fallback: substring match on featType
     filtered = feats.filter(f => {
       const groups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
       return groups.some(g => g.toLowerCase().includes(featType.toLowerCase()))
     })
   }
-  return filtered.filter(f => meetsRequirements(f, build, allClasses))
+
+  // Filter by prerequisites
+  filtered = filtered.filter(f => meetsRequirements(f, build, allClasses))
+
+  // Exclude feats already chosen in other slots (duplicate prevention)
+  const chosenElsewhere = new Set(
+    Object.entries(build.featChoices)
+      .filter(([k, v]) => k !== currentSlotKey && v)
+      .map(([, v]) => v)
+  )
+  filtered = filtered.filter(f => !chosenElsewhere.has(f.Name))
+
+  return filtered
 }
 
+// ---------------------------------------------------------------------------
+// Icon picker modal
+// ---------------------------------------------------------------------------
+interface IconPickerProps {
+  options: Feat[]
+  current: string
+  onSelect: (name: string) => void
+  onClose: () => void
+}
+
+function IconPicker({ options, current, onSelect, onClose }: IconPickerProps) {
+  const [search, setSearch] = useState('')
+  const visible = options.filter(f =>
+    !search || f.Name.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div className={styles.pickerOverlay} onClick={onClose}>
+      <div className={styles.pickerModal} onClick={e => e.stopPropagation()}>
+        <div className={styles.pickerHeader}>
+          <input
+            className={styles.pickerSearch}
+            placeholder="Search feats…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            autoFocus
+          />
+          <button className={styles.pickerClose} onClick={onClose}>✕</button>
+        </div>
+        <div className={styles.pickerGrid}>
+          {visible.map(f => (
+            <button
+              key={f.Name}
+              className={`${styles.pickerItem} ${f.Name === current ? styles.pickerItemActive : ''}`}
+              title={f.Name + (f.Description ? '\n' + f.Description : '')}
+              onClick={() => { onSelect(f.Name); onClose() }}
+            >
+              <DdoIcon
+                category="FeatImages"
+                name={f.Icon ?? f.Name}
+                size={40}
+                className={styles.pickerIcon}
+              />
+              <span className={styles.pickerName}>{f.Name}</span>
+            </button>
+          ))}
+          {visible.length === 0 && (
+            <div className={styles.pickerEmpty}>No feats match your search.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 export default function FeatSlots() {
   const { build, dispatch } = useCharacter()
   const [allClasses, setAllClasses] = useState<DDOClass[]>([])
   const [feats, setFeats] = useState<Feat[]>([])
+  const [openSlotKey, setOpenSlotKey] = useState<string | null>(null)
 
   useEffect(() => {
     api.classes().then(setAllClasses)
@@ -161,6 +269,11 @@ export default function FeatSlots() {
   }, [])
 
   const slots = buildSlots(build.classes, allClasses, build.totalLevel)
+
+  const openSlot = openSlotKey ? slots.find(s => s.key === openSlotKey) : null
+  const pickerOptions = openSlot
+    ? getOptions(openSlot.featType, feats, build, allClasses, openSlotKey)
+    : []
 
   return (
     <div className="panel">
@@ -171,7 +284,8 @@ export default function FeatSlots() {
         ) : (
           <div className={styles.list}>
             {slots.map(slot => {
-              const options = getOptions(slot.featType, feats, build, allClasses)
+              const chosen = build.featChoices[slot.key] ?? ''
+              const chosenFeat = feats.find(f => f.Name === chosen)
               return (
                 <div key={slot.key} className={styles.slot}>
                   <div className={styles.slotMeta}>
@@ -181,20 +295,45 @@ export default function FeatSlots() {
                       <span className={styles.slotClass}>{slot.className}</span>
                     )}
                   </div>
-                  <select
-                    value={build.featChoices[slot.key] ?? ''}
-                    onChange={e => dispatch({ type: 'SET_FEAT', slotKey: slot.key, featName: e.target.value })}
-                    className={styles.select}
+                  <button
+                    className={`${styles.featPickerBtn} ${chosen ? styles.featPickerBtnChosen : ''}`}
+                    onClick={() => setOpenSlotKey(slot.key)}
+                    title={chosen || 'Choose a feat'}
                   >
-                    <option value="">— Choose Feat —</option>
-                    {options.map(f => (
-                      <option key={f.Name} value={f.Name}>{f.Name}</option>
-                    ))}
-                  </select>
+                    {chosen ? (
+                      <>
+                        <DdoIcon
+                          category="FeatImages"
+                          name={chosenFeat?.Icon ?? chosen}
+                          size={28}
+                          className={styles.chosenIcon}
+                        />
+                        <span className={styles.chosenName}>{chosen}</span>
+                      </>
+                    ) : (
+                      <span className={styles.emptySlotLabel}>— Choose Feat —</span>
+                    )}
+                  </button>
+                  {chosen && (
+                    <button
+                      className={styles.clearBtn}
+                      onClick={() => dispatch({ type: 'SET_FEAT', slotKey: slot.key, featName: '' })}
+                      title="Clear feat"
+                    >✕</button>
+                  )}
                 </div>
               )
             })}
           </div>
+        )}
+
+        {openSlotKey && openSlot && (
+          <IconPicker
+            options={pickerOptions}
+            current={build.featChoices[openSlotKey] ?? ''}
+            onSelect={name => dispatch({ type: 'SET_FEAT', slotKey: openSlotKey, featName: name })}
+            onClose={() => setOpenSlotKey(null)}
+          />
         )}
       </div>
     </div>
