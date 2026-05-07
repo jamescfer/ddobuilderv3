@@ -53,7 +53,7 @@ export interface Race {
   ShortName?: string
   Description?: string
   StartingWorld?: string
-  BuildPoints?: number
+  BuildPoints?: unknown
   IconicClass?: string
   Strength?: number
   Dexterity?: number
@@ -185,6 +185,32 @@ export interface Item {
   Material?: string
   Buff?: ItemBuff | ItemBuff[]
   ItemAugment?: ItemAugment | ItemAugment[]
+  SetBonus?: string | string[]
+}
+
+// ---------------------------------------------------------------------------
+// Set Bonuses
+// ---------------------------------------------------------------------------
+export interface SetBonusBuff {
+  EquippedCount: number
+  Description?: string
+}
+
+export interface SetBonus {
+  Type: string
+  Icon?: string
+  Buff?: SetBonusBuff | SetBonusBuff[]
+}
+
+// ---------------------------------------------------------------------------
+// Stance
+// ---------------------------------------------------------------------------
+export interface Stance {
+  Name: string
+  Icon?: string
+  Description?: string
+  Group?: string
+  AutoControlled?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +222,38 @@ export interface Augment {
   MinLevel?: number
   Type: string
   Icon?: string
+}
+
+// ---------------------------------------------------------------------------
+// Filigree
+// ---------------------------------------------------------------------------
+export interface FiligreeSetBuff {
+  EquippedCount: number
+  Description?: string
+}
+
+export interface FiligreeSetBonus {
+  Type: string
+  Icon?: string
+  Buff?: FiligreeSetBuff | FiligreeSetBuff[]
+}
+
+export interface Filigree {
+  Name: string
+  Description?: string
+  Icon?: string
+  Menu?: string
+  /** the set bonus type name this filigree belongs to */
+  SetBonus?: string
+}
+
+// ---------------------------------------------------------------------------
+// Guild Buff
+// ---------------------------------------------------------------------------
+export interface GuildBuff {
+  Name: string
+  Description?: string
+  Level?: number  // minimum guild level to unlock this buff
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +280,8 @@ export interface CharacterBuild {
   augmentChoices: Record<string, string>
   /** className|raceName → count of past lives */
   pastLives: Record<string, number>
+  /** filigree slot index (0-5) → filigree name */
+  filigreeSlots: string[]
 }
 
 export function emptyBuild(): CharacterBuild {
@@ -244,6 +304,7 @@ export function emptyBuild(): CharacterBuild {
     gear: {},
     augmentChoices: {},
     pastLives: {},
+    filigreeSlots: ['', '', '', '', '', ''],
   }
 }
 

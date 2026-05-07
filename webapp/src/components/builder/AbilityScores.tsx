@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react'
 import { useCharacter } from '../../context/CharacterContext'
-import type { Ability } from '../../types/ddo'
+import type { Ability, Race } from '../../types/ddo'
 import { POINT_BUY_COSTS, totalPointsSpent, pointBuyCost } from '../../types/ddo'
+import { api } from '../../api'
 import styles from './AbilityScores.module.css'
 
 const ABILITIES: Ability[] = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']
@@ -10,11 +12,32 @@ const ABBREV: Record<Ability, string> = {
 }
 const MIN_SCORE = 8
 const MAX_SCORE = 18
-const POINT_BUY_BUDGET = 32
+
+function parseBuildPoints(raw: unknown): number[] {
+  if (raw == null) return [28, 32, 34, 36]
+  if (typeof raw === 'number') return [raw]
+  if (typeof raw === 'string') return raw.split(' ').map(Number)
+  if (typeof raw === 'object' && '#text' in (raw as object)) {
+    const text = (raw as Record<string, unknown>)['#text']
+    return typeof text === 'string' ? text.split(' ').map(Number) : [32]
+  }
+  return [28, 32, 34, 36]
+}
 
 export default function AbilityScores() {
   const { build, dispatch } = useCharacter()
   const { baseAbilities } = build
+  const [races, setRaces] = useState<Race[]>([])
+
+  useEffect(() => {
+    api.races().then(setRaces).catch(() => setRaces([]))
+  }, [])
+
+  const race = races.find(r => r.Name === build.race)
+  const points = race ? parseBuildPoints(race.BuildPoints) : [28, 32, 34, 36]
+  const pastLifeCount = Math.min(build.pastLives[build.race] ?? 0, points.length - 1)
+  const POINT_BUY_BUDGET = points[pastLifeCount] ?? 32
+
   const spent = totalPointsSpent(baseAbilities)
   const remaining = POINT_BUY_BUDGET - spent
 
@@ -32,7 +55,7 @@ export default function AbilityScores() {
       <div className="panel-header">
         Ability Scores
         <span className={styles.pointsRemaining} data-over={remaining < 0}>
-          {remaining} pts remaining
+          {remaining} / {POINT_BUY_BUDGET} pts
         </span>
       </div>
       <div className="panel-body">

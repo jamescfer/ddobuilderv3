@@ -1,4 +1,4 @@
-import type { Race, DDOClass, Feat, EnhancementTree, Item, Augment } from '../types/ddo'
+import type { Race, DDOClass, Feat, EnhancementTree, Item, Augment, SetBonus, Stance, GuildBuff, Filigree, FiligreeSetBonus } from '../types/ddo'
 
 const BASE = '/api'
 
@@ -23,5 +23,14 @@ export const api = {
     get<Item[]>('/items', params as Record<string, string | number> | undefined),
   item: (name: string) => get<Item | null>('/item', { name }),
   augments: (params?: { type?: string }) => get<Augment[]>('/augments', params as Record<string, string> | undefined),
+  stances: () => get<unknown[]>('/stances'),
   health: () => get<{ status: string; dataDir: string }>('/health'),
+  itemSetBonuses: (names: string[]) =>
+    names.length === 0
+      ? Promise.resolve([] as Array<{ type: string; count: number }>)
+      : get<Array<{ type: string; count: number }>>('/item-setbonuses', { names: names.join(',') }),
+  setbonuses: () => get<SetBonus[]>('/setbonuses'),
+  guildbuffs: () => get<GuildBuff[]>('/guildbuffs'),
+  filigree: () => get<Filigree[]>('/filigree'),
+  filigreeSetBonuses: () => get<FiligreeSetBonus[]>('/filigree-bonuses'),
 }

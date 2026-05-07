@@ -33,6 +33,7 @@ const parser = new XMLParser({
     'Feats', 'ClassSkill', 'Alignment', 'Augment', 'Buff', 'ItemAugment',
     'SetBonus', 'Gem', 'Stance', 'Spell', 'Patron', 'Quest', 'GuildBuff',
     'GrantedFeat', 'ClassFeat', 'RacialFeat', 'WeaponGroup', 'OptionalBuff',
+    'Filigree',
   ].includes(name),
 })
 
@@ -151,6 +152,35 @@ function loadSetBonuses() {
   } catch { return [] }
 }
 
+function loadGuildBuffs() {
+  try {
+    const parsed = readXml(path.join(DATA_DIR, 'GuildBuffs.xml')) as { GuildBuffs?: { GuildBuff?: unknown[] } }
+    return (parsed?.GuildBuffs?.GuildBuff ?? []) as unknown[]
+  } catch { return [] }
+}
+
+function loadFiligreeSets() {
+  const dir = path.join(DATA_DIR, 'FiligreeSets')
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.Filigree.xml'))
+  return files.flatMap(f => {
+    try {
+      const parsed = readXml(path.join(dir, f)) as { Filigrees?: { Filigree?: unknown[] } }
+      return (parsed?.Filigrees?.Filigree ?? []) as unknown[]
+    } catch { return [] }
+  })
+}
+
+function loadFiligreeBonuses() {
+  const dir = path.join(DATA_DIR, 'FiligreeSets')
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.Filigree.xml'))
+  return files.flatMap(f => {
+    try {
+      const parsed = readXml(path.join(dir, f)) as { Filigrees?: { SetBonus?: unknown[] } }
+      return (parsed?.Filigrees?.SetBonus ?? []) as unknown[]
+    } catch { return [] }
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -226,6 +256,48 @@ app.get('/api/item', (_req, res) => {
 
 app.get('/api/setbonuses', (_req, res) => {
   res.json(cached('setbonuses', loadSetBonuses))
+})
+
+app.get('/api/item-setbonuses', (req, res) => {
+  const { names } = req.query
+  if (!names || typeof names !== 'string') {
+    res.json([])
+    return
+  }
+  const nameList = names.split(',').map(n => n.trim()).filter(Boolean)
+  if (nameList.length === 0) {
+    res.json([])
+    return
+  }
+  const items = cached('items', loadItems) as Array<Record<string, unknown>>
+  // Collect set bonus type counts from matching items
+  const counts = new Map<string, number>()
+  for (const name of nameList) {
+    const item = items.find(i => i['Name'] === name)
+    if (!item) continue
+    const sb = item['SetBonus']
+    if (!sb) continue
+    const sbList = Array.isArray(sb) ? sb : [sb]
+    for (const type of sbList) {
+      if (typeof type === 'string') {
+        counts.set(type, (counts.get(type) ?? 0) + 1)
+      }
+    }
+  }
+  const result = Array.from(counts.entries()).map(([type, count]) => ({ type, count }))
+  res.json(result)
+})
+
+app.get('/api/guildbuffs', (_req, res) => {
+  res.json(cached('guildbuffs', loadGuildBuffs))
+})
+
+app.get('/api/filigree', (_req, res) => {
+  res.json(cached('filigree', loadFiligreeSets))
+})
+
+app.get('/api/filigree-bonuses', (_req, res) => {
+  res.json(cached('filigree-bonuses', loadFiligreeBonuses))
 })
 
 // Serve React build in production

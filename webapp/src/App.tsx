@@ -15,11 +15,12 @@ import EnhancementTreePanel from './components/enhancements/EnhancementTreePanel
 import GearPanel from './components/items/GearPanel'
 import BreakdownsPanel from './components/breakdowns/BreakdownsPanel'
 import PastLivesPanel from './components/pastlives/PastLivesPanel'
+import GuildBuffsPanel from './components/guildbuffs/GuildBuffsPanel'
 import { SaveLoadBar } from './hooks/usePersistence'
 import type { CharacterBuild } from './types/ddo'
 import styles from './App.module.css'
 
-const TABS = ['Builder', 'Skills', 'Enhancements', 'Spells', 'Gear', 'Breakdowns', 'Past Lives'] as const
+const TABS = ['Builder', 'Skills', 'Enhancements', 'Spells', 'Gear', 'Breakdowns', 'Past Lives', 'Guild Buffs'] as const
 type Tab = typeof TABS[number]
 
 export default function App() {
@@ -103,6 +104,12 @@ function AppInner() {
         {activeTab === 'Past Lives' && (
           <div className={styles.single}>
             <PastLivesPanel />
+          </div>
+        )}
+
+        {activeTab === 'Guild Buffs' && (
+          <div className={styles.single}>
+            <GuildBuffsPanel />
           </div>
         )}
       </div>
