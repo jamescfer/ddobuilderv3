@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { EnhancementTree, EnhancementTreeItem } from '../../types/ddo'
-import TreeGrid, { type TreeChoices } from './TreeGrid'
+import TreeGrid, { type TreeChoices, type TreeSelections } from './TreeGrid'
 import DdoIcon from '../DdoIcon'
 import styles from './EnhancementTreePanel.module.css'
 
@@ -10,15 +10,15 @@ import styles from './EnhancementTreePanel.module.css'
 // Constants
 // ---------------------------------------------------------------------------
 
-const TOTAL_AP = 80
-const TREE_AP_CAP = 41
-const MAX_VISIBLE_TREES = 6
+const ENH_AP = 80
+const MAX_VISIBLE = 6
+
+type Tab = 'enhancements' | 'destiny' | 'reaper'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Normalize CostPerRank which may arrive as a plain value or {#text, size} object. */
 function normalizeCostPerRank(raw: unknown): string {
   if (raw == null) return '1'
   if (typeof raw === 'number') return String(raw)
@@ -30,7 +30,6 @@ function normalizeCostPerRank(raw: unknown): string {
   return '1'
 }
 
-/** Parse CostPerRank and accumulate cost for a given rank count. */
 function costUpToRank(item: EnhancementTreeItem, rank: number): number {
   if (rank <= 0) return 0
   const maxRanks = item.Ranks ?? 1
@@ -42,11 +41,9 @@ function costUpToRank(item: EnhancementTreeItem, rank: number): number {
   return costs.slice(0, rank).reduce((a: number, b: number) => a + b, 0)
 }
 
-/** Compute AP spent in one tree given the choices map for that tree. */
 function computeTreeSpent(tree: EnhancementTree, choices: TreeChoices): number {
   return (tree.EnhancementTreeItem ?? []).reduce((sum, item) => {
-    const rank = choices[item.Name] ?? 0
-    return sum + costUpToRank(item, rank)
+    return sum + costUpToRank(item, choices[item.Name] ?? 0)
   }, 0)
 }
 
@@ -57,7 +54,6 @@ function treeMatchesName(treeName: string, name: string): boolean {
   return t.includes(n) || n.includes(t)
 }
 
-/** Check if tree has a Requirements block that references a specific class Type. */
 function treeRequiresClassType(tree: EnhancementTree, types: string[]): string | null {
   const reqs = tree.Requirements
   if (!reqs) return null
@@ -72,9 +68,14 @@ function treeRequiresClassType(tree: EnhancementTree, types: string[]): string |
   return null
 }
 
-/** Universal trees — no class/race requirement. */
 function isUniversalTree(tree: EnhancementTree): boolean {
   return !tree.IsRacialTree && !tree.Requirements
+}
+
+function treeCategory(tree: EnhancementTree): Tab {
+  if (tree.IsReaperTree !== undefined) return 'reaper'
+  if (tree.IsEpicDestiny !== undefined) return 'destiny'
+  return 'enhancements'
 }
 
 // ---------------------------------------------------------------------------
@@ -84,23 +85,26 @@ function isUniversalTree(tree: EnhancementTree): boolean {
 interface TreePickerProps {
   allTrees: EnhancementTree[]
   selected: string[]
+  tab: Tab
   build: { race: string; classes: { name: string; levels: number }[] }
   onToggle: (name: string) => void
   onClose: () => void
 }
 
-function TreePicker({ allTrees, selected, build, onToggle, onClose }: TreePickerProps) {
+function TreePicker({ allTrees, selected, tab, build, onToggle, onClose }: TreePickerProps) {
   const classNames = build.classes.map(c => c.name).filter(Boolean)
   const raceName = build.race
+
+  const tabTrees = allTrees.filter(t => treeCategory(t) === tab)
 
   const racial: EnhancementTree[] = []
   const classTrees: EnhancementTree[] = []
   const universal: EnhancementTree[] = []
 
-  for (const tree of allTrees) {
-    // Skip epic destiny / reaper trees
-    if (tree.IsEpicDestiny !== undefined || tree.IsReaperTree !== undefined) continue
-    if (tree.IsRacialTree) {
+  for (const tree of tabTrees) {
+    if (tab === 'reaper' || tab === 'destiny') {
+      universal.push(tree)
+    } else if (tree.IsRacialTree) {
       racial.push(tree)
     } else if (isUniversalTree(tree)) {
       universal.push(tree)
@@ -117,12 +121,12 @@ function TreePicker({ allTrees, selected, build, onToggle, onClose }: TreePicker
         <div className={styles.pickerTreeGrid}>
           {trees.map(tree => {
             const on = selected.includes(tree.Name)
-            const full = !on && selected.length >= MAX_VISIBLE_TREES
+            const full = !on && selected.length >= MAX_VISIBLE
             const matchesRace = tree.IsRacialTree && treeMatchesName(tree.Name, raceName)
             const matchesClass = !tree.IsRacialTree && classNames.some(cn => treeMatchesName(tree.Name, cn))
             const baseClass = treeRequiresClassType(tree, ['BaseClass', 'Class'])
             const matchesBaseClass = baseClass ? classNames.some(cn => cn === baseClass || treeMatchesName(tree.Name, cn)) : false
-            const available = matchesRace || matchesClass || matchesBaseClass || isUniversalTree(tree)
+            const available = tab !== 'enhancements' || matchesRace || matchesClass || matchesBaseClass || isUniversalTree(tree)
             return (
               <button
                 key={tree.Name}
@@ -146,17 +150,19 @@ function TreePicker({ allTrees, selected, build, onToggle, onClose }: TreePicker
     )
   }
 
+  const tabLabel = tab === 'destiny' ? 'Epic Destiny' : tab === 'reaper' ? 'Reaper' : 'Enhancement'
+
   return (
     <div className={styles.pickerOverlay} onClick={onClose}>
       <div className={styles.pickerModal} onClick={e => e.stopPropagation()}>
         <div className={styles.pickerModalHeader}>
-          <span>Select Enhancement Trees ({selected.length}/{MAX_VISIBLE_TREES})</span>
+          <span>Select {tabLabel} Trees ({selected.length}/{MAX_VISIBLE})</span>
           <button className={styles.pickerClose} onClick={onClose}>✕</button>
         </div>
         <div className={styles.pickerBody}>
           <Section label="Racial" trees={racial} />
           <Section label="Class" trees={classTrees} />
-          <Section label="Universal" trees={universal} />
+          <Section label={tab === 'enhancements' ? 'Universal' : tabLabel} trees={universal} />
         </div>
       </div>
     </div>
@@ -174,16 +180,19 @@ export default function EnhancementTreePanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // treeName → itemName → ranks spent
+  const [activeTab, setActiveTab] = useState<Tab>('enhancements')
+
+  // Per-tab pinned trees
+  const [pinnedEnh, setPinnedEnh] = useState<string[]>([])
+  const [pinnedDst, setPinnedDst] = useState<string[]>([])
+  const [pinnedRpr, setPinnedRpr] = useState<string[]>([])
+
+  // Shared choices + selections for ALL trees (keyed by tree name)
   const [enhChoices, setEnhChoices] = useState<Record<string, TreeChoices>>({})
+  const [enhSelections, setEnhSelections] = useState<Record<string, TreeSelections>>({})
 
-  // Trees currently pinned in the multi-tree view
-  const [pinnedTrees, setPinnedTrees] = useState<string[]>([])
-
-  // Whether tree picker is open
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  // Load all enhancement trees once
   useEffect(() => {
     setLoading(true)
     api.enhancements()
@@ -192,137 +201,162 @@ export default function EnhancementTreePanel() {
       .finally(() => setLoading(false))
   }, [])
 
-  // ── Determine available trees based on build ──────────────────────────────
-  const availableTrees = useMemo<EnhancementTree[]>(() => {
-    if (allTrees.length === 0) return []
-
+  // Available heroic enhancement trees for current build
+  const availableEnhTrees = useMemo<EnhancementTree[]>(() => {
     const classNames = build.classes.map(c => c.name).filter(Boolean)
     const raceName = build.race
-
     return allTrees.filter(tree => {
-      // Exclude epic destiny / reaper — check !== undefined to catch empty string ""
-      if (tree.IsEpicDestiny !== undefined || tree.IsReaperTree !== undefined) return false
-
-      if (tree.IsRacialTree) {
-        return raceName ? treeMatchesName(tree.Name, raceName) : false
-      }
-
+      if (treeCategory(tree) !== 'enhancements') return false
+      if (tree.IsRacialTree) return raceName ? treeMatchesName(tree.Name, raceName) : false
       if (isUniversalTree(tree)) return true
-
-      // Class tree: check Class and BaseClass requirement types
       if (classNames.some(cn => treeMatchesName(tree.Name, cn))) return true
-
-      const requiredClass = treeRequiresClassType(tree, ['Class', 'BaseClass'])
-      if (requiredClass) {
-        return classNames.some(cn => cn === requiredClass)
-      }
-
+      const req = treeRequiresClassType(tree, ['Class', 'BaseClass'])
+      if (req) return classNames.some(cn => cn === req)
       return false
     })
   }, [allTrees, build.race, build.classes])
 
-  // Auto-pin racial tree when race is set; remove trees no longer available
+  // Auto-pin racial tree
   useEffect(() => {
-    setPinnedTrees(prev => {
-      let next = prev.filter(name => availableTrees.some(t => t.Name === name))
-      // Auto-add racial tree
-      const racial = availableTrees.find(t => t.IsRacialTree)
+    setPinnedEnh(prev => {
+      let next = prev.filter(name => availableEnhTrees.some(t => t.Name === name))
+      const racial = availableEnhTrees.find(t => t.IsRacialTree)
       if (racial && !next.includes(racial.Name)) {
-        next = [racial.Name, ...next].slice(0, MAX_VISIBLE_TREES)
+        next = [racial.Name, ...next].slice(0, MAX_VISIBLE)
       }
       return next
     })
-  }, [availableTrees])
+  }, [availableEnhTrees])
 
-  // ── AP totals ─────────────────────────────────────────────────────────────
-  const totalSpentAllTrees = useMemo(() => {
-    return allTrees.reduce((sum, tree) => {
-      return sum + computeTreeSpent(tree, enhChoices[tree.Name] ?? {})
-    }, 0)
-  }, [allTrees, enhChoices])
+  // AP totals per category
+  const totalSpentEnh = useMemo(() => allTrees
+    .filter(t => treeCategory(t) === 'enhancements')
+    .reduce((s, t) => s + computeTreeSpent(t, enhChoices[t.Name] ?? {}), 0),
+    [allTrees, enhChoices])
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
+  const totalSpentDst = useMemo(() => allTrees
+    .filter(t => treeCategory(t) === 'destiny')
+    .reduce((s, t) => s + computeTreeSpent(t, enhChoices[t.Name] ?? {}), 0),
+    [allTrees, enhChoices])
+
+  const totalSpentRpr = useMemo(() => allTrees
+    .filter(t => treeCategory(t) === 'reaper')
+    .reduce((s, t) => s + computeTreeSpent(t, enhChoices[t.Name] ?? {}), 0),
+    [allTrees, enhChoices])
+
+  const totalSpentAll = totalSpentEnh + totalSpentDst + totalSpentRpr
+
   function handleChoicesChange(treeName: string, updated: TreeChoices) {
     setEnhChoices(prev => ({ ...prev, [treeName]: updated }))
   }
 
+  function handleSelectionsChange(treeName: string, updated: TreeSelections) {
+    setEnhSelections(prev => ({ ...prev, [treeName]: updated }))
+  }
+
   function handleReset(treeName: string) {
     setEnhChoices(prev => ({ ...prev, [treeName]: {} }))
+    setEnhSelections(prev => ({ ...prev, [treeName]: {} }))
   }
 
-  function handleRemoveTree(treeName: string) {
-    setPinnedTrees(prev => prev.filter(n => n !== treeName))
-  }
+  // Tab-specific pinned/toggle helpers
+  const pinned = activeTab === 'enhancements' ? pinnedEnh
+    : activeTab === 'destiny' ? pinnedDst : pinnedRpr
+  const setPinned = activeTab === 'enhancements' ? setPinnedEnh
+    : activeTab === 'destiny' ? setPinnedDst : setPinnedRpr
 
   function toggleTree(name: string) {
-    setPinnedTrees(prev => {
+    setPinned(prev => {
       if (prev.includes(name)) return prev.filter(n => n !== name)
-      if (prev.length >= MAX_VISIBLE_TREES) return prev
+      if (prev.length >= MAX_VISIBLE) return prev
       return [...prev, name]
     })
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  const hasCharacter = build.race || build.classes.some(c => c.name)
-  const visibleTrees = pinnedTrees
-    .map(name => allTrees.find(t => t.Name === name))
+  function removeTree(name: string) {
+    setPinned(prev => prev.filter(n => n !== name))
+  }
+
+  const tabTrees = allTrees.filter(t => treeCategory(t) === activeTab)
+
+  const visibleTrees = pinned
+    .map(name => tabTrees.find(t => t.Name === name))
     .filter(Boolean) as EnhancementTree[]
+
+  const totalSpentTab = activeTab === 'enhancements' ? totalSpentEnh
+    : activeTab === 'destiny' ? totalSpentDst : totalSpentRpr
+
+  const hasCharacter = build.race || build.classes.some(c => c.name)
+
+  // For destiny/reaper, no AP cap; for enhancements use ENH_AP
+  const tabAP = activeTab === 'enhancements' ? ENH_AP : 9999
 
   return (
     <div className="panel">
       <div className="panel-header">
-        <span>Enhancement Trees</span>
+        <span>Enhancements</span>
         <span className={styles.apTotal}>
-          {totalSpentAllTrees} / {TOTAL_AP} AP spent
+          {activeTab === 'enhancements'
+            ? `${totalSpentEnh} / ${ENH_AP} AP`
+            : activeTab === 'destiny'
+            ? `${totalSpentDst} Fate pts`
+            : `${totalSpentRpr} Reaper pts`}
         </span>
       </div>
 
-      <div className="panel-body" style={{ padding: 0 }}>
-        {loading && (
-          <div className={styles.statusMsg}>Loading enhancement trees…</div>
-        )}
+      {/* Tabs */}
+      <div className={styles.tabs}>
+        {(['enhancements', 'destiny', 'reaper'] as Tab[]).map(tab => (
+          <button
+            key={tab}
+            className={`${styles.tab} ${activeTab === tab ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab === 'enhancements' ? 'Enhancements' : tab === 'destiny' ? 'Epic Destiny' : 'Reaper'}
+          </button>
+        ))}
+      </div>
 
+      <div className="panel-body" style={{ padding: 0 }}>
+        {loading && <div className={styles.statusMsg}>Loading enhancement trees…</div>}
         {error && !loading && (
           <div className={`${styles.statusMsg} ${styles.errorMsg}`}>
-            Failed to load enhancements: {error}
+            Failed to load: {error}
           </div>
         )}
 
-        {!loading && !error && !hasCharacter && (
-          <div className={styles.statusMsg}>
-            Select a race and class to see available enhancement trees.
-          </div>
+        {!loading && !error && !hasCharacter && activeTab === 'enhancements' && (
+          <div className={styles.statusMsg}>Select a race and class to see enhancement trees.</div>
         )}
 
-        {!loading && !error && hasCharacter && (
+        {!loading && !error && (hasCharacter || activeTab !== 'enhancements') && (
           <>
-            {/* Toolbar */}
             <div className={styles.toolbar}>
-              <button
-                className={styles.addTreeBtn}
-                onClick={() => setPickerOpen(true)}
-              >
-                + Add Tree ({pinnedTrees.length}/{MAX_VISIBLE_TREES})
+              <button className={styles.addTreeBtn} onClick={() => setPickerOpen(true)}>
+                + Add Tree ({pinned.length}/{MAX_VISIBLE})
               </button>
               <span className={styles.toolbarHint}>
-                {TOTAL_AP - totalSpentAllTrees} AP remaining
+                {activeTab === 'enhancements'
+                  ? `${ENH_AP - totalSpentEnh} AP remaining`
+                  : activeTab === 'destiny'
+                  ? `${totalSpentDst} pts spent`
+                  : `${totalSpentRpr} pts spent`}
               </span>
             </div>
 
-            {/* Multi-tree display */}
             {visibleTrees.length === 0 ? (
               <div className={styles.statusMsg}>
-                No trees selected. Click "Add Tree" to choose enhancement trees.
+                No trees selected. Click "Add Tree" to add enhancement trees.
               </div>
             ) : (
               <div className={styles.multiTreeScroll}>
                 <div className={styles.multiTreeRow}>
                   {visibleTrees.map(tree => {
                     const treeChoices = enhChoices[tree.Name] ?? {}
+                    const treeSelections = enhSelections[tree.Name] ?? {}
                     const spent = computeTreeSpent(tree, treeChoices)
                     return (
                       <div key={tree.Name} className={styles.treeColumn}>
-                        {/* Tree header */}
                         <div className={styles.treeHeader}>
                           <DdoIcon
                             category="EnhancementImages"
@@ -333,30 +367,24 @@ export default function EnhancementTreePanel() {
                           <span className={styles.treeHeaderName} title={tree.Name}>
                             {tree.Name}
                           </span>
-                          <span className={`${styles.treeHeaderAP} ${spent >= TREE_AP_CAP ? styles.apCapReached : ''}`}>
-                            {spent} AP
+                          <span className={styles.treeHeaderAP}>
+                            {spent} {activeTab === 'enhancements' ? 'AP' : 'pts'}
                           </span>
                           {spent > 0 && (
-                            <button
-                              className={styles.resetBtn}
-                              onClick={() => handleReset(tree.Name)}
-                              title="Reset this tree"
-                            >↺</button>
+                            <button className={styles.resetBtn}
+                              onClick={() => handleReset(tree.Name)} title="Reset">↺</button>
                           )}
-                          <button
-                            className={styles.removeBtn}
-                            onClick={() => handleRemoveTree(tree.Name)}
-                            title="Remove tree"
-                          >✕</button>
+                          <button className={styles.removeBtn}
+                            onClick={() => removeTree(tree.Name)} title="Remove">✕</button>
                         </div>
-
-                        {/* Grid */}
                         <TreeGrid
                           tree={tree}
                           choices={treeChoices}
-                          totalSpentAllTrees={totalSpentAllTrees}
-                          totalAP={TOTAL_AP}
-                          onChoicesChange={(updated) => handleChoicesChange(tree.Name, updated)}
+                          selections={treeSelections}
+                          totalSpentAllTrees={totalSpentAll}
+                          totalAP={tabAP}
+                          onChoicesChange={u => handleChoicesChange(tree.Name, u)}
+                          onSelectionsChange={u => handleSelectionsChange(tree.Name, u)}
                         />
                       </div>
                     )
@@ -371,7 +399,8 @@ export default function EnhancementTreePanel() {
       {pickerOpen && (
         <TreePicker
           allTrees={allTrees}
-          selected={pinnedTrees}
+          selected={pinned}
+          tab={activeTab}
           build={build}
           onToggle={toggleTree}
           onClose={() => setPickerOpen(false)}
