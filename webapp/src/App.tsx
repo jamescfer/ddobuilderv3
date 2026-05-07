@@ -5,6 +5,7 @@ import CharacterInfo from './components/builder/CharacterInfo'
 import RaceSelector from './components/builder/RaceSelector'
 import ClassSelector from './components/builder/ClassSelector'
 import AbilityScores from './components/builder/AbilityScores'
+import AbilityLevelUps from './components/builder/AbilityLevelUps'
 import StatsPanel from './components/builder/StatsPanel'
 import FeatSlots from './components/builder/FeatSlots'
 import Skills from './components/builder/Skills'
@@ -59,6 +60,7 @@ function AppInner() {
               <RaceSelector />
               <ClassSelector />
               <AbilityScores />
+              <AbilityLevelUps />
               <StatsPanel />
             </aside>
             <section className={styles.main}>

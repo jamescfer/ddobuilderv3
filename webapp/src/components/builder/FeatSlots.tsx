@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, Feat } from '../../types/ddo'
+import type { BuildClass, CharacterBuild, DDOClass, Feat, Requirement, RequiresOneOf } from '../../types/ddo'
 import styles from './FeatSlots.module.css'
 
 interface SlotEntry {
@@ -36,17 +36,106 @@ function buildSlots(classes: { name: string; levels: number }[], allClasses: DDO
   return slots
 }
 
-function getOptions(featType: string, feats: Feat[]): Feat[] {
+// ---------------------------------------------------------------------------
+// BAB helpers (mirrors StatsPanel logic)
+// ---------------------------------------------------------------------------
+function babPerLevel(babStr: string | undefined): number {
+  switch (babStr) {
+    case 'Full': return 1
+    case '3/4': return 0.75
+    case '1/2': return 0.5
+    default: return 0.75
+  }
+}
+
+function totalBAB(classes: BuildClass[], allClasses: DDOClass[]): number {
+  return classes.reduce((sum, bc) => {
+    if (!bc.name || !bc.levels) return sum
+    const cls = allClasses.find(c => c.Name === bc.name)
+    return sum + Math.floor(bc.levels * babPerLevel(cls?.BAB))
+  }, 0)
+}
+
+// ---------------------------------------------------------------------------
+// Prerequisite checking
+// ---------------------------------------------------------------------------
+function meetsSingleRequirement(req: Requirement, build: CharacterBuild, allClasses: DDOClass[]): boolean {
+  const item = Array.isArray(req.Item) ? req.Item[0] : req.Item ?? ''
+  const value = req.Value ?? 0
+
+  switch (req.Type) {
+    case 'Ability': {
+      const score = build.baseAbilities[item as keyof typeof build.baseAbilities]
+      return score !== undefined && score >= value
+    }
+    case 'BAB':
+      return totalBAB(build.classes, allClasses) >= value
+    case 'Feat': {
+      const chosen = Object.values(build.featChoices)
+      return chosen.includes(item)
+    }
+    case 'Race':
+      return build.race === item
+    case 'Class':
+      return build.classes.some(c => c.name === item && c.levels > 0)
+    case 'ClassLevel': {
+      const bc = build.classes.find(c => c.name === item)
+      return (bc?.levels ?? 0) >= value
+    }
+    case 'Level':
+      return build.totalLevel >= value
+    default:
+      return true
+  }
+}
+
+function meetsOneOfGroup(group: RequiresOneOf, build: CharacterBuild, allClasses: DDOClass[]): boolean {
+  const reqs = Array.isArray(group.Requirement) ? group.Requirement : [group.Requirement]
+  return reqs.some(r => meetsSingleRequirement(r, build, allClasses))
+}
+
+function meetsRequirements(feat: Feat, build: CharacterBuild, allClasses: DDOClass[]): boolean {
+  const reqs = feat.Requirements
+  if (!reqs) return true
+
+  // ALL Requirement entries must pass (AND)
+  if (reqs.Requirement) {
+    const list = Array.isArray(reqs.Requirement) ? reqs.Requirement : [reqs.Requirement]
+    if (!list.every(r => meetsSingleRequirement(r, build, allClasses))) return false
+  }
+
+  // RequiresOneOf: at least one group must have >=1 passing requirement
+  if (reqs.RequiresOneOf) {
+    const groups = Array.isArray(reqs.RequiresOneOf) ? reqs.RequiresOneOf : [reqs.RequiresOneOf]
+    if (!groups.every(g => meetsOneOfGroup(g, build, allClasses))) return false
+  }
+
+  // RequiresNoneOf: none of the requirements in any group may pass
+  if (reqs.RequiresNoneOf) {
+    const groups = Array.isArray(reqs.RequiresNoneOf) ? reqs.RequiresNoneOf : [reqs.RequiresNoneOf]
+    if (groups.some(g => meetsOneOfGroup(g, build, allClasses))) return false
+  }
+
+  return true
+}
+
+// ---------------------------------------------------------------------------
+// Option filtering
+// ---------------------------------------------------------------------------
+function getOptions(featType: string, feats: Feat[], build: CharacterBuild, allClasses: DDOClass[]): Feat[] {
+  let filtered: Feat[]
   if (featType === 'Heroic') {
-    return feats.filter(f => {
+    filtered = feats.filter(f => {
       const groups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
       return groups.includes('Feat') || groups.includes('General Feat')
     })
+  } else {
+    filtered = feats.filter(f => {
+      const groups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
+      return groups.some(g => g.toLowerCase().includes(featType.toLowerCase()))
+    })
   }
-  return feats.filter(f => {
-    const groups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
-    return groups.some(g => g.toLowerCase().includes(featType.toLowerCase()))
-  })
+  return filtered.filter(f => meetsRequirements(f, build, allClasses))
 }
 
 export default function FeatSlots() {
@@ -70,7 +159,7 @@ export default function FeatSlots() {
         ) : (
           <div className={styles.list}>
             {slots.map(slot => {
-              const options = getOptions(slot.featType, feats)
+              const options = getOptions(slot.featType, feats, build, allClasses)
               return (
                 <div key={slot.key} className={styles.slot}>
                   <div className={styles.slotMeta}>
