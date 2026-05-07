@@ -56,14 +56,15 @@ interface CellProps {
   totalSpent: number
   totalAP: number
   isCore: boolean
+  coreUnlocked?: boolean
   onIncrement: () => void
   onDecrement: () => void
 }
 
-function EnhancementCell({ item, rank, treeSpent, totalSpent, totalAP, isCore, onIncrement, onDecrement }: CellProps) {
+function EnhancementCell({ item, rank, treeSpent, totalSpent, totalAP, isCore, coreUnlocked = true, onIncrement, onDecrement }: CellProps) {
   const maxRanks = item.Ranks ?? 1
   const minSpent = item.MinSpent ?? 0
-  const locked = treeSpent < minSpent
+  const locked = treeSpent < minSpent || (isCore && !coreUnlocked)
   const atMax = rank >= maxRanks
   const cost = nextRankCost(item, rank)
   const apRemaining = totalAP - totalSpent
@@ -79,6 +80,7 @@ function EnhancementCell({ item, rank, treeSpent, totalSpent, totalAP, isCore, o
     item.Description ? item.Description : '',
     `Cost: ${cost} AP${maxRanks > 1 ? ` per rank (${totalCost} total)` : ''}`,
     minSpent > 0 ? `Requires ${minSpent} AP spent in tree` : '',
+    isCore && !coreUnlocked ? 'Requires previous core enhancement' : '',
   ].filter(Boolean).join('\n')
 
   let cellClass = `${styles.cell} ${isCore ? styles.coreCell : styles.tierCell}`
@@ -191,10 +193,20 @@ export default function TreeGrid({ tree, choices, totalSpentAllTrees, totalAP = 
 
   // Separate core vs tier items
   const tierItems = items.filter(it => (it.YPosition ?? 0) < CORE_Y_THRESHOLD)
-  const coreItems = items.filter(it => (it.YPosition ?? 0) >= CORE_Y_THRESHOLD)
+  const coreItems = items
+    .filter(it => (it.YPosition ?? 0) >= CORE_Y_THRESHOLD)
+    .sort((a, b) => (a.XPosition ?? 0) - (b.XPosition ?? 0))
 
   // Unique tier Y values (ascending), used to build label rows
   const tierRows = Array.from(new Set(tierItems.map(it => it.YPosition ?? 0))).sort((a, b) => a - b)
+
+  /** Cores require each preceding core to be fully purchased first. */
+  function coreIsUnlocked(item: EnhancementTreeItem): boolean {
+    const idx = coreItems.findIndex(c => c.Name === item.Name)
+    if (idx <= 0) return true
+    const prev = coreItems[idx - 1]
+    return (choices[prev.Name] ?? 0) >= (prev.Ranks ?? 1)
+  }
 
   function handleIncrement(item: EnhancementTreeItem) {
     const rank = choices[item.Name] ?? 0
@@ -204,12 +216,21 @@ export default function TreeGrid({ tree, choices, totalSpentAllTrees, totalAP = 
     if (rank >= maxRanks) return
     if (treeSpent < minSpent) return
     if (apRemaining < cost) return
+    const isCore = (item.YPosition ?? 0) >= CORE_Y_THRESHOLD
+    if (isCore && !coreIsUnlocked(item)) return
     onChoicesChange({ ...choices, [item.Name]: rank + 1 })
   }
 
   function handleDecrement(item: EnhancementTreeItem) {
     const rank = choices[item.Name] ?? 0
     if (rank <= 0) return
+    // Prevent removing a core if a later core has been purchased
+    const isCore = (item.YPosition ?? 0) >= CORE_Y_THRESHOLD
+    if (isCore) {
+      const idx = coreItems.findIndex(c => c.Name === item.Name)
+      const laterCoresBought = coreItems.slice(idx + 1).some(c => (choices[c.Name] ?? 0) > 0)
+      if (laterCoresBought) return
+    }
     onChoicesChange({ ...choices, [item.Name]: rank - 1 })
   }
 
@@ -270,6 +291,7 @@ export default function TreeGrid({ tree, choices, totalSpentAllTrees, totalAP = 
                   totalSpent={totalSpentAllTrees}
                   totalAP={totalAP}
                   isCore={true}
+                  coreUnlocked={coreIsUnlocked(item)}
                   onIncrement={() => handleIncrement(item)}
                   onDecrement={() => handleDecrement(item)}
                 />

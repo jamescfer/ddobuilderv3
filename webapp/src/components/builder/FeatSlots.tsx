@@ -286,32 +286,35 @@ export default function FeatSlots() {
             {slots.map(slot => {
               const chosen = build.featChoices[slot.key] ?? ''
               const chosenFeat = feats.find(f => f.Name === chosen)
+              const hoverTitle = chosen
+                ? `${chosen}${chosenFeat?.Description ? '\n\n' + chosenFeat.Description : ''}`
+                : 'Click to choose a feat'
               return (
                 <div key={slot.key} className={styles.slot}>
-                  <div className={styles.slotMeta}>
-                    <span className={styles.slotLevel}>Lv {slot.level}</span>
-                    <span className={styles.slotType}>{slot.featType}</span>
-                    {slot.className !== 'Universal' && (
-                      <span className={styles.slotClass}>{slot.className}</span>
-                    )}
-                  </div>
+                  <span className={styles.slotLevel}>Lv {slot.level}</span>
+                  <span className={styles.slotType} title={slot.featType}>
+                    {slot.featType.replace(' Feat', '').slice(0, 12)}
+                  </span>
+                  {slot.className !== 'Universal' && slot.className !== 'Epic' && (
+                    <span className={styles.slotClass}>{slot.className.slice(0, 8)}</span>
+                  )}
                   <button
                     className={`${styles.featPickerBtn} ${chosen ? styles.featPickerBtnChosen : ''}`}
                     onClick={() => setOpenSlotKey(slot.key)}
-                    title={chosen || 'Choose a feat'}
+                    title={hoverTitle}
                   >
                     {chosen ? (
                       <>
                         <DdoIcon
                           category="FeatImages"
                           name={chosenFeat?.Icon ?? chosen}
-                          size={28}
+                          size={22}
                           className={styles.chosenIcon}
                         />
                         <span className={styles.chosenName}>{chosen}</span>
                       </>
                     ) : (
-                      <span className={styles.emptySlotLabel}>— Choose Feat —</span>
+                      <span className={styles.emptySlotLabel}>Choose…</span>
                     )}
                   </button>
                   {chosen && (
