@@ -1,0 +1,47 @@
+.empty {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.slotMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.slotLevel {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-gold);
+  background: rgba(200, 136, 42, 0.15);
+  border: 1px solid var(--color-gold-dark);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+}
+
+.slotType {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.slotClass {
+  font-size: 11px;
+  color: var(--color-blue);
+  margin-left: auto;
+}
+
+.select {
+  width: 100%;
+}

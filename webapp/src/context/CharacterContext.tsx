@@ -1,0 +1,114 @@
+import React, { createContext, useContext, useReducer } from 'react'
+import type { CharacterBuild, Ability } from '../types/ddo'
+import { emptyBuild } from '../types/ddo'
+
+type Action =
+  | { type: 'SET_NAME'; name: string }
+  | { type: 'SET_RACE'; race: string }
+  | { type: 'SET_ALIGNMENT'; alignment: string }
+  | { type: 'SET_CLASS'; index: 0 | 1 | 2; name: string }
+  | { type: 'SET_CLASS_LEVELS'; index: 0 | 1 | 2; levels: number }
+  | { type: 'SET_ABILITY'; ability: Ability; score: number }
+  | { type: 'SET_ABILITY_LEVELUP'; level: 4 | 8 | 12 | 16 | 20 | 24 | 28 | 32 | 36 | 40; ability: Ability }
+  | { type: 'SET_FEAT'; slotKey: string; featName: string }
+  | { type: 'SET_SKILL_RANK'; skill: string; rank: number }
+  | { type: 'SET_GEAR'; slot: string; itemName: string }
+  | { type: 'CLEAR_GEAR'; slot: string }
+  | { type: 'SET_AUGMENT'; key: string; augmentName: string }
+  | { type: 'CLEAR_AUGMENT'; key: string }
+  | { type: 'SET_PAST_LIFE'; source: string; count: number }
+  | { type: 'LOAD_BUILD'; build: CharacterBuild }
+  | { type: 'RESET' }
+
+function migrateLoad(raw: CharacterBuild): CharacterBuild {
+  return {
+    ...raw,
+    skillRanks: raw.skillRanks ?? {},
+    gear: raw.gear ?? {},
+    augmentChoices: raw.augmentChoices ?? {},
+    pastLives: raw.pastLives ?? {},
+  }
+}
+
+function reducer(state: CharacterBuild, action: Action): CharacterBuild {
+  switch (action.type) {
+    case 'SET_NAME':
+      return { ...state, name: action.name }
+    case 'SET_RACE':
+      return { ...state, race: action.race }
+    case 'SET_ALIGNMENT':
+      return { ...state, alignment: action.alignment }
+    case 'SET_CLASS': {
+      const classes = [...state.classes] as CharacterBuild['classes']
+      classes[action.index] = { ...classes[action.index], name: action.name }
+      return { ...state, classes }
+    }
+    case 'SET_CLASS_LEVELS': {
+      const classes = [...state.classes] as CharacterBuild['classes']
+      classes[action.index] = { ...classes[action.index], levels: action.levels }
+      const totalLevel = classes.reduce((s, c) => s + c.levels, 0)
+      return { ...state, classes, totalLevel }
+    }
+    case 'SET_ABILITY':
+      return { ...state, baseAbilities: { ...state.baseAbilities, [action.ability]: action.score } }
+    case 'SET_ABILITY_LEVELUP':
+      return { ...state, abilityLevelUps: { ...state.abilityLevelUps, [action.level]: action.ability } }
+    case 'SET_FEAT':
+      return { ...state, featChoices: { ...state.featChoices, [action.slotKey]: action.featName } }
+    case 'SET_SKILL_RANK':
+      return { ...state, skillRanks: { ...state.skillRanks, [action.skill]: action.rank } }
+    case 'SET_GEAR':
+      return {
+        ...state,
+        gear: { ...state.gear, [action.slot]: action.itemName },
+        augmentChoices: Object.fromEntries(
+          Object.entries(state.augmentChoices).filter(([k]) => !k.startsWith(action.slot + ':')),
+        ),
+      }
+    case 'CLEAR_GEAR': {
+      const gear = { ...state.gear }
+      delete gear[action.slot]
+      const augmentChoices = Object.fromEntries(
+        Object.entries(state.augmentChoices).filter(([k]) => !k.startsWith(action.slot + ':')),
+      )
+      return { ...state, gear, augmentChoices }
+    }
+    case 'SET_AUGMENT':
+      return { ...state, augmentChoices: { ...state.augmentChoices, [action.key]: action.augmentName } }
+    case 'CLEAR_AUGMENT': {
+      const augmentChoices = { ...state.augmentChoices }
+      delete augmentChoices[action.key]
+      return { ...state, augmentChoices }
+    }
+    case 'SET_PAST_LIFE':
+      return { ...state, pastLives: { ...state.pastLives, [action.source]: action.count } }
+    case 'LOAD_BUILD':
+      return migrateLoad(action.build)
+    case 'RESET':
+      return emptyBuild()
+    default:
+      return state
+  }
+}
+
+interface CharacterContextValue {
+  build: CharacterBuild
+  dispatch: React.Dispatch<Action>
+}
+
+const CharacterContext = createContext<CharacterContextValue | null>(null)
+
+export function CharacterProvider({ children }: { children: React.ReactNode }) {
+  const [build, dispatch] = useReducer(reducer, undefined, emptyBuild)
+  return (
+    <CharacterContext.Provider value={{ build, dispatch }}>
+      {children}
+    </CharacterContext.Provider>
+  )
+}
+
+export function useCharacter() {
+  const ctx = useContext(CharacterContext)
+  if (!ctx) throw new Error('useCharacter must be used inside CharacterProvider')
+  return ctx
+}

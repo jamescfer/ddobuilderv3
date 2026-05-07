@@ -1,0 +1,125 @@
+.section {
+  margin-bottom: 16px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 6px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 4px 12px;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: var(--radius-sm);
+}
+
+.entry:hover {
+  background: var(--color-bg-hover);
+}
+
+.entryName {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn {
+  padding: 1px 6px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-light);
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.count {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 14px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.count[data-nonzero='true'] {
+  color: var(--color-gold);
+}
+
+.pips {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.pipFilled,
+.pipEmpty {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-light);
+}
+
+.pipFilled {
+  background: var(--color-gold);
+  border-color: var(--color-gold);
+}
+
+.pipEmpty {
+  background: transparent;
+}
+
+.totalBadge {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-gold);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-gold-dark);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+
+.note {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 4px 0 0;
+}
