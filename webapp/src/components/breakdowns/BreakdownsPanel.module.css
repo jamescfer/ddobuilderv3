@@ -2,60 +2,81 @@
   font-size: 12px;
   color: var(--color-text-muted);
   font-style: italic;
+  padding: 8px 4px;
 }
 
-.note {
-  font-size: 10px;
-  color: var(--color-text-muted);
-  font-style: italic;
-  margin: 0 0 12px;
+/* ── Outer container ─────────────────────────────────────────────────── */
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-/* ── 2-column responsive grid ────────────────────────────────────────── */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px 20px;
-  align-items: start;
-}
-
-/* ── Section ─────────────────────────────────────────────────────────── */
+/* ── Collapsible Section ─────────────────────────────────────────────── */
 .section {
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
-.sectionTitle {
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  background: rgba(212,152,42,0.06);
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  padding: 5px 8px;
+  font-family: var(--font-heading);
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.09em;
   color: var(--color-gold-dark);
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--color-border);
-  margin-bottom: 2px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
 
-/* ── Table rows ──────────────────────────────────────────────────────── */
-.table {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+.sectionHeader:hover {
+  background: rgba(212,152,42,0.12);
+  color: var(--color-gold);
 }
 
+.sectionCaret {
+  font-size: 10px;
+  color: var(--color-gold-dark);
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.sectionBody {
+  padding: 2px 0 6px;
+}
+
+/* ── Stat rows ───────────────────────────────────────────────────────── */
 .row {
   display: grid;
-  grid-template-columns: 130px 60px 1fr;
+  grid-template-columns: 1fr 60px;
   align-items: baseline;
   gap: 4px;
-  padding: 2px 4px;
+  padding: 2px 8px;
   border-radius: var(--radius-sm);
   cursor: default;
+  transition: background 0.08s;
 }
 
 .row:hover {
   background: var(--color-bg-hover);
+}
+
+.rowIndent {
+  padding-left: 22px;
+}
+
+.rowDim {
+  opacity: 0.45;
 }
 
 .label {
@@ -74,10 +95,210 @@
   text-align: right;
 }
 
-.detail {
-  font-size: 10px;
+.valueDim {
   color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+/* ── Ability Score grid ──────────────────────────────────────────────── */
+.abilityGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+@media (max-width: 600px) {
+  .abilityGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.abilityCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  cursor: default;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.abilityCell:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-light);
+}
+
+.abLabel {
+  font-family: var(--font-heading);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-gold-dark);
+  text-transform: uppercase;
+}
+
+.abScore {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+}
+
+.abMod {
+  font-size: 10px;
+  color: var(--color-gold);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Tooltip ─────────────────────────────────────────────────────────── */
+.tipBox {
+  position: fixed;
+  z-index: 9999;
+  min-width: 200px;
+  max-width: 340px;
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-dropdown);
+  padding: 0;
+  pointer-events: none;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.tipTitle {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--color-gold);
+  background: rgba(212,152,42,0.1);
+  border-bottom: 1px solid var(--color-border);
+  padding: 5px 8px;
+}
+
+.tipTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.tipTable thead th {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  padding: 3px 8px 2px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.tipTable thead th:last-child {
+  text-align: right;
+}
+
+.tipTable tbody td {
+  padding: 2px 8px;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid rgba(30,36,64,0.5);
+}
+
+.tipTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tipTable tfoot td {
+  padding: 3px 8px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.tipVal {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-gold);
+}
+
+.tipEmpty {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--color-text-muted);
+  padding: 6px 8px;
+}
+
+/* ── Spell Power table ───────────────────────────────────────────────── */
+.spNote {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 2px 8px 4px;
+}
+
+.spTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.spTable thead th {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  text-align: right;
+}
+
+.spTable thead th:first-child {
+  text-align: left;
+}
+
+.spRow:hover {
+  background: var(--color-bg-hover);
+}
+
+.spName {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  padding: 2px 6px;
   white-space: nowrap;
+}
+
+.spHead {
+  text-align: right;
+  padding: 2px 6px;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.spCell {
+  text-align: right;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-gold);
+  cursor: default;
+  transition: background 0.08s;
+}
+
+.spCell:hover {
+  background: rgba(212,152,42,0.08);
+}
+
+.spCellDim {
+  color: var(--color-text-muted);
+  font-weight: 400;
 }
