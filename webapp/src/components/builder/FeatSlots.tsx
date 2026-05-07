@@ -126,8 +126,8 @@ function meetsSingleRequirement(req: Requirement, build: CharacterBuild, allClas
       return build.classes.some(c => c.levels >= value)
     }
     case 'BaseClassMinLevel': {
-      // Primary class (index 0) with at least `value` levels
-      return (build.classes[0]?.levels ?? 0) >= value
+      const bc = build.classes.find(c => c.name === item)
+      return (bc?.levels ?? 0) >= value
     }
     case 'Level':
       return build.totalLevel >= value
@@ -167,43 +167,86 @@ function meetsRequirements(feat: Feat, build: CharacterBuild, allClasses: DDOCla
 }
 
 // ---------------------------------------------------------------------------
+// Prerequisite label formatting
+// ---------------------------------------------------------------------------
+function formatReq(req: Requirement): string {
+  const item = Array.isArray(req.Item) ? req.Item[0] : req.Item ?? ''
+  const val = req.Value ?? 0
+  switch (req.Type) {
+    case 'Ability': return `${item} ${val}+`
+    case 'BAB': return `BAB ${val}+`
+    case 'Feat': return item
+    case 'Race': return `Race: ${item}`
+    case 'Class': return `Class: ${item}`
+    case 'ClassLevel': return `${item} ${val}+`
+    case 'ClassMinLevel': return `Any class ${val}+`
+    case 'BaseClassMinLevel': return `${item} ${val}+`
+    case 'Level': return `Level ${val}+`
+    default: return ''
+  }
+}
+
+function formatPrerequisites(feat: Feat): string {
+  const reqs = feat.Requirements
+  if (!reqs) return ''
+  const parts: string[] = []
+  if (reqs.Requirement) {
+    const list = Array.isArray(reqs.Requirement) ? reqs.Requirement : [reqs.Requirement]
+    list.forEach(r => { const s = formatReq(r); if (s) parts.push(s) })
+  }
+  if (reqs.RequiresOneOf) {
+    const groups = Array.isArray(reqs.RequiresOneOf) ? reqs.RequiresOneOf : [reqs.RequiresOneOf]
+    groups.forEach(g => {
+      const sub = (Array.isArray(g.Requirement) ? g.Requirement : [g.Requirement])
+        .map(formatReq).filter(Boolean)
+      if (sub.length) parts.push(sub.join(' or '))
+    })
+  }
+  return parts.length ? `Requires: ${parts.join(', ')}` : ''
+}
+
+// ---------------------------------------------------------------------------
 // Option filtering
 // ---------------------------------------------------------------------------
+interface FeatOption {
+  feat: Feat
+  prereqsMet: boolean
+}
+
 function getOptions(
   featType: string,
   feats: Feat[],
   build: CharacterBuild,
   allClasses: DDOClass[],
   currentSlotKey: string,
-): Feat[] {
-  const allowedGroups = FEAT_TYPE_TO_GROUPS[featType]
-  let filtered: Feat[]
+): FeatOption[] {
+  const groups = FEAT_TYPE_TO_GROUPS[featType] ?? ['Standard']
 
-  const groups = allowedGroups ?? ['Standard']
-  filtered = feats.filter(f => {
-    const featGroups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
-    return featGroups.some(g => groups.includes(g))
-  })
-
-  // Filter by prerequisites
-  filtered = filtered.filter(f => meetsRequirements(f, build, allClasses))
-
-  // Exclude feats already chosen in other slots (duplicate prevention)
+  // Exclude already-chosen feats in other slots
   const chosenElsewhere = new Set(
     Object.entries(build.featChoices)
       .filter(([k, v]) => k !== currentSlotKey && v)
       .map(([, v]) => v)
   )
-  filtered = filtered.filter(f => !chosenElsewhere.has(f.Name))
 
-  return filtered
+  return feats
+    .filter(f => {
+      if (chosenElsewhere.has(f.Name)) return false
+      const featGroups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
+      return featGroups.some(g => groups.includes(g))
+    })
+    .map(f => ({ feat: f, prereqsMet: meetsRequirements(f, build, allClasses) }))
+    .sort((a, b) => {
+      if (a.prereqsMet !== b.prereqsMet) return a.prereqsMet ? -1 : 1
+      return a.feat.Name.localeCompare(b.feat.Name)
+    })
 }
 
 // ---------------------------------------------------------------------------
 // Icon picker modal
 // ---------------------------------------------------------------------------
 interface IconPickerProps {
-  options: Feat[]
+  options: FeatOption[]
   current: string
   onSelect: (name: string) => void
   onClose: () => void
@@ -211,9 +254,12 @@ interface IconPickerProps {
 
 function IconPicker({ options, current, onSelect, onClose }: IconPickerProps) {
   const [search, setSearch] = useState('')
-  const visible = options.filter(f =>
-    !search || f.Name.toLowerCase().includes(search.toLowerCase())
-  )
+  const [showLocked, setShowLocked] = useState(false)
+
+  const lowerSearch = search.toLowerCase()
+  const available = options.filter(o => o.prereqsMet && (!search || o.feat.Name.toLowerCase().includes(lowerSearch)))
+  const locked = options.filter(o => !o.prereqsMet && (!search || o.feat.Name.toLowerCase().includes(lowerSearch)))
+  const visible = showLocked ? [...available, ...locked] : available
 
   return (
     <div className={styles.pickerOverlay} onClick={onClose}>
@@ -226,25 +272,48 @@ function IconPicker({ options, current, onSelect, onClose }: IconPickerProps) {
             onChange={e => setSearch(e.target.value)}
             autoFocus
           />
+          {locked.length > 0 && (
+            <button
+              className={`${styles.lockedToggle} ${showLocked ? styles.lockedToggleOn : ''}`}
+              onClick={() => setShowLocked(v => !v)}
+              title={showLocked ? 'Hide feats with unmet prerequisites' : 'Show feats with unmet prerequisites'}
+            >
+              {locked.length} locked
+            </button>
+          )}
           <button className={styles.pickerClose} onClick={onClose}>✕</button>
         </div>
         <div className={styles.pickerGrid}>
-          {visible.map(f => (
-            <button
-              key={f.Name}
-              className={`${styles.pickerItem} ${f.Name === current ? styles.pickerItemActive : ''}`}
-              title={f.Name + (f.Description ? '\n' + f.Description : '')}
-              onClick={() => { onSelect(f.Name); onClose() }}
-            >
-              <DdoIcon
-                category="FeatImages"
-                name={f.Icon ?? f.Name}
-                size={40}
-                className={styles.pickerIcon}
-              />
-              <span className={styles.pickerName}>{f.Name}</span>
-            </button>
-          ))}
+          {visible.map(({ feat: f, prereqsMet }) => {
+            const prereqLine = !prereqsMet ? formatPrerequisites(f) : ''
+            const tooltip = [
+              f.Name,
+              f.Description ?? '',
+              prereqLine,
+            ].filter(Boolean).join('\n\n')
+            return (
+              <button
+                key={f.Name}
+                className={[
+                  styles.pickerItem,
+                  f.Name === current ? styles.pickerItemActive : '',
+                  !prereqsMet ? styles.pickerItemLocked : '',
+                ].join(' ')}
+                title={tooltip}
+                onClick={prereqsMet ? () => { onSelect(f.Name); onClose() } : undefined}
+                style={!prereqsMet ? { cursor: 'default' } : undefined}
+              >
+                <DdoIcon
+                  category="FeatImages"
+                  name={f.Icon ?? f.Name}
+                  size={32}
+                  className={styles.pickerIcon}
+                />
+                <span className={styles.pickerName}>{f.Name}</span>
+                {!prereqsMet && <span className={styles.pickerLockBadge}>🔒</span>}
+              </button>
+            )
+          })}
           {visible.length === 0 && (
             <div className={styles.pickerEmpty}>No feats match your search.</div>
           )}

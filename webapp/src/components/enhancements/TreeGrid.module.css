@@ -47,15 +47,15 @@
 }
 
 .cellEmpty {
-  width: 90px;
-  height: 90px;
+  width: 68px;
+  height: 68px;
 }
 
 /* ── Enhancement cells ───────────────────────────────────────────────── */
 .cell {
   position: relative;
-  width: 90px;
-  height: 90px;
+  width: 68px;
+  height: 68px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -76,8 +76,8 @@
 }
 
 .coreCell {
-  width: 90px;
-  height: 80px;
+  width: 68px;
+  height: 58px;
   border-color: rgba(60,80,40,0.6);
   background: rgba(20,28,14,0.75);
 }

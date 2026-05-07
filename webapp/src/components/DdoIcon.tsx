@@ -19,7 +19,7 @@ export default function DdoIcon({ category, name, size = 32, className, alt }: D
     width: size,
     height: size,
     objectFit: 'contain',
-    imageRendering: 'pixelated',
+    imageRendering: 'auto',
     flexShrink: 0,
   }
 
