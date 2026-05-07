@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { CharacterProvider, useCharacter } from './context/CharacterContext'
 import Layout from './components/layout/Layout'
+import ComingSoon from './components/layout/ComingSoon'
+import type { NavItem } from './components/layout/Sidebar'
 import CharacterInfo from './components/builder/CharacterInfo'
 import RaceSelector from './components/builder/RaceSelector'
 import ClassSelector from './components/builder/ClassSelector'
@@ -24,9 +26,6 @@ import { SaveLoadBar } from './hooks/usePersistence'
 import type { CharacterBuild } from './types/ddo'
 import styles from './App.module.css'
 
-const TABS = ['Builder', 'Skills', 'Enhancements', 'Spells', 'Gear', 'Set Bonuses', 'Stances', 'Filigrees', 'DCs', 'Breakdowns', 'Past Lives', 'Guild Buffs'] as const
-type Tab = typeof TABS[number]
-
 export default function App() {
   return (
     <CharacterProvider>
@@ -37,30 +36,20 @@ export default function App() {
 
 function AppInner() {
   const { dispatch } = useCharacter()
-  const [activeTab, setActiveTab] = useState<Tab>('Builder')
+  const [activeItem, setActiveItem] = useState<NavItem>('Builder')
 
   function handleLoad(build: CharacterBuild) {
     dispatch({ type: 'LOAD_BUILD', build })
   }
 
-  return (
-    <Layout headerExtra={<SaveLoadBar onLoad={handleLoad} />}>
-      <nav className={styles.tabs}>
-        {TABS.map(tab => (
-          <button
-            key={tab}
-            className={`${styles.tab} ${activeTab === tab ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </nav>
+  const saveBar = <SaveLoadBar onLoad={handleLoad} />
 
+  return (
+    <Layout activeItem={activeItem} onNavigate={setActiveItem} saveBar={saveBar}>
       <div className={styles.content}>
-        {activeTab === 'Builder' && (
+        {activeItem === 'Builder' && (
           <div className={styles.builderLayout}>
-            <aside className={styles.sidebar}>
+            <aside className={styles.builderSidebar}>
               <CharacterInfo />
               <RaceSelector />
               <ClassSelector />
@@ -68,77 +57,123 @@ function AppInner() {
               <AbilityLevelUps />
               <StatsPanel />
             </aside>
-            <section className={styles.main}>
+            <section className={styles.builderMain}>
               <FeatSlots />
               <AutomaticFeats />
             </section>
           </div>
         )}
 
-        {activeTab === 'Skills' && (
+        {activeItem === 'Ability Ups' && (
+          <div className={styles.single}>
+            <AbilityLevelUps />
+          </div>
+        )}
+
+        {activeItem === 'Skills' && (
           <div className={styles.single}>
             <Skills />
           </div>
         )}
 
-        {activeTab === 'Enhancements' && (
+        {activeItem === 'Feats' && (
           <div className={styles.single}>
-            <EnhancementTreePanel />
+            <FeatSlots />
           </div>
         )}
 
-        {activeTab === 'Spells' && (
+        {activeItem === 'Automatic Feats' && (
+          <div className={styles.single}>
+            <AutomaticFeats />
+          </div>
+        )}
+
+        {activeItem === 'Spells' && (
           <div className={styles.single}>
             <SpellsPanel />
           </div>
         )}
 
-        {activeTab === 'Gear' && (
+        {activeItem === 'DCs' && (
+          <div className={styles.single}>
+            <DCPanel />
+          </div>
+        )}
+
+        {activeItem === 'Enhancements' && (
+          <div className={styles.single}>
+            <EnhancementTreePanel />
+          </div>
+        )}
+
+        {activeItem === 'Epic Destinies' && (
+          <ComingSoon label="Epic Destinies" />
+        )}
+
+        {activeItem === 'Reaper' && (
+          <ComingSoon label="Reaper" />
+        )}
+
+        {activeItem === 'Gear' && (
           <div className={styles.single}>
             <GearPanel />
           </div>
         )}
 
-        {activeTab === 'Breakdowns' && (
-          <div className={styles.single}>
-            <BreakdownsPanel />
-          </div>
-        )}
-
-        {activeTab === 'Past Lives' && (
-          <div className={styles.single}>
-            <PastLivesPanel />
-          </div>
-        )}
-
-        {activeTab === 'Set Bonuses' && (
-          <div className={styles.single}>
-            <SetBonusesPanel />
-          </div>
-        )}
-
-        {activeTab === 'Stances' && (
-          <div className={styles.single}>
-            <StancesPanel />
-          </div>
-        )}
-
-        {activeTab === 'Guild Buffs' && (
-          <div className={styles.single}>
-            <GuildBuffsPanel />
-          </div>
-        )}
-
-        {activeTab === 'Filigrees' && (
+        {activeItem === 'Filigrees' && (
           <div className={styles.single}>
             <FiligreePanel />
           </div>
         )}
 
-        {activeTab === 'DCs' && (
+        {activeItem === 'Set Bonuses' && (
           <div className={styles.single}>
-            <DCPanel />
+            <SetBonusesPanel />
           </div>
+        )}
+
+        {activeItem === 'Breakdowns' && (
+          <div className={styles.single}>
+            <BreakdownsPanel />
+          </div>
+        )}
+
+        {activeItem === 'Bonuses' && (
+          <ComingSoon label="Bonuses" />
+        )}
+
+        {activeItem === 'Stances' && (
+          <div className={styles.single}>
+            <StancesPanel />
+          </div>
+        )}
+
+        {activeItem === 'Past Lives' && (
+          <div className={styles.single}>
+            <PastLivesPanel />
+          </div>
+        )}
+
+        {activeItem === 'Favor' && (
+          <ComingSoon label="Favor" />
+        )}
+
+        {activeItem === 'Self Buffs' && (
+          <ComingSoon label="Self Buffs" />
+        )}
+
+        {activeItem === 'Guild Buffs' && (
+          <div className={styles.single}>
+            <GuildBuffsPanel />
+          </div>
+        )}
+
+        {activeItem === 'Notes' && (
+          <ComingSoon label="Notes" />
+        )}
+
+        {activeItem === 'Forum Export' && (
+          <ComingSoon label="Forum Export" />
         )}
       </div>
     </Layout>

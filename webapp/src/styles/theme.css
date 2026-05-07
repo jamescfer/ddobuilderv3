@@ -1,36 +1,46 @@
 :root {
-  --color-bg-primary: #1a1612;
-  --color-bg-secondary: #231f1a;
-  --color-bg-panel: #2a2520;
-  --color-bg-input: #1e1a16;
-  --color-bg-hover: #332e28;
-  --color-bg-active: #3d3630;
+  /* Backgrounds */
+  --color-bg-primary: #0d1117;
+  --color-bg-secondary: #161b27;
+  --color-bg-panel: #1c2235;
+  --color-bg-input: #131929;
+  --color-bg-hover: #212840;
+  --color-bg-active: #263050;
+  --color-bg-sidebar: #111827;
 
-  --color-border: #4a3f30;
-  --color-border-light: #5a4f3f;
-  --color-border-focus: #c8882a;
+  /* Borders */
+  --color-border: #2a3350;
+  --color-border-light: #374060;
+  --color-border-focus: #f59e0b;
 
-  --color-text-primary: #e8d8b0;
-  --color-text-secondary: #a89060;
-  --color-text-muted: #706050;
-  --color-text-disabled: #504540;
+  /* Text */
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-text-disabled: #475569;
 
-  --color-gold: #c8882a;
-  --color-gold-light: #e8a040;
-  --color-gold-dark: #a06820;
+  /* Accents */
+  --color-gold: #f59e0b;
+  --color-gold-light: #fbbf24;
+  --color-gold-dark: #d97706;
+  --color-red: #ef4444;
+  --color-green: #22c55e;
+  --color-blue: #3b82f6;
+  --color-purple: #a855f7;
 
-  --color-red: #c84040;
-  --color-green: #50a050;
-  --color-blue: #4080c0;
-  --color-purple: #9060c0;
+  /* Typography */
+  --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
-  --font-main: 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'Consolas', monospace;
+  /* Shape */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 
-  --radius-sm: 3px;
-  --radius-md: 5px;
-  --radius-lg: 8px;
-
-  --shadow-panel: 0 2px 8px rgba(0, 0, 0, 0.5);
-  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.7);
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-panel: 0 4px 16px rgba(0,0,0,0.5);
+  --shadow-dropdown: 0 8px 32px rgba(0,0,0,0.7);
+  --shadow-sidebar: 4px 0 16px rgba(0,0,0,0.4);
 }
