@@ -289,7 +289,7 @@ function IconPicker({ options, current, onSelect, onClose }: IconPickerProps) {
         </div>
         <div className={styles.pickerGrid}>
           {visible.map(({ feat: f, prereqsMet }) => {
-            const prereqLine = !prereqsMet ? formatPrerequisites(f) : ''
+            const prereqLine = formatPrerequisites(f)
             const tooltip = [
               f.Name,
               f.Description ?? '',
