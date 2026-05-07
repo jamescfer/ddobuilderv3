@@ -18,11 +18,13 @@ import PastLivesPanel from './components/pastlives/PastLivesPanel'
 import GuildBuffsPanel from './components/guildbuffs/GuildBuffsPanel'
 import SetBonusesPanel from './components/setbonuses/SetBonusesPanel'
 import StancesPanel from './components/stances/StancesPanel'
+import FiligreePanel from './components/filigree/FiligreePanel'
+import DCPanel from './components/dc/DCPanel'
 import { SaveLoadBar } from './hooks/usePersistence'
 import type { CharacterBuild } from './types/ddo'
 import styles from './App.module.css'
 
-const TABS = ['Builder', 'Skills', 'Enhancements', 'Spells', 'Gear', 'Set Bonuses', 'Stances', 'Breakdowns', 'Past Lives', 'Guild Buffs'] as const
+const TABS = ['Builder', 'Skills', 'Enhancements', 'Spells', 'Gear', 'Set Bonuses', 'Stances', 'Filigrees', 'DCs', 'Breakdowns', 'Past Lives', 'Guild Buffs'] as const
 type Tab = typeof TABS[number]
 
 export default function App() {
@@ -124,6 +126,18 @@ function AppInner() {
         {activeTab === 'Guild Buffs' && (
           <div className={styles.single}>
             <GuildBuffsPanel />
+          </div>
+        )}
+
+        {activeTab === 'Filigrees' && (
+          <div className={styles.single}>
+            <FiligreePanel />
+          </div>
+        )}
+
+        {activeTab === 'DCs' && (
+          <div className={styles.single}>
+            <DCPanel />
           </div>
         )}
       </div>
