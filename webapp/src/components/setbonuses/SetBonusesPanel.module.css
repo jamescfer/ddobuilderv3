@@ -1,0 +1,91 @@
+.empty {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setBonus {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  flex: 1;
+}
+
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-gold);
+  background: rgba(200, 136, 42, 0.15);
+  border: 1px solid var(--color-gold-dark);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tier {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+
+.tierUnlocked {
+  color: var(--color-green);
+}
+
+.tierLocked {
+  color: var(--color-text-muted);
+}
+
+.tierCheck {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.tierCount {
+  font-size: 10px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.tierDesc {
+  flex: 1;
+}
+
+.tierNeed {
+  font-size: 10px;
+  opacity: 0.6;
+  font-style: italic;
+  flex-shrink: 0;
+}

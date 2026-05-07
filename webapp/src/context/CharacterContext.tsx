@@ -17,6 +17,7 @@ type Action =
   | { type: 'SET_AUGMENT'; key: string; augmentName: string }
   | { type: 'CLEAR_AUGMENT'; key: string }
   | { type: 'SET_PAST_LIFE'; source: string; count: number }
+  | { type: 'SET_FILIGREE'; slotIndex: number; name: string }
   | { type: 'LOAD_BUILD'; build: CharacterBuild }
   | { type: 'RESET' }
 
@@ -27,6 +28,7 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     gear: raw.gear ?? {},
     augmentChoices: raw.augmentChoices ?? {},
     pastLives: raw.pastLives ?? {},
+    filigreeSlots: raw.filigreeSlots ?? ['', '', '', '', '', ''],
   }
 }
 
@@ -82,6 +84,11 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
     }
     case 'SET_PAST_LIFE':
       return { ...state, pastLives: { ...state.pastLives, [action.source]: action.count } }
+    case 'SET_FILIGREE': {
+      const filigreeSlots = [...state.filigreeSlots]
+      filigreeSlots[action.slotIndex] = action.name
+      return { ...state, filigreeSlots }
+    }
     case 'LOAD_BUILD':
       return migrateLoad(action.build)
     case 'RESET':

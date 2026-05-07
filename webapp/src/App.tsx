@@ -16,11 +16,13 @@ import GearPanel from './components/items/GearPanel'
 import BreakdownsPanel from './components/breakdowns/BreakdownsPanel'
 import PastLivesPanel from './components/pastlives/PastLivesPanel'
 import GuildBuffsPanel from './components/guildbuffs/GuildBuffsPanel'
+import SetBonusesPanel from './components/setbonuses/SetBonusesPanel'
+import StancesPanel from './components/stances/StancesPanel'
 import { SaveLoadBar } from './hooks/usePersistence'
 import type { CharacterBuild } from './types/ddo'
 import styles from './App.module.css'
 
-const TABS = ['Builder', 'Skills', 'Enhancements', 'Spells', 'Gear', 'Breakdowns', 'Past Lives', 'Guild Buffs'] as const
+const TABS = ['Builder', 'Skills', 'Enhancements', 'Spells', 'Gear', 'Set Bonuses', 'Stances', 'Breakdowns', 'Past Lives', 'Guild Buffs'] as const
 type Tab = typeof TABS[number]
 
 export default function App() {
@@ -104,6 +106,18 @@ function AppInner() {
         {activeTab === 'Past Lives' && (
           <div className={styles.single}>
             <PastLivesPanel />
+          </div>
+        )}
+
+        {activeTab === 'Set Bonuses' && (
+          <div className={styles.single}>
+            <SetBonusesPanel />
+          </div>
+        )}
+
+        {activeTab === 'Stances' && (
+          <div className={styles.single}>
+            <StancesPanel />
           </div>
         )}
 

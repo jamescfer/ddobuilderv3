@@ -23,7 +23,7 @@ export const api = {
     get<Item[]>('/items', params as Record<string, string | number> | undefined),
   item: (name: string) => get<Item | null>('/item', { name }),
   augments: (params?: { type?: string }) => get<Augment[]>('/augments', params as Record<string, string> | undefined),
-  stances: () => get<unknown[]>('/stances'),
+  stances: () => get<Stance[]>('/stances'),
   health: () => get<{ status: string; dataDir: string }>('/health'),
   itemSetBonuses: (names: string[]) =>
     names.length === 0
