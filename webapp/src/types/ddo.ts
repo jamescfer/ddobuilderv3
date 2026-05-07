@@ -306,7 +306,12 @@ export interface CharacterBuild {
   race: string
   alignment: string
   classes: [BuildClass, BuildClass, BuildClass]
+  /** Heroic class levels total (max 20) */
   totalLevel: number
+  /** Epic progression levels 21–30 (0–10) */
+  epicLevels: number
+  /** Legendary progression levels 31–34 (0–4) */
+  legendaryLevels: number
   baseAbilities: AbilityScores
   abilityLevelUps: Partial<Record<4 | 8 | 12 | 16 | 20 | 24 | 28 | 32 | 36 | 40, Ability>>
   purchasedPoints: number
@@ -363,6 +368,8 @@ export function emptyBuild(): CharacterBuild {
       { name: '', levels: 0 },
     ],
     totalLevel: 20,
+    epicLevels: 10,
+    legendaryLevels: 4,
     baseAbilities: { Strength: 8, Dexterity: 8, Constitution: 8, Intelligence: 8, Wisdom: 8, Charisma: 8 },
     abilityLevelUps: {},
     purchasedPoints: 0,

@@ -14,28 +14,35 @@ interface SlotEntry {
 
 const EPIC_FEAT_LEVELS = [21, 24, 27, 30, 33, 36, 39]
 
-// Map from FeatType in XML FeatSlot → Group name(s) in feat data
+// Map from FeatType in class XML FeatSlot → Group name(s) that exist in feats.xml
+// All unique Group values: Standard, Epic Feat, Deity, Human Bonus Feat, Follower Of,
+// Purple Dragon Knight Bonus Feat, Metamagics, Martial, Arcane, Primal, Divine, User,
+// Ranged Stance, Beloved Of, Child Of
 const FEAT_TYPE_TO_GROUPS: Record<string, string[]> = {
-  'Heroic':           ['Standard'],
-  'Epic Feat':        ['Epic Feat'],
-  'Fighter':          ['Fighter Bonus Feat', 'Fighter', 'Standard'],
-  'Wizard':           ['Wizard Bonus Feat', 'Wizard', 'Standard'],
-  'Rogue':            ['Rogue Bonus Feat', 'Rogue', 'Standard'],
-  'Ranger':           ['Ranger Bonus Feat', 'Ranger', 'Standard'],
-  'Cleric':           ['Cleric Bonus Feat', 'Cleric', 'Standard'],
-  'Druid':            ['Druid Bonus Feat', 'Druid', 'Standard'],
-  'Paladin':          ['Paladin Bonus Feat', 'Paladin', 'Standard'],
-  'Barbarian':        ['Barbarian Bonus Feat', 'Barbarian', 'Standard'],
-  'Bard':             ['Bard Bonus Feat', 'Bard', 'Standard'],
-  'Monk':             ['Monk Bonus Feat', 'Monk', 'Standard'],
-  'Sorcerer':         ['Sorcerer Bonus Feat', 'Sorcerer', 'Standard'],
-  'Favored Soul':     ['Favored Soul Bonus Feat', 'Favored Soul', 'Standard'],
-  'Artificer':        ['Artificer Bonus Feat', 'Artificer', 'Standard'],
-  'Alchemist':        ['Alchemist Bonus Feat', 'Alchemist', 'Standard'],
-  'Warlock':          ['Warlock Bonus Feat', 'Warlock', 'Standard'],
-  'Stormsinger':      ['Stormsinger Bonus Feat', 'Standard'],
-  'Racial':           ['Racial'],
-  'Deity':            ['Deity'],
+  // Universal heroic slots
+  'Heroic':                              ['Standard'],
+  // Epic
+  'Epic Feat':                           ['Epic Feat'],
+  'Epic Destiny Feat':                   ['Epic Feat'],
+  // Class bonus feats — all draw from Standard (+ Martial for fighter/monk)
+  'Fighter Bonus Feat':                  ['Standard', 'Martial'],
+  'Artificer Bonus Feat':               ['Standard'],
+  'Alchemist Bonus Feat':               ['Standard'],
+  'Monk Bonus':                          ['Standard', 'Martial'],
+  'Bonus Magical Feat':                  ['Arcane', 'Divine', 'Primal'],
+  'Rogue Special Ability':               ['User'],
+  // Metamagics
+  'Metamagic Feat':                      ['Metamagics'],
+  // Race-gated
+  'Human Bonus Feat':                    ['Human Bonus Feat', 'Standard'],
+  'Purple Dragon Knight Bonus Feat':    ['Purple Dragon Knight Bonus Feat', 'Standard'],
+  // Deity / religion
+  'Deity':                               ['Deity'],
+  'Follower Of':                         ['Follower Of'],
+  'Child Of':                            ['Child Of'],
+  'Beloved Of':                          ['Beloved Of'],
+  // Divine domain
+  'Domain Feat':                         ['Divine'],
 }
 
 function buildSlots(classes: { name: string; levels: number }[], allClasses: DDOClass[], totalLevel: number): SlotEntry[] {
@@ -172,18 +179,11 @@ function getOptions(
   const allowedGroups = FEAT_TYPE_TO_GROUPS[featType]
   let filtered: Feat[]
 
-  if (allowedGroups) {
-    filtered = feats.filter(f => {
-      const groups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
-      return groups.some(g => allowedGroups.includes(g))
-    })
-  } else {
-    // Fallback: substring match on featType
-    filtered = feats.filter(f => {
-      const groups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
-      return groups.some(g => g.toLowerCase().includes(featType.toLowerCase()))
-    })
-  }
+  const groups = allowedGroups ?? ['Standard']
+  filtered = feats.filter(f => {
+    const featGroups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
+    return featGroups.some(g => groups.includes(g))
+  })
 
   // Filter by prerequisites
   filtered = filtered.filter(f => meetsRequirements(f, build, allClasses))
