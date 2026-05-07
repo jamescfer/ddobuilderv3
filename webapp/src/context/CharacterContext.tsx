@@ -8,6 +8,8 @@ type Action =
   | { type: 'SET_ALIGNMENT'; alignment: string }
   | { type: 'SET_CLASS'; index: 0 | 1 | 2; name: string }
   | { type: 'SET_CLASS_LEVELS'; index: 0 | 1 | 2; levels: number }
+  | { type: 'SET_EPIC_LEVELS'; levels: number }
+  | { type: 'SET_LEGENDARY_LEVELS'; levels: number }
   | { type: 'SET_ABILITY'; ability: Ability; score: number }
   | { type: 'SET_ABILITY_LEVELUP'; level: 4 | 8 | 12 | 16 | 20 | 24 | 28 | 32 | 36 | 40; ability: Ability }
   | { type: 'SET_FEAT'; slotKey: string; featName: string }
@@ -35,6 +37,8 @@ type Action =
 function migrateLoad(raw: CharacterBuild): CharacterBuild {
   return {
     ...raw,
+    epicLevels: raw.epicLevels ?? 10,
+    legendaryLevels: raw.legendaryLevels ?? 4,
     skillRanks: raw.skillRanks ?? {},
     gear: raw.gear ?? {},
     augmentChoices: raw.augmentChoices ?? {},
@@ -72,6 +76,10 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       const totalLevel = classes.reduce((s, c) => s + c.levels, 0)
       return { ...state, classes, totalLevel }
     }
+    case 'SET_EPIC_LEVELS':
+      return { ...state, epicLevels: Math.max(0, Math.min(10, action.levels)) }
+    case 'SET_LEGENDARY_LEVELS':
+      return { ...state, legendaryLevels: Math.max(0, Math.min(4, action.levels)) }
     case 'SET_ABILITY':
       return { ...state, baseAbilities: { ...state.baseAbilities, [action.ability]: action.score } }
     case 'SET_ABILITY_LEVELUP':

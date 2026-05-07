@@ -102,3 +102,99 @@
   outline: none;
   border-color: var(--color-gold-dark);
 }
+
+/* ── Section headers (Heroic / Epic / Legendary) ─────────────────────── */
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-gold-dark);
+  padding: 6px 0 3px;
+  border-bottom: 1px solid var(--color-border);
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.sectionRange {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-text-muted);
+  font-size: 9px;
+}
+
+.sectionCount {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Epic / Legendary pip row ────────────────────────────────────────── */
+.progressionRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.adjBtn {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s;
+}
+
+.adjBtn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.adjBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.progressPips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  flex: 1;
+}
+
+.pip {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  padding: 0;
+}
+
+.pip:hover {
+  border-color: var(--color-gold-dark);
+  background: var(--color-bg-hover);
+}
+
+.pipFilled {
+  background: var(--color-gold-dark);
+  border-color: var(--color-gold);
+}
+
+.pipFilled:hover {
+  background: var(--color-gold);
+}
