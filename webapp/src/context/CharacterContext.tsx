@@ -18,6 +18,17 @@ type Action =
   | { type: 'CLEAR_AUGMENT'; key: string }
   | { type: 'SET_PAST_LIFE'; source: string; count: number }
   | { type: 'SET_FILIGREE'; slotIndex: number; name: string }
+  | { type: 'SET_DESTINY_CHOICE'; treeName: string; itemName: string; rank: number }
+  | { type: 'SET_REAPER_CHOICE'; treeName: string; itemName: string; rank: number }
+  | { type: 'SET_ABILITY_TOME'; ability: Ability; bonus: number }
+  | { type: 'SET_SKILL_TOME'; skill: string; bonus: number }
+  | { type: 'TOGGLE_BUFF'; buffName: string }
+  | { type: 'TOGGLE_QUEST'; questName: string }
+  | { type: 'SET_NOTES'; notes: string }
+  | { type: 'SET_SENTIENT_GEM'; gem: string }
+  | { type: 'SAVE_GEAR_SET'; setName: string }
+  | { type: 'LOAD_GEAR_SET'; setName: string }
+  | { type: 'DELETE_GEAR_SET'; setName: string }
   | { type: 'LOAD_BUILD'; build: CharacterBuild }
   | { type: 'RESET' }
 
@@ -29,6 +40,16 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     augmentChoices: raw.augmentChoices ?? {},
     pastLives: raw.pastLives ?? {},
     filigreeSlots: raw.filigreeSlots ?? ['', '', '', '', '', ''],
+    destinyChoices: raw.destinyChoices ?? {},
+    reaperChoices: raw.reaperChoices ?? {},
+    abilityTomes: raw.abilityTomes ?? {},
+    skillTomes: raw.skillTomes ?? {},
+    activeBuffs: raw.activeBuffs ?? [],
+    completedQuests: raw.completedQuests ?? {},
+    notes: raw.notes ?? '',
+    sentientGem: raw.sentientGem ?? '',
+    namedGearSets: raw.namedGearSets ?? {},
+    activeGearSetName: raw.activeGearSetName ?? '',
   }
 }
 
@@ -88,6 +109,42 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       const filigreeSlots = [...state.filigreeSlots]
       filigreeSlots[action.slotIndex] = action.name
       return { ...state, filigreeSlots }
+    }
+    case 'SET_DESTINY_CHOICE': {
+      const treeChoices = { ...(state.destinyChoices[action.treeName] ?? {}), [action.itemName]: action.rank }
+      return { ...state, destinyChoices: { ...state.destinyChoices, [action.treeName]: treeChoices } }
+    }
+    case 'SET_REAPER_CHOICE': {
+      const treeChoices = { ...(state.reaperChoices[action.treeName] ?? {}), [action.itemName]: action.rank }
+      return { ...state, reaperChoices: { ...state.reaperChoices, [action.treeName]: treeChoices } }
+    }
+    case 'SET_ABILITY_TOME':
+      return { ...state, abilityTomes: { ...state.abilityTomes, [action.ability]: action.bonus } }
+    case 'SET_SKILL_TOME':
+      return { ...state, skillTomes: { ...state.skillTomes, [action.skill]: action.bonus } }
+    case 'TOGGLE_BUFF': {
+      const active = state.activeBuffs.includes(action.buffName)
+        ? state.activeBuffs.filter(b => b !== action.buffName)
+        : [...state.activeBuffs, action.buffName]
+      return { ...state, activeBuffs: active }
+    }
+    case 'TOGGLE_QUEST':
+      return { ...state, completedQuests: { ...state.completedQuests, [action.questName]: !state.completedQuests[action.questName] } }
+    case 'SET_NOTES':
+      return { ...state, notes: action.notes }
+    case 'SET_SENTIENT_GEM':
+      return { ...state, sentientGem: action.gem }
+    case 'SAVE_GEAR_SET':
+      return { ...state, namedGearSets: { ...state.namedGearSets, [action.setName]: { ...state.gear } }, activeGearSetName: action.setName }
+    case 'LOAD_GEAR_SET': {
+      const gearSet = state.namedGearSets[action.setName]
+      if (!gearSet) return state
+      return { ...state, gear: { ...gearSet }, activeGearSetName: action.setName }
+    }
+    case 'DELETE_GEAR_SET': {
+      const sets = { ...state.namedGearSets }
+      delete sets[action.setName]
+      return { ...state, namedGearSets: sets, activeGearSetName: state.activeGearSetName === action.setName ? '' : state.activeGearSetName }
     }
     case 'LOAD_BUILD':
       return migrateLoad(action.build)

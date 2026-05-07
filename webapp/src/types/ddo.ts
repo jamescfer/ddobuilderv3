@@ -148,6 +148,8 @@ export interface EnhancementTree {
   Name: string
   Version?: number
   IsRacialTree?: boolean
+  IsEpicDestiny?: boolean
+  IsReaperTree?: boolean
   Background?: string
   Icon?: string
   Requirements?: Requirements
@@ -248,12 +250,49 @@ export interface Filigree {
 }
 
 // ---------------------------------------------------------------------------
+// Optional (Self & Party) Buff
+// ---------------------------------------------------------------------------
+export interface OptionalBuff {
+  Name: string
+  Description?: string
+  Icon?: string
+  Effect?: Effect | Effect[]
+}
+
+// ---------------------------------------------------------------------------
 // Guild Buff
 // ---------------------------------------------------------------------------
 export interface GuildBuff {
   Name: string
   Description?: string
   Level?: number  // minimum guild level to unlock this buff
+}
+
+// ---------------------------------------------------------------------------
+// Patron / Favor
+// ---------------------------------------------------------------------------
+export interface Patron {
+  Name: string
+  FavorTiers?: unknown  // "75 150 400 700" with size attr
+  AssociatedFavorFeat?: string
+}
+
+export interface Quest {
+  Name: string
+  Patron?: string
+  AdventurePack?: string
+  Favor?: number
+  Levels?: unknown
+  DoNotShow?: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Sentient Gem
+// ---------------------------------------------------------------------------
+export interface SentientGem {
+  Name: string
+  Icon?: string
+  Description?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -282,6 +321,24 @@ export interface CharacterBuild {
   pastLives: Record<string, number>
   /** filigree slot index (0-5) → filigree name */
   filigreeSlots: string[]
+  /** epic destiny tree choices: treeName → itemName → ranks */
+  destinyChoices: Record<string, Record<string, number>>
+  /** reaper enhancement choices: treeName → itemName → ranks */
+  reaperChoices: Record<string, Record<string, number>>
+  /** ability → tome bonus (+1 to +7) */
+  abilityTomes: Partial<Record<Ability, number>>
+  /** skill name → tome bonus (+0 to +7) */
+  skillTomes: Record<string, number>
+  /** names of toggled-on self/party buffs */
+  activeBuffs: string[]
+  /** quest name → completed */
+  completedQuests: Record<string, boolean>
+  notes: string
+  /** name of equipped sentient gem */
+  sentientGem: string
+  /** setName → slot → itemName */
+  namedGearSets: Record<string, Record<string, string>>
+  activeGearSetName: string
 }
 
 export function emptyBuild(): CharacterBuild {
@@ -305,6 +362,16 @@ export function emptyBuild(): CharacterBuild {
     augmentChoices: {},
     pastLives: {},
     filigreeSlots: ['', '', '', '', '', ''],
+    destinyChoices: {},
+    reaperChoices: {},
+    abilityTomes: {},
+    skillTomes: {},
+    activeBuffs: [],
+    completedQuests: {},
+    notes: '',
+    sentientGem: '',
+    namedGearSets: {},
+    activeGearSetName: '',
   }
 }
 

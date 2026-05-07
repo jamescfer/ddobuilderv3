@@ -14,6 +14,8 @@ import Skills from './components/builder/Skills'
 import AutomaticFeats from './components/builder/AutomaticFeats'
 import SpellsPanel from './components/builder/SpellsPanel'
 import EnhancementTreePanel from './components/enhancements/EnhancementTreePanel'
+import EpicDestiniesPanel from './components/epicdestinies/EpicDestiniesPanel'
+import ReaperPanel from './components/reaper/ReaperPanel'
 import GearPanel from './components/items/GearPanel'
 import BreakdownsPanel from './components/breakdowns/BreakdownsPanel'
 import PastLivesPanel from './components/pastlives/PastLivesPanel'
@@ -107,11 +109,15 @@ function AppInner() {
         )}
 
         {activeItem === 'Epic Destinies' && (
-          <ComingSoon label="Epic Destinies" />
+          <div className={styles.single}>
+            <EpicDestiniesPanel />
+          </div>
         )}
 
         {activeItem === 'Reaper' && (
-          <ComingSoon label="Reaper" />
+          <div className={styles.single}>
+            <ReaperPanel />
+          </div>
         )}
 
         {activeItem === 'Gear' && (

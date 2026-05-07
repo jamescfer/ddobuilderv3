@@ -89,6 +89,7 @@ export default function EnhancementTreePanel() {
     const universal: EnhancementTree[] = []
 
     for (const tree of allTrees) {
+      if (tree.IsEpicDestiny || tree.IsReaperTree) continue
       if (tree.IsRacialTree) {
         if (raceName && treeMatchesName(tree.Name, raceName)) {
           racial.push(tree)
