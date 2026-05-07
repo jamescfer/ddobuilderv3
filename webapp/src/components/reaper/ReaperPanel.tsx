@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { EnhancementTree, EnhancementTreeItem } from '../../types/ddo'
-import TreeGrid, { type TreeChoices } from '../enhancements/TreeGrid'
+import TreeGrid, { type TreeChoices, type TreeSelections } from '../enhancements/TreeGrid'
 import styles from './ReaperPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -44,6 +44,7 @@ export default function ReaperPanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTreeName, setActiveTreeName] = useState<string | null>(null)
+  const [reaperSelections, setReaperSelections] = useState<Record<string, TreeSelections>>({})
 
   // Session-only AP budget (not persisted)
   const [reaperAP, setReaperAP] = useState(0)
@@ -217,9 +218,11 @@ export default function ReaperPanel() {
                     <TreeGrid
                       tree={activeTree}
                       choices={activeTreeChoices}
+                      selections={reaperSelections[activeTree.Name] ?? {}}
                       totalSpentAllTrees={totalSpentAllTrees}
                       totalAP={reaperAP}
                       onChoicesChange={(updated) => handleChoicesChange(activeTree.Name, updated)}
+                      onSelectionsChange={(updated) => setReaperSelections(prev => ({ ...prev, [activeTree.Name]: updated }))}
                     />
                   </div>
                 )}

@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { EnhancementTree, EnhancementTreeItem } from '../../types/ddo'
-import TreeGrid, { type TreeChoices } from '../enhancements/TreeGrid'
+import TreeGrid, { type TreeChoices, type TreeSelections } from '../enhancements/TreeGrid'
 import styles from './EpicDestiniesPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -50,6 +50,7 @@ export default function EpicDestiniesPanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTreeName, setActiveTreeName] = useState<string | null>(null)
+  const [destinySelections, setDestinySelections] = useState<Record<string, TreeSelections>>({})
 
   // Load all enhancement trees once and filter to epic destinies
   useEffect(() => {
@@ -201,9 +202,11 @@ export default function EpicDestiniesPanel() {
                 <TreeGrid
                   tree={activeTree}
                   choices={activeTreeChoices}
+                  selections={destinySelections[activeTree.Name] ?? {}}
                   totalSpentAllTrees={activeTreeSpent}
                   totalAP={DESTINY_AP_CAP}
                   onChoicesChange={(updated) => handleChoicesChange(activeTree.Name, updated)}
+                  onSelectionsChange={(updated) => setDestinySelections(prev => ({ ...prev, [activeTree.Name]: updated }))}
                 />
               </div>
             )}

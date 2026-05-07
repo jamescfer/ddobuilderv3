@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { Item, ItemAugment, Augment } from '../../types/ddo'
+import type { Item, ItemBuff, ItemAugment, Augment } from '../../types/ddo'
+import DdoIcon from '../DdoIcon'
 import styles from './GearPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -22,19 +23,117 @@ function slotLabel(slot: string): string {
   return slot
 }
 
-function itemLabel(item: Item): string {
-  if (item.MinLevel && item.MinLevel > 1) return `${item.Name} (Lv ${item.MinLevel})`
-  return item.Name
-}
-
 function toArray<T>(val: T | T[] | undefined): T[] {
   if (val == null) return []
   return Array.isArray(val) ? val : [val]
 }
 
-// Augment key: slot:augmentType:index
 function augmentKey(slot: string, augType: string, idx: number) {
   return `${slot}:${augType}:${idx}`
+}
+
+// ---------------------------------------------------------------------------
+// Tooltip formatter
+// ---------------------------------------------------------------------------
+function formatItemTooltip(item: Item): string {
+  const lines: string[] = []
+  const lvl = item.MinLevel && item.MinLevel > 1 ? ` (Level ${item.MinLevel})` : ''
+  lines.push(item.Name + lvl)
+  if (item.Description) lines.push('', item.Description)
+
+  const buffs = toArray(item.Buff as ItemBuff | ItemBuff[] | undefined)
+  if (buffs.length > 0) {
+    lines.push('')
+    for (const b of buffs) {
+      const val = b.Value1 != null ? `+${b.Value1} ` : ''
+      const bonus = b.BonusType ? ` (${b.BonusType})` : ''
+      lines.push(`${val}${b.Type}${bonus}`)
+    }
+  }
+
+  const augments = toArray(item.ItemAugment as ItemAugment | ItemAugment[] | undefined)
+  if (augments.length > 0) {
+    lines.push('', 'Augments: ' + augments.map(a => a.Type).join(', '))
+  }
+
+  const sets = toArray(item.SetBonus as string | string[] | undefined)
+  if (sets.length > 0) {
+    lines.push('', 'Set: ' + sets.join(', '))
+  }
+
+  if (item.DropLocation) lines.push('', 'From: ' + item.DropLocation)
+
+  return lines.join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// Item picker modal
+// ---------------------------------------------------------------------------
+interface ItemPickerModalProps {
+  slot: string
+  items: Item[]
+  current: string | undefined
+  maxLevel: number
+  onSelect: (name: string) => void
+  onClose: () => void
+}
+
+function ItemPickerModal({ slot, items, current, maxLevel, onSelect, onClose }: ItemPickerModalProps) {
+  const [search, setSearch] = useState('')
+
+  const available = items
+    .filter(item => (item.MinLevel ?? 1) <= maxLevel)
+    .filter(item => !search || item.Name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (a.MinLevel ?? 0) - (b.MinLevel ?? 0) || a.Name.localeCompare(b.Name))
+
+  return (
+    <div className={styles.pickerOverlay} onClick={onClose}>
+      <div className={styles.pickerModal} onClick={e => e.stopPropagation()}>
+        <div className={styles.pickerModalHeader}>
+          <span>Select {slotLabel(slot)} item</span>
+          <button className={styles.pickerClose} onClick={onClose}>✕</button>
+        </div>
+        <div className={styles.pickerSearch}>
+          <input
+            className={styles.pickerSearchInput}
+            placeholder="Search items…"
+            value={search}
+            autoFocus
+            onChange={e => setSearch(e.target.value)}
+          />
+          <span className={styles.pickerCount}>{available.length} items</span>
+        </div>
+        <div className={styles.pickerGrid}>
+          <button
+            className={`${styles.pickerItem} ${!current ? styles.pickerItemActive : ''}`}
+            onClick={() => { onSelect(''); onClose() }}
+          >
+            <span className={styles.pickerEmptyIcon}>—</span>
+            <span className={styles.pickerItemName}>Empty</span>
+          </button>
+          {available.map(item => (
+            <button
+              key={item.Name}
+              className={`${styles.pickerItem} ${item.Name === current ? styles.pickerItemActive : ''}`}
+              title={formatItemTooltip(item)}
+              onClick={() => { onSelect(item.Name); onClose() }}
+            >
+              <DdoIcon
+                category="ItemImages"
+                name={item.Icon ?? item.Name}
+                size={32}
+                className={styles.pickerIcon}
+              />
+              <span className={styles.pickerItemName}>{item.Name}</span>
+              {item.MinLevel != null && item.MinLevel > 1 && (
+                <span className={styles.pickerItemLevel}>Lv {item.MinLevel}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -56,7 +155,6 @@ function AugmentSlot({ slotName, augment, index, choice, onSet, onClear, maxItem
   const [loading, setLoading] = useState(false)
   const key = augmentKey(slotName, augment.Type, index)
 
-  // Pre-filled augment (crafted items)
   if (augment.Augment) {
     return (
       <div className={styles.augRow}>
@@ -131,13 +229,9 @@ function AugmentSlot({ slotName, augment, index, choice, onSet, onClear, maxItem
 export default function GearPanel() {
   const { build, dispatch } = useCharacter()
 
-  // slotName → items fetched (undefined = not fetched, null = loading)
   const [slotItems, setSlotItems] = useState<Record<string, Item[] | null>>({})
-  // slotName → full item details (for augment display)
   const [itemDetails, setItemDetails] = useState<Record<string, Item | null>>({})
-  // Which slot's item picker is open
   const [openSlot, setOpenSlot] = useState<string | null>(null)
-  // Gear set name input
   const [setNameInput, setSetNameInput] = useState('')
 
   const gear = build.gear
@@ -160,7 +254,6 @@ export default function GearPanel() {
       .catch(() => setItemDetails(prev => ({ ...prev, [slot]: null })))
   }, [itemDetails])
 
-  // When gear changes, load item details for equipped slots
   useEffect(() => {
     for (const slot of ALL_SLOTS) {
       const itemName = gear[slot]
@@ -171,7 +264,6 @@ export default function GearPanel() {
   }, [gear, itemDetails, loadItemDetails])
 
   function handleSlotClick(slot: string) {
-    if (openSlot === slot) { setOpenSlot(null); return }
     ensureItemsLoaded(slot)
     setOpenSlot(slot)
   }
@@ -198,14 +290,16 @@ export default function GearPanel() {
 
   function renderSlot(slot: string) {
     const equipped = gear[slot]
-    const rawItems = slotItems[slot]
-    const loading = rawItems === null
-    const availableItems = rawItems != null
-      ? rawItems.filter(item => (item.MinLevel ?? 1) <= maxLevel)
-      : []
-    const isOpen = openSlot === slot
     const detail = equipped ? (itemDetails[slot] ?? null) : null
     const augSlots = detail ? toArray(detail.ItemAugment) : []
+    const icon = detail?.Icon
+
+    // Try to find icon from the basic list too (if detail not yet loaded)
+    const basicList = slotItems[slot]
+    const basicItem = basicList ? basicList.find(i => i.Name === equipped) : null
+    const displayIcon = icon ?? basicItem?.Icon
+
+    const slotTooltip = detail ? formatItemTooltip(detail) : (equipped ?? '')
 
     return (
       <div key={slot} className={styles.slotBlock}>
@@ -213,13 +307,22 @@ export default function GearPanel() {
           <span className={styles.slotLabel}>{slotLabel(slot)}</span>
 
           <button
-            className={`${styles.slotSelector} ${equipped ? styles.equipped : ''}`}
+            className={`${styles.slotBtn} ${equipped ? styles.slotBtnEquipped : ''}`}
             onClick={() => handleSlotClick(slot)}
-            title={equipped ?? 'Click to browse items'}
+            title={slotTooltip}
             type="button"
           >
-            <span className={styles.slotSelectorText}>{equipped ?? '— Empty —'}</span>
-            <span className={styles.slotArrow}>{isOpen ? '▲' : '▼'}</span>
+            {equipped && displayIcon ? (
+              <DdoIcon
+                category="ItemImages"
+                name={displayIcon}
+                size={24}
+                className={styles.slotIcon}
+              />
+            ) : (
+              <span className={styles.slotIconPlaceholder} aria-hidden>◇</span>
+            )}
+            <span className={styles.slotBtnText}>{equipped ?? '— Empty —'}</span>
           </button>
 
           {equipped && (
@@ -230,34 +333,8 @@ export default function GearPanel() {
               type="button"
             >×</button>
           )}
-
-          {isOpen && (
-            <div className={styles.picker}>
-              {loading ? (
-                <div className={styles.pickerLoading}>Loading…</div>
-              ) : availableItems.length === 0 ? (
-                <div className={styles.pickerEmpty}>No items for this slot.</div>
-              ) : (
-                <select
-                  size={Math.min(8, availableItems.length + 1)}
-                  className={styles.pickerSelect}
-                  value={equipped ?? ''}
-                  onChange={e => handleSelectItem(slot, e.target.value)}
-                >
-                  <option value="">— Empty —</option>
-                  {availableItems
-                    .slice()
-                    .sort((a, b) => (a.MinLevel ?? 0) - (b.MinLevel ?? 0) || a.Name.localeCompare(b.Name))
-                    .map(item => (
-                      <option key={item.Name} value={item.Name}>{itemLabel(item)}</option>
-                    ))}
-                </select>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* Augment slots for equipped item */}
         {equipped && augSlots.length > 0 && (
           <div className={styles.augments}>
             {augSlots.map((aug, idx) => (
@@ -282,12 +359,10 @@ export default function GearPanel() {
   const activeSetName = build.activeGearSetName ?? ''
   const setNames = Object.keys(namedGearSets)
 
-  // Detect unsaved changes vs active set
   const hasUnsavedChanges = activeSetName !== '' && (() => {
     const saved = namedGearSets[activeSetName]
     if (!saved) return false
-    const slots = ALL_SLOTS
-    return slots.some(s => (build.gear[s] ?? '') !== (saved[s] ?? ''))
+    return ALL_SLOTS.some(s => (build.gear[s] ?? '') !== (saved[s] ?? ''))
   })()
 
   function handleSaveSet() {
@@ -305,11 +380,14 @@ export default function GearPanel() {
     if (activeSetName) dispatch({ type: 'DELETE_GEAR_SET', setName: activeSetName })
   }
 
+  // For the open picker
+  const pickerSlotItems = openSlot ? (slotItems[openSlot] ?? []) : []
+  const isPickerLoading = openSlot && slotItems[openSlot] === null
+
   return (
     <div className="panel">
       <div className="panel-header">Gear</div>
       <div className="panel-body">
-        {/* Gear set management */}
         <div className={styles.gearSetRow}>
           <input
             type="text"
@@ -319,12 +397,7 @@ export default function GearPanel() {
             onChange={e => setSetNameInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleSaveSet() }}
           />
-          <button
-            className={styles.gearSetBtn}
-            type="button"
-            onClick={handleSaveSet}
-            title="Save current gear as a named set"
-          >
+          <button className={styles.gearSetBtn} type="button" onClick={handleSaveSet} title="Save current gear as a named set">
             Save Set
           </button>
           <select
@@ -334,9 +407,7 @@ export default function GearPanel() {
             disabled={setNames.length === 0}
           >
             <option value="">Load Set ▼</option>
-            {setNames.map(n => (
-              <option key={n} value={n}>{n}</option>
-            ))}
+            {setNames.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
           <button
             className={styles.gearSetDeleteBtn}
@@ -362,10 +433,33 @@ export default function GearPanel() {
             {RIGHT_SLOTS.map(renderSlot)}
           </div>
         </div>
+
         {build.totalLevel === 0 && (
           <p className={styles.hint}>Set your character level to filter items by level.</p>
         )}
       </div>
+
+      {openSlot && !isPickerLoading && (
+        <ItemPickerModal
+          slot={openSlot}
+          items={pickerSlotItems}
+          current={gear[openSlot]}
+          maxLevel={maxLevel}
+          onSelect={name => handleSelectItem(openSlot, name)}
+          onClose={() => setOpenSlot(null)}
+        />
+      )}
+      {isPickerLoading && (
+        <div className={styles.pickerOverlay} onClick={() => setOpenSlot(null)}>
+          <div className={styles.pickerModal} onClick={e => e.stopPropagation()}>
+            <div className={styles.pickerModalHeader}>
+              <span>Loading items…</span>
+              <button className={styles.pickerClose} onClick={() => setOpenSlot(null)}>✕</button>
+            </div>
+            <div className={styles.pickerLoading}>Loading {slotLabel(openSlot)} items…</div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -73,8 +73,8 @@ function isUniversalTree(tree: EnhancementTree): boolean {
 }
 
 function treeCategory(tree: EnhancementTree): Tab {
-  if (tree.IsReaperTree !== undefined) return 'reaper'
-  if (tree.IsEpicDestiny !== undefined) return 'destiny'
+  if (tree.IsReaperTree === true) return 'reaper'
+  if (tree.IsEpicDestiny === true) return 'destiny'
   return 'enhancements'
 }
 
