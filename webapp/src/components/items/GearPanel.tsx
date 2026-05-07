@@ -80,9 +80,19 @@ interface ItemPickerModalProps {
 
 function ItemPickerModal({ slot, items, current, maxLevel, onSelect, onClose }: ItemPickerModalProps) {
   const [search, setSearch] = useState('')
+  const [minLv, setMinLv] = useState(1)
+  const [maxLv, setMaxLv] = useState(maxLevel)
+  const [buffFilter, setBuffFilter] = useState('')
+
+  // Collect unique buff types across all items in this slot
+  const allBuffTypes = Array.from(new Set(
+    items.flatMap(item => toArray(item.Buff as ItemBuff | ItemBuff[] | undefined).map(b => b.Type).filter(Boolean))
+  )).sort()
 
   const available = items
-    .filter(item => (item.MinLevel ?? 1) <= maxLevel)
+    .filter(item => (item.MinLevel ?? 1) >= minLv)
+    .filter(item => (item.MinLevel ?? 1) <= maxLv)
+    .filter(item => !buffFilter || toArray(item.Buff as ItemBuff | ItemBuff[] | undefined).some(b => b.Type === buffFilter))
     .filter(item => !search || item.Name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (a.MinLevel ?? 0) - (b.MinLevel ?? 0) || a.Name.localeCompare(b.Name))
 
@@ -102,6 +112,47 @@ function ItemPickerModal({ slot, items, current, maxLevel, onSelect, onClose }: 
             onChange={e => setSearch(e.target.value)}
           />
           <span className={styles.pickerCount}>{available.length} items</span>
+        </div>
+        <div className={styles.pickerFilters}>
+          <label className={styles.filterLabel}>
+            Min Lv
+            <input
+              type="number"
+              className={styles.filterNum}
+              min={1}
+              max={maxLevel}
+              value={minLv}
+              onChange={e => setMinLv(Math.max(1, Math.min(maxLevel, Number(e.target.value) || 1)))}
+            />
+          </label>
+          <label className={styles.filterLabel}>
+            Max Lv
+            <input
+              type="number"
+              className={styles.filterNum}
+              min={1}
+              max={maxLevel}
+              value={maxLv}
+              onChange={e => setMaxLv(Math.max(1, Math.min(maxLevel, Number(e.target.value) || maxLevel)))}
+            />
+          </label>
+          <label className={styles.filterLabel}>
+            Effect
+            <select
+              className={styles.filterSelect}
+              value={buffFilter}
+              onChange={e => setBuffFilter(e.target.value)}
+            >
+              <option value="">All</option>
+              {allBuffTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          {(minLv !== 1 || maxLv !== maxLevel || buffFilter) && (
+            <button
+              className={styles.filterReset}
+              onClick={() => { setMinLv(1); setMaxLv(maxLevel); setBuffFilter('') }}
+            >Reset</button>
+          )}
         </div>
         <div className={styles.pickerGrid}>
           <button
@@ -236,7 +287,7 @@ export default function GearPanel() {
 
   const gear = build.gear
   const augmentChoices = build.augmentChoices
-  const maxLevel = Math.max(1, build.totalLevel)
+  const maxLevel = Math.max(1, build.totalLevel + (build.epicLevels ?? 0) + (build.legendaryLevels ?? 0))
 
   function ensureItemsLoaded(slot: string) {
     if (slotItems[slot] !== undefined) return
