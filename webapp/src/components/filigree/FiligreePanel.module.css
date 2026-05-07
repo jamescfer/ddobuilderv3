@@ -4,6 +4,56 @@
   margin: 4px 0;
 }
 
+/* ── Sentient Gem row ────────────────────────────────────────────────── */
+
+.gemRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.gemLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.gemSelect {
+  height: 28px;
+  padding: 0 6px;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 200px;
+  transition: border-color 0.12s;
+}
+
+.gemSelect:hover {
+  border-color: var(--color-border-light);
+}
+
+.gemSelect:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
+}
+
+.gemSelected {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-gold);
+  font-style: italic;
+}
+
 /* ── Slot rows ────────────────────────────────────────────────────────── */
 
 .slotsSection {

@@ -257,6 +257,108 @@
 }
 
 /* -----------------------------------------------------------------------
+   Gear set management row
+   ----------------------------------------------------------------------- */
+
+.gearSetRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.gearSetInput {
+  flex: 1;
+  min-width: 100px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.gearSetInput:focus {
+  border-color: var(--color-border-focus);
+}
+
+.gearSetInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.gearSetBtn {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--color-bg-active);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.gearSetBtn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-gold-dark);
+}
+
+.gearSetSelect {
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.gearSetSelect:focus {
+  border-color: var(--color-border-focus);
+}
+
+.gearSetSelect:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.gearSetDeleteBtn {
+  padding: 4px 8px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.gearSetDeleteBtn:hover:not(:disabled) {
+  color: var(--color-red);
+  border-color: var(--color-red);
+}
+
+.gearSetDeleteBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.unsavedBadge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: color-mix(in srgb, var(--color-gold) 15%, transparent);
+  color: var(--color-gold);
+  border: 1px solid var(--color-gold-dark);
+  border-radius: 99px;
+  font-weight: 600;
+}
+
+/* -----------------------------------------------------------------------
    Hint text
    ----------------------------------------------------------------------- */
 

@@ -1,0 +1,219 @@
+/* -----------------------------------------------------------------------
+   FavorPanel layout
+   ----------------------------------------------------------------------- */
+
+.empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.totalRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.totalLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.totalValue {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-gold);
+}
+
+.patronList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* -----------------------------------------------------------------------
+   PatronRow
+   ----------------------------------------------------------------------- */
+
+.patronCard {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.patronHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  gap: 8px;
+  transition: background 0.12s;
+}
+
+.patronHeader:hover {
+  background: var(--color-bg-hover);
+}
+
+.patronLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.patronCollapse {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.patronName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.patronFeat {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.patronRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.patronProgress {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.patronFavorVal {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-gold-light);
+}
+
+/* -----------------------------------------------------------------------
+   Favor tiers
+   ----------------------------------------------------------------------- */
+
+.tierRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px 6px;
+  background: var(--color-bg-secondary);
+  flex-wrap: wrap;
+}
+
+.tier {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 99px;
+  background: var(--color-bg-input);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  cursor: default;
+}
+
+.tierAchieved {
+  background: color-mix(in srgb, var(--color-green) 20%, transparent);
+  color: var(--color-green);
+  border-color: var(--color-green);
+}
+
+.tierNext {
+  background: color-mix(in srgb, var(--color-gold) 15%, transparent);
+  color: var(--color-gold);
+  border-color: var(--color-gold);
+}
+
+/* -----------------------------------------------------------------------
+   Quest list
+   ----------------------------------------------------------------------- */
+
+.questList {
+  padding: 6px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-top: 1px solid var(--color-border);
+}
+
+.noQuests {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+.questRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.1s;
+}
+
+.questRow:hover {
+  background: var(--color-bg-hover);
+}
+
+.questCheck {
+  flex-shrink: 0;
+  accent-color: var(--color-gold);
+}
+
+.questName {
+  font-size: 12px;
+  color: var(--color-text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.questDone {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.questPack {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.questFavor {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-gold-dark);
+  flex-shrink: 0;
+  white-space: nowrap;
+}

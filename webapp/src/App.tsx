@@ -27,6 +27,9 @@ import DCPanel from './components/dc/DCPanel'
 import TomesPanel from './components/builder/TomesPanel'
 import SelfBuffsPanel from './components/buffs/SelfBuffsPanel'
 import BonusesPanel from './components/bonuses/BonusesPanel'
+import FavorPanel from './components/favor/FavorPanel'
+import NotesPanel from './components/notes/NotesPanel'
+import ForumExportPanel from './components/export/ForumExportPanel'
 import { SaveLoadBar } from './hooks/usePersistence'
 import type { CharacterBuild } from './types/ddo'
 import styles from './App.module.css'
@@ -172,7 +175,9 @@ function AppInner() {
           </div>
         )}
         {activeItem === 'Favor' && (
-          <ComingSoon label="Favor" />
+          <div className={styles.single}>
+            <FavorPanel />
+          </div>
         )}
 
         {activeItem === 'Self Buffs' && (
@@ -188,11 +193,15 @@ function AppInner() {
         )}
 
         {activeItem === 'Notes' && (
-          <ComingSoon label="Notes" />
+          <div className={styles.single}>
+            <NotesPanel />
+          </div>
         )}
 
         {activeItem === 'Forum Export' && (
-          <ComingSoon label="Forum Export" />
+          <div className={styles.single}>
+            <ForumExportPanel />
+          </div>
         )}
       </div>
     </Layout>

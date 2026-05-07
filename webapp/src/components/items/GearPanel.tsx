@@ -137,6 +137,8 @@ export default function GearPanel() {
   const [itemDetails, setItemDetails] = useState<Record<string, Item | null>>({})
   // Which slot's item picker is open
   const [openSlot, setOpenSlot] = useState<string | null>(null)
+  // Gear set name input
+  const [setNameInput, setSetNameInput] = useState('')
 
   const gear = build.gear
   const augmentChoices = build.augmentChoices
@@ -276,10 +278,80 @@ export default function GearPanel() {
     )
   }
 
+  const namedGearSets = build.namedGearSets ?? {}
+  const activeSetName = build.activeGearSetName ?? ''
+  const setNames = Object.keys(namedGearSets)
+
+  // Detect unsaved changes vs active set
+  const hasUnsavedChanges = activeSetName !== '' && (() => {
+    const saved = namedGearSets[activeSetName]
+    if (!saved) return false
+    const slots = ALL_SLOTS
+    return slots.some(s => (build.gear[s] ?? '') !== (saved[s] ?? ''))
+  })()
+
+  function handleSaveSet() {
+    const name = setNameInput.trim() || activeSetName
+    if (!name) return
+    dispatch({ type: 'SAVE_GEAR_SET', setName: name })
+    setSetNameInput('')
+  }
+
+  function handleLoadSet(name: string) {
+    if (name) dispatch({ type: 'LOAD_GEAR_SET', setName: name })
+  }
+
+  function handleDeleteSet() {
+    if (activeSetName) dispatch({ type: 'DELETE_GEAR_SET', setName: activeSetName })
+  }
+
   return (
     <div className="panel">
       <div className="panel-header">Gear</div>
       <div className="panel-body">
+        {/* Gear set management */}
+        <div className={styles.gearSetRow}>
+          <input
+            type="text"
+            className={styles.gearSetInput}
+            placeholder={activeSetName || 'Set name…'}
+            value={setNameInput}
+            onChange={e => setSetNameInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSaveSet() }}
+          />
+          <button
+            className={styles.gearSetBtn}
+            type="button"
+            onClick={handleSaveSet}
+            title="Save current gear as a named set"
+          >
+            Save Set
+          </button>
+          <select
+            className={styles.gearSetSelect}
+            value={activeSetName}
+            onChange={e => handleLoadSet(e.target.value)}
+            disabled={setNames.length === 0}
+          >
+            <option value="">Load Set ▼</option>
+            {setNames.map(n => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          <button
+            className={styles.gearSetDeleteBtn}
+            type="button"
+            onClick={handleDeleteSet}
+            disabled={!activeSetName}
+            title={activeSetName ? `Delete set "${activeSetName}"` : 'No active set'}
+          >
+            Delete
+          </button>
+          {hasUnsavedChanges && (
+            <span className={styles.unsavedBadge} title="Gear differs from saved set">unsaved</span>
+          )}
+        </div>
+
         <div className={styles.grid}>
           <div className={styles.column}>
             <div className={styles.columnHeader}>Body</div>

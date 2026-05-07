@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { Filigree, FiligreeSetBonus, FiligreeSetBuff } from '../../types/ddo'
+import type { Filigree, FiligreeSetBonus, FiligreeSetBuff, SentientGem } from '../../types/ddo'
 import styles from './FiligreePanel.module.css'
 
 const SLOT_COUNT = 6
@@ -39,18 +39,21 @@ export default function FiligreePanel() {
   const { build, dispatch } = useCharacter()
   const [filigrees, setFiligrees] = useState<Filigree[]>([])
   const [setBonuses, setSetBonuses] = useState<FiligreeSetBonus[]>([])
+  const [gems, setGems] = useState<SentientGem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setLoading(true)
-    Promise.all([api.filigree(), api.filigreeSetBonuses()])
-      .then(([fils, bonuses]) => {
+    Promise.all([api.filigree(), api.filigreeSetBonuses(), api.gems()])
+      .then(([fils, bonuses, gemList]) => {
         setFiligrees(Array.isArray(fils) ? fils : [])
         setSetBonuses(Array.isArray(bonuses) ? bonuses : [])
+        setGems(Array.isArray(gemList) ? gemList : [])
       })
       .catch(() => {
         setFiligrees([])
         setSetBonuses([])
+        setGems([])
       })
       .finally(() => setLoading(false))
   }, [])
@@ -68,6 +71,12 @@ export default function FiligreePanel() {
     dispatch({ type: 'SET_FILIGREE', slotIndex, name })
   }
 
+  function handleGemChange(gem: string) {
+    dispatch({ type: 'SET_SENTIENT_GEM', gem })
+  }
+
+  const selectedGem = build.sentientGem ?? ''
+
   return (
     <div className="panel">
       <div className="panel-header">Sentient Jewel Filigrees</div>
@@ -76,6 +85,25 @@ export default function FiligreePanel() {
           <p className={styles.empty}>Loading filigrees&hellip;</p>
         ) : (
           <>
+            {/* Sentient Gem Selector */}
+            <div className={styles.gemRow}>
+              <label className={styles.gemLabel} htmlFor="sentient-gem-select">Sentient Gem:</label>
+              <select
+                id="sentient-gem-select"
+                className={styles.gemSelect}
+                value={selectedGem}
+                onChange={e => handleGemChange(e.target.value)}
+              >
+                <option value="">— None —</option>
+                {gems.map(gem => (
+                  <option key={gem.Name} value={gem.Name}>{gem.Name}</option>
+                ))}
+              </select>
+              {selectedGem && (
+                <span className={styles.gemSelected}>{selectedGem}</span>
+              )}
+            </div>
+
             <div className={styles.slotsSection}>
               {Array.from({ length: SLOT_COUNT }, (_, i) => (
                 <div key={i} className={styles.slotRow}>
