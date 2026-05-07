@@ -1,0 +1,4 @@
+# Exclude image asset directories from the data sync
+Output/DataFiles/*Images/
+Output/DataFiles/*Image/
+Output/DataFiles/Blank Trees/
