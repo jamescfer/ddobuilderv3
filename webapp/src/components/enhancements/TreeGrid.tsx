@@ -253,7 +253,7 @@ export default function TreeGrid({
     .filter(it => (it.YPosition ?? 0) === CORE_Y)
     .sort((a, b) => (a.XPosition ?? 0) - (b.XPosition ?? 0))
   const tierItems = items.filter(it => (it.YPosition ?? 0) !== CORE_Y)
-  const tierRows = Array.from(new Set(tierItems.map(it => it.YPosition ?? 1))).sort((a, b) => a - b)
+  const tierRows = Array.from(new Set(tierItems.map(it => it.YPosition ?? 1))).sort((a, b) => b - a)
   const maxX = items.reduce((m, it) => Math.max(m, it.XPosition ?? 0), 0)
   const gridCols = maxX + 1
 
@@ -330,7 +330,7 @@ export default function TreeGrid({
 
   return (
     <div className={styles.gridWrapper} style={bgStyle}>
-      {/* Tier rows T1→T5 (ascending Y = ascending tier) */}
+      {/* Tier rows T5→T1 (descending so T5 is at top, T1 just above Core) */}
       {tierRows.map(yVal => {
         const rowItems = tierItems.filter(it => (it.YPosition ?? 0) === yVal)
         const label = TIER_LABELS[yVal] ?? `T${yVal}`
