@@ -1,4 +1,4 @@
-import type { Race, DDOClass, Feat, EnhancementTree, Item, Augment, SetBonus, Stance, GuildBuff, Filigree, FiligreeSetBonus } from '../types/ddo'
+import type { Race, DDOClass, Feat, EnhancementTree, Item, Augment, SetBonus, Stance, GuildBuff, Filigree, FiligreeSetBonus, OptionalBuff, Patron, Quest, SentientGem } from '../types/ddo'
 
 const BASE = '/api'
 
@@ -33,4 +33,8 @@ export const api = {
   guildbuffs: () => get<GuildBuff[]>('/guildbuffs'),
   filigree: () => get<Filigree[]>('/filigree'),
   filigreeSetBonuses: () => get<FiligreeSetBonus[]>('/filigree-bonuses'),
+  selfbuffs: () => get<OptionalBuff[]>('/selfbuffs'),
+  patrons: () => get<Patron[]>('/patrons'),
+  quests: () => get<Quest[]>('/quests'),
+  gems: () => get<SentientGem[]>('/gems'),
 }

@@ -1,0 +1,142 @@
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.section[open] {
+  padding-bottom: 8px;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.sectionTitle::-webkit-details-marker {
+  display: none;
+}
+
+.sectionTitle::before {
+  content: '▶';
+  font-size: 8px;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+details[open] > .sectionTitle::before {
+  transform: rotate(90deg);
+}
+
+.badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-gold);
+  background: rgba(245, 158, 11, 0.12);
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.list {
+  list-style: none;
+  margin: 6px 0 0 0;
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.listItem {
+  font-size: 12px;
+  color: var(--color-text-primary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  gap: 6px;
+}
+
+.listItem:hover {
+  background: var(--color-bg-hover);
+}
+
+.buffItem {
+  color: var(--color-gold-light);
+}
+
+.slot {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.itemName {
+  color: var(--color-text-primary);
+}
+
+.abilityTable {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px 0 10px;
+}
+
+.abilityRow {
+  display: grid;
+  grid-template-columns: 40px 40px 40px;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+
+.abilityRow:hover {
+  background: var(--color-bg-hover);
+}
+
+.abilityLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.abilityValue {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.abilityMod {
+  font-size: 12px;
+  color: var(--color-gold);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 4px 10px 0 10px;
+  padding: 0;
+}

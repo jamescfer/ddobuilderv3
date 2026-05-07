@@ -181,6 +181,34 @@ function loadFiligreeBonuses() {
   })
 }
 
+function loadSelfAndPartyBuffs() {
+  try {
+    const parsed = readXml(path.join(DATA_DIR, 'SelfAndPartyBuffs.xml')) as { SelfAndPartyBuffs?: { OptionalBuff?: unknown[] } }
+    return (parsed?.SelfAndPartyBuffs?.OptionalBuff ?? []) as unknown[]
+  } catch { return [] }
+}
+
+function loadPatrons() {
+  try {
+    const parsed = readXml(path.join(DATA_DIR, 'Patrons.xml')) as { Patrons?: { Patron?: unknown[] } }
+    return (parsed?.Patrons?.Patron ?? []) as unknown[]
+  } catch { return [] }
+}
+
+function loadQuests() {
+  try {
+    const parsed = readXml(path.join(DATA_DIR, 'Quests.xml')) as { Quests?: { Quest?: unknown[] } }
+    return (parsed?.Quests?.Quest ?? []) as unknown[]
+  } catch { return [] }
+}
+
+function loadSentientGems() {
+  try {
+    const parsed = readXml(path.join(DATA_DIR, 'Sentient.gems.xml')) as { SentientGems?: { Gem?: unknown[] } }
+    return (parsed?.SentientGems?.Gem ?? []) as unknown[]
+  } catch { return [] }
+}
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -299,6 +327,14 @@ app.get('/api/filigree', (_req, res) => {
 app.get('/api/filigree-bonuses', (_req, res) => {
   res.json(cached('filigree-bonuses', loadFiligreeBonuses))
 })
+
+app.get('/api/selfbuffs', (_req, res) => {
+  res.json(cached('selfbuffs', loadSelfAndPartyBuffs))
+})
+
+app.get('/api/patrons', (_req, res) => res.json(cached('patrons', loadPatrons)))
+app.get('/api/quests', (_req, res) => res.json(cached('quests', loadQuests)))
+app.get('/api/gems', (_req, res) => res.json(cached('gems', loadSentientGems)))
 
 // Serve React build in production
 if (process.env.NODE_ENV === 'production') {
