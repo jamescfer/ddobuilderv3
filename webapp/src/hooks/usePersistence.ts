@@ -144,11 +144,17 @@ export interface SaveLoadBarProps {
  * Reads the current build from CharacterContext automatically.
  */
 export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
-  const { build } = useCharacter()
+  const { build, dispatch } = useCharacter()
   const { saves, saveCharacter, deleteCharacter, exportJSON, importJSON } = usePersistence()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState(false)
+
+  function handleNew() {
+    if (window.confirm('Start a new build? Unsaved changes will be lost.')) {
+      dispatch({ type: 'RESET' })
+    }
+  }
 
   function handleSave() {
     saveCharacter(build)
@@ -189,6 +195,12 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
   }
 
   // ---- render via createElement ----
+
+  const newBtn = h(
+    'button',
+    { type: 'button', onClick: handleNew, title: 'Start a new build' },
+    'New',
+  )
 
   const saveBtn = h(
     'button',
@@ -244,6 +256,7 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
         padding: '6px 0',
       },
     },
+    newBtn,
     saveBtn,
     loadSelect,
     exportBtn,
