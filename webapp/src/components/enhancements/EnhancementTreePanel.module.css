@@ -12,14 +12,16 @@
 .tabs {
   display: flex;
   border-bottom: 2px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  background: linear-gradient(180deg, #1a1408 0%, #131009 100%);
 }
 
 .tab {
   flex: 1;
   padding: 6px 8px;
-  font-size: 11px;
+  font-family: var(--font-heading);
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.08em;
   border: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
@@ -36,6 +38,7 @@
 .tabActive {
   color: var(--color-gold);
   border-bottom-color: var(--color-gold);
+  text-shadow: 0 0 8px rgba(200,154,42,0.4);
 }
 
 /* ── Status / empty states ───────────────────────────────────────────── */
@@ -102,9 +105,11 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
-  background: radial-gradient(ellipse at 50% 30%, rgba(80,40,10,0.45) 0%, rgba(18,14,10,0.9) 80%);
+  /* Fallback background if tree has no image */
+  background: radial-gradient(ellipse at 50% 30%, rgba(60,35,8,0.5) 0%, rgba(14,10,5,0.95) 80%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.7), 0 0 0 1px rgba(200,154,42,0.06);
   flex-shrink: 0;
 }
 
@@ -114,9 +119,10 @@
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  background: linear-gradient(180deg, rgba(40,25,8,0.9) 0%, rgba(24,18,10,0.8) 100%);
+  background: linear-gradient(180deg, #2a1e0c 0%, #1a1408 100%);
   border-bottom: 2px solid var(--color-gold-dark);
   min-width: 0;
+  box-shadow: 0 2px 0 rgba(200,154,42,0.15);
 }
 
 .treeHeaderIcon {

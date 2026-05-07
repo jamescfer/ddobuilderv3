@@ -4,7 +4,14 @@
   left: 0;
   height: 100vh;
   width: 220px;
-  background: var(--color-bg-sidebar);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0,0,0,0) 0px,    rgba(0,0,0,0) 40px,
+      rgba(0,0,0,0.06) 40px, rgba(0,0,0,0.06) 41px
+    ),
+    var(--color-bg-sidebar);
+  border-right: 2px solid var(--color-border);
   box-shadow: var(--shadow-sidebar);
   overflow-y: auto;
   display: flex;
@@ -40,10 +47,12 @@
 }
 
 .logoText {
-  font-size: 17px;
+  font-family: var(--font-heading);
+  font-size: 16px;
   font-weight: 700;
   color: var(--color-gold);
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 12px rgba(200,154,42,0.5);
 }
 
 .vBadge {
@@ -83,12 +92,15 @@
 }
 
 .groupHeader {
-  font-size: 10px;
+  font-family: var(--font-heading);
+  font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--color-text-muted);
+  letter-spacing: 0.14em;
+  color: var(--color-gold-dark);
   padding: 16px 16px 4px;
-  font-weight: 700;
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 2px;
 }
 
 .navItem {
