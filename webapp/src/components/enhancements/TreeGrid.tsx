@@ -1,18 +1,29 @@
 import type { EnhancementTree, EnhancementTreeItem } from '../../types/ddo'
+import DdoIcon from '../DdoIcon'
 import styles from './TreeGrid.module.css'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Parse CostPerRank string into an array of per-rank costs.
- *  e.g. "1" → [1], "2 2 2" → [2,2,2], "1 2 3" → [1,2,3]
- */
-function parseCosts(costPerRank: string | undefined, maxRanks: number): number[] {
-  if (!costPerRank) return Array(maxRanks).fill(1)
-  const parts = costPerRank.trim().split(/\s+/).map(Number)
+/** Normalize CostPerRank which may be a plain string/number or a {#text, size} object from fast-xml-parser. */
+function normalizeCostPerRank(raw: unknown): string | undefined {
+  if (raw == null) return undefined
+  if (typeof raw === 'number') return String(raw)
+  if (typeof raw === 'string') return raw
+  if (typeof raw === 'object' && '#text' in (raw as object)) {
+    const t = (raw as Record<string, unknown>)['#text']
+    return t != null ? String(t) : undefined
+  }
+  return undefined
+}
+
+/** Parse CostPerRank into an array of per-rank costs. */
+function parseCosts(costPerRank: unknown, maxRanks: number): number[] {
+  const str = normalizeCostPerRank(costPerRank)
+  if (!str) return Array(maxRanks).fill(1)
+  const parts = str.trim().split(/\s+/).map(Number)
   if (parts.length === 1) return Array(maxRanks).fill(parts[0])
-  // Pad or truncate to maxRanks
   const out: number[] = []
   for (let i = 0; i < maxRanks; i++) {
     out.push(parts[i] ?? parts[parts.length - 1])
@@ -44,11 +55,12 @@ interface CellProps {
   treeSpent: number
   totalSpent: number
   totalAP: number
+  isCore: boolean
   onIncrement: () => void
   onDecrement: () => void
 }
 
-function EnhancementCell({ item, rank, treeSpent, totalSpent, totalAP, onIncrement, onDecrement }: CellProps) {
+function EnhancementCell({ item, rank, treeSpent, totalSpent, totalAP, isCore, onIncrement, onDecrement }: CellProps) {
   const maxRanks = item.Ranks ?? 1
   const minSpent = item.MinSpent ?? 0
   const locked = treeSpent < minSpent
@@ -59,27 +71,26 @@ function EnhancementCell({ item, rank, treeSpent, totalSpent, totalAP, onIncreme
   const canBuy = !locked && !atMax && canAfford
   const canSell = rank > 0
 
-  // Determine CSS state
-  let cellClass = styles.cell
+  const totalCost = costUpToRank(item, rank)
+
+  // Build tooltip
+  const tooltip = [
+    item.Name,
+    item.Description ? item.Description : '',
+    `Cost: ${cost} AP${maxRanks > 1 ? ` per rank (${totalCost} total)` : ''}`,
+    minSpent > 0 ? `Requires ${minSpent} AP spent in tree` : '',
+  ].filter(Boolean).join('\n')
+
+  let cellClass = `${styles.cell} ${isCore ? styles.coreCell : styles.tierCell}`
   if (locked) cellClass += ` ${styles.locked}`
   else if (rank > 0) cellClass += ` ${styles.active}`
-  else cellClass += ` ${styles.available}`
-
-  // Truncate long names
-  const displayName = item.Name.length > 18 ? item.Name.slice(0, 16) + '…' : item.Name
-
-  // Show cost as what you'd pay for next rank (or total cost at rank 0)
-  const costLabel = atMax ? '✓' : `${cost} AP`
+  else if (canBuy) cellClass += ` ${styles.available}`
+  else cellClass += ` ${styles.unavailable}`
 
   return (
     <div
       className={cellClass}
-      style={{
-        gridColumn: (item.XPosition ?? 0) + 1,
-        gridRow: (item.YPosition ?? 0) + 1,
-        position: 'relative',
-      }}
-      title={`${item.Name}${item.Description ? '\n' + item.Description : ''}${minSpent > 0 ? '\nRequires ' + minSpent + ' AP spent in tree' : ''}`}
+      title={tooltip}
       onClick={canBuy ? onIncrement : undefined}
       onContextMenu={canSell ? (e) => { e.preventDefault(); onDecrement() } : undefined}
     >
@@ -87,8 +98,20 @@ function EnhancementCell({ item, rank, treeSpent, totalSpent, totalAP, onIncreme
       {item.ArrowRight && <span className={styles.arrowRight} aria-hidden>›</span>}
       {item.ArrowUp && <span className={styles.arrowUp} aria-hidden>↑</span>}
 
-      <div className={styles.cellName}>{displayName}</div>
+      {/* Icon */}
+      <div className={styles.cellIconWrap}>
+        <DdoIcon
+          category="EnhancementImages"
+          name={item.Icon ?? item.Name}
+          size={isCore ? 46 : 54}
+          className={`${styles.cellIcon} ${rank > 0 ? styles.cellIconActive : ''}`}
+        />
+        {locked && (
+          <span className={styles.lockOverlay}>🔒</span>
+        )}
+      </div>
 
+      {/* Rank pips */}
       {maxRanks > 1 && (
         <div className={styles.rankRow}>
           {Array.from({ length: maxRanks }, (_, i) => (
@@ -100,26 +123,21 @@ function EnhancementCell({ item, rank, treeSpent, totalSpent, totalAP, onIncreme
         </div>
       )}
 
-      <div className={styles.cellMeta}>
-        {maxRanks > 1 && <span className={styles.rankText}>{rank}/{maxRanks}</span>}
-        <span className={styles.costText}>{costLabel}</span>
+      {/* Cost label */}
+      <div className={styles.costLabel}>
+        {atMax ? '✓' : `${cost} AP`}
       </div>
 
+      {/* Decrement button */}
       {canSell && (
         <button
           className={styles.decrementBtn}
           onClick={(e) => { e.stopPropagation(); onDecrement() }}
-          title="Remove rank (right-click also works)"
+          title="Remove rank"
           tabIndex={-1}
         >
           −
         </button>
-      )}
-
-      {locked && minSpent > 0 && (
-        <div className={styles.lockBadge} title={`Requires ${minSpent} AP in tree`}>
-          🔒
-        </div>
       )}
     </div>
   )
@@ -130,7 +148,6 @@ function EnhancementCell({ item, rank, treeSpent, totalSpent, totalAP, onIncreme
 // ---------------------------------------------------------------------------
 
 export interface TreeChoices {
-  /** itemName → ranks spent */
   [itemName: string]: number
 }
 
@@ -142,10 +159,22 @@ interface TreeGridProps {
   onChoicesChange: (updated: TreeChoices) => void
 }
 
+// DDO tier row labels (Y=0 is the highest tier in the XML → displayed at top)
+// Core items sit below all tier rows.
+const TIER_LABELS: Record<number, string> = {
+  0: 'T5',
+  1: 'T4',
+  2: 'T3',
+  3: 'T2',
+  4: 'T1',
+}
+
+const CELL_SIZE = 90
+const CORE_Y_THRESHOLD = 5 // YPosition >= this value is treated as a core row
+
 export default function TreeGrid({ tree, choices, totalSpentAllTrees, totalAP = 80, onChoicesChange }: TreeGridProps) {
   const items = tree.EnhancementTreeItem ?? []
 
-  // AP spent in this tree
   const treeSpent = items.reduce((sum, item) => {
     const rank = choices[item.Name] ?? 0
     return sum + costUpToRank(item, rank)
@@ -157,9 +186,15 @@ export default function TreeGrid({ tree, choices, totalSpentAllTrees, totalAP = 
     return <div className={styles.empty}>No enhancements found for this tree.</div>
   }
 
-  // Determine grid dimensions from item positions
-  const maxCol = items.reduce((m, it) => Math.max(m, it.XPosition ?? 0), 0)
-  const maxRow = items.reduce((m, it) => Math.max(m, it.YPosition ?? 0), 0)
+  const maxY = items.reduce((m, it) => Math.max(m, it.YPosition ?? 0), 0)
+  const maxX = items.reduce((m, it) => Math.max(m, it.XPosition ?? 0), 0)
+
+  // Separate core vs tier items
+  const tierItems = items.filter(it => (it.YPosition ?? 0) < CORE_Y_THRESHOLD)
+  const coreItems = items.filter(it => (it.YPosition ?? 0) >= CORE_Y_THRESHOLD)
+
+  // Unique tier Y values (ascending), used to build label rows
+  const tierRows = Array.from(new Set(tierItems.map(it => it.YPosition ?? 0))).sort((a, b) => a - b)
 
   function handleIncrement(item: EnhancementTreeItem) {
     const rank = choices[item.Name] ?? 0
@@ -178,26 +213,71 @@ export default function TreeGrid({ tree, choices, totalSpentAllTrees, totalAP = 
     onChoicesChange({ ...choices, [item.Name]: rank - 1 })
   }
 
+  const gridCols = maxX + 1
+
   return (
-    <div
-      className={styles.grid}
-      style={{
-        gridTemplateColumns: `repeat(${maxCol + 1}, 100px)`,
-        gridTemplateRows: `repeat(${maxRow + 1}, 70px)`,
-      }}
-    >
-      {items.map(item => (
-        <EnhancementCell
-          key={item.Name}
-          item={item}
-          rank={choices[item.Name] ?? 0}
-          treeSpent={treeSpent}
-          totalSpent={totalSpentAllTrees}
-          totalAP={totalAP}
-          onIncrement={() => handleIncrement(item)}
-          onDecrement={() => handleDecrement(item)}
-        />
-      ))}
+    <div className={styles.gridWrapper}>
+      {/* Tier rows — displayed top to bottom: highest Y-value tier first (DDO order: T5→T1) */}
+      {[...tierRows].reverse().map(yVal => {
+        const rowItems = tierItems.filter(it => (it.YPosition ?? 0) === yVal)
+        const label = TIER_LABELS[yVal] ?? `T${5 - yVal}`
+        return (
+          <div key={`tier-${yVal}`} className={styles.tierRow}>
+            <div className={styles.tierLabel}>{label}</div>
+            <div
+              className={styles.cellRow}
+              style={{ gridTemplateColumns: `repeat(${gridCols}, ${CELL_SIZE}px)` }}
+            >
+              {Array.from({ length: gridCols }, (_, col) => {
+                const item = rowItems.find(it => (it.XPosition ?? 0) === col)
+                if (!item) return <div key={col} className={styles.cellEmpty} />
+                return (
+                  <EnhancementCell
+                    key={item.Name}
+                    item={item}
+                    rank={choices[item.Name] ?? 0}
+                    treeSpent={treeSpent}
+                    totalSpent={totalSpentAllTrees}
+                    totalAP={totalAP}
+                    isCore={false}
+                    onIncrement={() => handleIncrement(item)}
+                    onDecrement={() => handleDecrement(item)}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Core row */}
+      {coreItems.length > 0 && (
+        <div className={styles.tierRow}>
+          <div className={`${styles.tierLabel} ${styles.coreTierLabel}`}>Core</div>
+          <div
+            className={styles.cellRow}
+            style={{ gridTemplateColumns: `repeat(${gridCols}, ${CELL_SIZE}px)` }}
+          >
+            {Array.from({ length: gridCols }, (_, col) => {
+              const item = coreItems.find(it => (it.XPosition ?? 0) === col)
+              if (!item) return <div key={col} className={styles.cellEmpty} />
+              return (
+                <EnhancementCell
+                  key={item.Name}
+                  item={item}
+                  rank={choices[item.Name] ?? 0}
+                  treeSpent={treeSpent}
+                  totalSpent={totalSpentAllTrees}
+                  totalAP={totalAP}
+                  isCore={true}
+                  onIncrement={() => handleIncrement(item)}
+                  onDecrement={() => handleDecrement(item)}
+                />
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

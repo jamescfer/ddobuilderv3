@@ -341,18 +341,28 @@ export interface CharacterBuild {
   activeGearSetName: string
 }
 
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+  })
+}
+
 export function emptyBuild(): CharacterBuild {
   return {
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: 'New Character',
-    race: '',
+    race: 'Human',
     alignment: 'True Neutral',
     classes: [
-      { name: '', levels: 0 },
+      { name: 'Fighter', levels: 20 },
       { name: '', levels: 0 },
       { name: '', levels: 0 },
     ],
-    totalLevel: 0,
+    totalLevel: 20,
     baseAbilities: { Strength: 8, Dexterity: 8, Constitution: 8, Intelligence: 8, Wisdom: 8, Charisma: 8 },
     abilityLevelUps: {},
     purchasedPoints: 0,

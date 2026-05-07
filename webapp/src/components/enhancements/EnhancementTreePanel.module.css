@@ -18,151 +18,249 @@
 }
 
 .errorMsg {
-  color: var(--color-red);
+  color: var(--color-red, #c94040);
   font-style: normal;
 }
 
-/* ── Tree selector tabs ──────────────────────────────────────────────── */
-.tabs {
+/* ── Toolbar ─────────────────────────────────────────────────────────── */
+.toolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  padding: 6px 8px 0;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-primary);
+  background: var(--color-bg-secondary);
 }
 
-.tab {
+.addTreeBtn {
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid var(--color-gold-dark);
+  border-radius: var(--radius-sm);
+  background: rgba(200,136,42,0.12);
+  color: var(--color-gold);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.addTreeBtn:hover {
+  background: rgba(200,136,42,0.22);
+}
+
+.toolbarHint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-left: auto;
+}
+
+/* ── Multi-tree scroll container ─────────────────────────────────────── */
+.multiTreeScroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 160px);
+}
+
+.multiTreeRow {
+  display: flex;
+  gap: 0;
+  min-width: max-content;
+  align-items: flex-start;
+}
+
+/* ── Individual tree column ──────────────────────────────────────────── */
+.treeColumn {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 4px 10px;
-  border: 1px solid var(--color-border);
-  border-bottom: none;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-  max-width: 120px;
+  border-right: 1px solid var(--color-border);
+  background: radial-gradient(ellipse at 50% 30%, rgba(80,40,10,0.45) 0%, rgba(18,14,10,0.9) 80%);
+  min-width: 0;
 }
 
-.tab:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text-primary);
+.treeColumn:last-child {
+  border-right: none;
 }
 
-.tabActive {
-  background: var(--color-bg-panel);
-  color: var(--color-gold);
-  border-color: var(--color-border-light);
-  border-bottom-color: var(--color-bg-panel);
-  position: relative;
-  z-index: 1;
-}
-
-.tabName {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 108px;
-}
-
-.tabAP {
-  font-size: 10px;
-  color: var(--color-gold-dark);
-  font-weight: 600;
-  margin-top: 1px;
-}
-
-.tabActive .tabAP {
-  color: var(--color-gold);
-}
-
-/* ── Active tree info bar ────────────────────────────────────────────── */
+/* ── Tree header ─────────────────────────────────────────────────────── */
 .treeHeader {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
-  background: var(--color-bg-secondary);
-  border-bottom: 1px solid var(--color-border);
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.treeTitle {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
   gap: 6px;
+  padding: 6px 8px;
+  background: linear-gradient(180deg, rgba(40,25,8,0.9) 0%, rgba(24,18,10,0.8) 100%);
+  border-bottom: 2px solid var(--color-gold-dark);
+  min-width: 0;
 }
 
-.treeBadge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 5px;
-  border-radius: var(--radius-sm);
-  background: var(--color-purple, #9060c0);
-  color: #fff;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.treeHeaderIcon {
+  flex-shrink: 0;
 }
 
-.treeAP {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.apCurrent {
-  color: var(--color-gold-light);
+.treeHeaderName {
+  flex: 1;
+  font-size: 11px;
   font-weight: 700;
+  color: var(--color-gold-light, #f0c060);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.treeHeaderAP {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-gold);
+  white-space: nowrap;
 }
 
 .apCapReached {
-  color: var(--color-green);
-  font-weight: 700;
+  color: var(--color-green, #4ca44c) !important;
 }
 
-.apSep,
-.apCap,
-.apLabel {
-  color: var(--color-text-muted);
-}
-
-.apRemaining {
-  color: var(--color-text-secondary);
-  margin-left: 4px;
-}
-
-/* ── Reset button ────────────────────────────────────────────────────── */
-.resetBtn {
-  margin-left: 10px;
-  padding: 2px 8px;
-  font-size: 11px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-panel);
-  color: var(--color-text-muted);
+/* ── Reset / remove buttons ──────────────────────────────────────────── */
+.resetBtn,
+.removeBtn {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  font-size: 12px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background 0.1s, color 0.1s;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
 }
 
 .resetBtn:hover {
   background: var(--color-bg-hover);
+  color: var(--color-gold);
+}
+
+.removeBtn:hover {
+  background: rgba(180, 40, 40, 0.2);
+  color: #e05050;
+  border-color: rgba(180,40,40,0.4);
+}
+
+/* ── Tree picker modal ───────────────────────────────────────────────── */
+.pickerOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pickerModal {
+  width: min(720px, 95vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.55);
+}
+
+.pickerModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-gold);
+}
+
+.pickerClose {
+  padding: 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.pickerClose:hover {
+  background: var(--color-bg-hover);
   color: var(--color-text-primary);
+}
+
+.pickerBody {
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pickerSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pickerSectionLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 4px;
+}
+
+.pickerTreeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 6px;
+}
+
+.pickerTree {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  text-align: left;
+}
+
+.pickerTree:hover {
+  background: var(--color-bg-hover);
   border-color: var(--color-border-light);
 }
 
-/* ── Grid scroll wrapper ─────────────────────────────────────────────── */
-.gridWrapper {
-  overflow: auto;
-  max-height: 480px;
-  background: var(--color-bg-primary);
+.pickerTreeOn {
+  border-color: var(--color-gold);
+  background: rgba(200,136,42,0.15);
+}
+
+.pickerTreeDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pickerTreeUnavailable {
+  opacity: 0.5;
+}
+
+.pickerTreeName {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.pickerTreeOn .pickerTreeName {
+  color: var(--color-gold-light, #f0c060);
 }

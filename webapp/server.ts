@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import path from 'path'
 import fs from 'fs'
+import { exec } from 'child_process'
 import { glob } from 'glob'
 import { XMLParser } from 'fast-xml-parser'
 import dotenv from 'dotenv'
@@ -30,7 +31,7 @@ const parser = new XMLParser({
     'Race', 'Class', 'Feat', 'Effect', 'Requirement', 'RequiresOneOf',
     'RequiresNoneOf', 'Group', 'Item', 'EnhancementTree', 'EnhancementTreeItem',
     'EnhancementSelection', 'Selector', 'FeatSlot', 'AutomaticFeats',
-    'Feats', 'ClassSkill', 'Alignment', 'Augment', 'Buff', 'ItemAugment',
+    'ClassSkill', 'Alignment', 'Augment', 'Buff', 'ItemAugment',
     'SetBonus', 'Gem', 'Stance', 'Spell', 'Patron', 'Quest', 'GuildBuff',
     'GrantedFeat', 'ClassFeat', 'RacialFeat', 'WeaponGroup', 'OptionalBuff',
     'Filigree',
@@ -336,11 +337,95 @@ app.get('/api/patrons', (_req, res) => res.json(cached('patrons', loadPatrons)))
 app.get('/api/quests', (_req, res) => res.json(cached('quests', loadQuests)))
 app.get('/api/gems', (_req, res) => res.json(cached('gems', loadSentientGems)))
 
+// ---------------------------------------------------------------------------
+// Auto-update routes
+// ---------------------------------------------------------------------------
+
+const REPO_DIR = path.resolve(__dirname, '..', '..') // project root
+
+function runGit(args: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    exec(`git -C "${REPO_DIR}" ${args}`, (err, stdout, stderr) => {
+      if (err) reject(stderr || err.message)
+      else resolve(stdout.trim())
+    })
+  })
+}
+
+app.get('/api/update/check', async (_req, res) => {
+  try {
+    await runGit('fetch origin')
+    const behind = await runGit('rev-list HEAD..origin/HEAD --count')
+    const count = parseInt(behind, 10) || 0
+    if (count === 0) {
+      res.json({ upToDate: true, commits: [] })
+      return
+    }
+    const log = await runGit('log HEAD..origin/HEAD --oneline')
+    const commits = log.split('\n').filter(Boolean)
+    res.json({ upToDate: false, commits })
+  } catch (err) {
+    res.status(500).json({ error: String(err) })
+  }
+})
+
+app.post('/api/update/apply', (_req, res) => {
+  res.json({ started: true })
+  // Pull, rebuild, restart
+  exec(
+    `git -C "${REPO_DIR}" pull origin HEAD && cd "${path.join(REPO_DIR, 'webapp')}" && npm run build`,
+    (err, _stdout, stderr) => {
+      if (err) {
+        console.error('Update failed:', stderr)
+      } else {
+        console.log('Update complete — restarting…')
+        setTimeout(() => process.exit(0), 500)
+      }
+    }
+  )
+})
+
+// ---------------------------------------------------------------------------
+// Auto-update cron (every 15 minutes)
+// ---------------------------------------------------------------------------
+function scheduleAutoUpdate() {
+  setInterval(async () => {
+    try {
+      await runGit('fetch origin')
+      const behind = await runGit('rev-list HEAD..origin/HEAD --count')
+      const count = parseInt(behind, 10) || 0
+      if (count > 0) {
+        console.log(`[auto-update] ${count} commit(s) behind — pulling and rebuilding…`)
+        exec(
+          `git -C "${REPO_DIR}" pull origin HEAD && cd "${path.join(REPO_DIR, 'webapp')}" && npm run build`,
+          (err, _stdout, stderr) => {
+            if (err) console.error('[auto-update] failed:', stderr)
+            else { console.log('[auto-update] done — restarting…'); setTimeout(() => process.exit(0), 500) }
+          }
+        )
+      }
+    } catch { /* network error or not a git repo — ignore */ }
+  }, 15 * 60 * 1000)
+}
+
+if (process.env.NODE_ENV === 'production') {
+  scheduleAutoUpdate()
+}
+
+// Serve image assets from the DDO data directory
+const IMAGE_DIRS = ['FeatImages', 'EnhancementImages', 'ClassImages', 'UIImages', 'AugmentImages', 'FiligreeImages', 'ItemImages', 'SetBonusImages', 'SpellImages', 'SentientGemImages']
+for (const dir of IMAGE_DIRS) {
+  const imgPath = path.join(DATA_DIR, dir)
+  if (fs.existsSync(imgPath)) {
+    app.use(`/images/${dir}`, express.static(imgPath))
+  }
+}
+
 // Serve React build in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'dist')))
+  app.use(express.static(path.join(__dirname, '..', 'dist')))
   app.get('*', (_req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'))
+    res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'))
   })
 }
 
