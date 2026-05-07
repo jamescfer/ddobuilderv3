@@ -4,7 +4,7 @@ import { useCharacter } from '../../context/CharacterContext'
 import type { DDOClass } from '../../types/ddo'
 import styles from './ClassSelector.module.css'
 
-const MAX_LEVEL = 20
+const MAX_LEVEL = 40
 const SLOTS = [0, 1, 2] as const
 
 export default function ClassSelector() {

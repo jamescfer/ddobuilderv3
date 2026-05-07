@@ -108,10 +108,8 @@ export default function Skills() {
 
   function maxRanks(skill: SkillName): number {
     const isClass = classSkills.has(skill)
-    if (isClass) {
-      return totalLevel + 3
-    }
-    return Math.floor((totalLevel + 3) / 2)
+    const tomeMod = build.skillTomes[skill] ?? 0
+    return (isClass ? totalLevel + 3 : Math.floor((totalLevel + 3) / 2)) + tomeMod
   }
 
   function adjust(skill: SkillName, delta: 1 | -1) {

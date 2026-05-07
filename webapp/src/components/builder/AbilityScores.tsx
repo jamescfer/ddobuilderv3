@@ -62,7 +62,10 @@ export default function AbilityScores() {
         <div className={styles.grid}>
           {ABILITIES.map(ab => {
             const score = baseAbilities[ab]
-            const mod = Math.floor((score - 10) / 2)
+            const lvlUp = Object.values(build.abilityLevelUps).filter(a => a === ab).length
+            const tomeMod = build.abilityTomes[ab] ?? 0
+            const total = score + (races.find(r => r.Name === build.race)?.[ab] ?? 0) + lvlUp + tomeMod
+            const mod = Math.floor((total - 10) / 2)
             const canIncrease = score < MAX_SCORE && pointBuyCost(score + 1) - pointBuyCost(score) <= remaining
             const canDecrease = score > MIN_SCORE
             return (
@@ -75,6 +78,12 @@ export default function AbilityScores() {
                   {mod >= 0 ? '+' : ''}{mod}
                 </span>
                 <span className={styles.cost}>{pointBuyCost(score)} pts</span>
+                {tomeMod > 0 && (
+                  <span className={styles.tome} title="Tome bonus">+{tomeMod}T</span>
+                )}
+                {total !== score && (
+                  <span className={styles.total} title="Total score">=&nbsp;{total}</span>
+                )}
               </div>
             )
           })}

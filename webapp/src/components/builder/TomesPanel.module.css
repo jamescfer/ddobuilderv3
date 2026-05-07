@@ -1,0 +1,60 @@
+.section {
+  margin-bottom: 1.5rem;
+}
+
+.sectionTitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent, #c8a84b);
+  margin: 0 0 0.6rem 0;
+  border-bottom: 1px solid var(--color-border, #444);
+  padding-bottom: 0.25rem;
+}
+
+.abilityGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 1rem;
+}
+
+.abilityRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.abilityLabel {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--color-text, #ddd);
+}
+
+.skillGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 1rem;
+}
+
+.skillRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.skillLabel {
+  flex: 1;
+  font-size: 0.8rem;
+  color: var(--color-text, #ddd);
+}
+
+.select {
+  width: 70px;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.25rem;
+  background: var(--color-input-bg, #2a2a2a);
+  color: var(--color-text, #ddd);
+  border: 1px solid var(--color-border, #444);
+  border-radius: 3px;
+}

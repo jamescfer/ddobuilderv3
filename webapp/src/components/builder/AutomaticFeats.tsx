@@ -15,7 +15,7 @@ function toArray<T>(val: T | T[] | undefined): T[] {
 }
 
 function buildFeatGroups(
-  build: { race: string; classes: { name: string; levels: number }[]; totalLevel: number },
+  build: { race: string; classes: { name: string; levels: number }[]; totalLevel: number; pastLives: Record<string, number> },
   allClasses: DDOClass[],
   allRaces: Race[],
 ): FeatGroup[] {
@@ -47,6 +47,20 @@ function buildFeatGroups(
         feats: featNames,
       })
     }
+  }
+
+  // Completionist check
+  const heroicClassNames = allClasses.filter(c => !c.NotHeroic).map(c => c.Name)
+  const hasCompletionist = heroicClassNames.length > 0 && heroicClassNames.every(cn => (build.pastLives[cn] ?? 0) >= 3)
+  if (hasCompletionist) {
+    groups.push({ source: 'Completionist', feats: ['Completionist'] })
+  }
+
+  // Racial Completionist check
+  const heroicRaceNames = allRaces.filter(r => !r.NotHeroic && !r.IsIconic).map(r => r.Name)
+  const hasRacialCompletionist = heroicRaceNames.length > 0 && heroicRaceNames.every(rn => (build.pastLives[rn] ?? 0) >= 3)
+  if (hasRacialCompletionist) {
+    groups.push({ source: 'Racial Completionist', feats: ['Racial Completionist'] })
   }
 
   return groups

@@ -11,7 +11,9 @@ interface SlotEntry {
   className: string
 }
 
-function buildSlots(classes: { name: string; levels: number }[], allClasses: DDOClass[]): SlotEntry[] {
+const EPIC_FEAT_LEVELS = [21, 24, 27, 30, 33, 36, 39]
+
+function buildSlots(classes: { name: string; levels: number }[], allClasses: DDOClass[], totalLevel: number): SlotEntry[] {
   const slots: SlotEntry[] = []
   const universalLevels = [1, 3, 6, 9, 12, 15, 18]
   universalLevels.forEach(lvl => {
@@ -32,6 +34,11 @@ function buildSlots(classes: { name: string; levels: number }[], allClasses: DDO
       }
     })
   }
+  EPIC_FEAT_LEVELS.forEach(lvl => {
+    if (totalLevel >= lvl) {
+      slots.push({ key: `epic-${lvl}`, level: lvl, featType: 'Epic Feat', className: 'Epic' })
+    }
+  })
   slots.sort((a, b) => a.level - b.level || a.className.localeCompare(b.className))
   return slots
 }
@@ -129,6 +136,11 @@ function getOptions(featType: string, feats: Feat[], build: CharacterBuild, allC
       const groups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
       return groups.includes('Feat') || groups.includes('General Feat')
     })
+  } else if (featType === 'Epic Feat') {
+    filtered = feats.filter(f => {
+      const groups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
+      return groups.includes('Epic Feat')
+    })
   } else {
     filtered = feats.filter(f => {
       const groups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
@@ -148,7 +160,7 @@ export default function FeatSlots() {
     api.feats().then(setFeats)
   }, [])
 
-  const slots = buildSlots(build.classes, allClasses)
+  const slots = buildSlots(build.classes, allClasses, build.totalLevel)
 
   return (
     <div className="panel">

@@ -24,6 +24,9 @@ import SetBonusesPanel from './components/setbonuses/SetBonusesPanel'
 import StancesPanel from './components/stances/StancesPanel'
 import FiligreePanel from './components/filigree/FiligreePanel'
 import DCPanel from './components/dc/DCPanel'
+import TomesPanel from './components/builder/TomesPanel'
+import SelfBuffsPanel from './components/buffs/SelfBuffsPanel'
+import BonusesPanel from './components/bonuses/BonusesPanel'
 import { SaveLoadBar } from './hooks/usePersistence'
 import type { CharacterBuild } from './types/ddo'
 import styles from './App.module.css'
@@ -145,7 +148,9 @@ function AppInner() {
         )}
 
         {activeItem === 'Bonuses' && (
-          <ComingSoon label="Bonuses" />
+          <div className={styles.single}>
+            <BonusesPanel />
+          </div>
         )}
 
         {activeItem === 'Stances' && (
@@ -160,12 +165,20 @@ function AppInner() {
           </div>
         )}
 
+
+        {activeItem === 'Tomes' && (
+          <div className={styles.single}>
+            <TomesPanel />
+          </div>
+        )}
         {activeItem === 'Favor' && (
           <ComingSoon label="Favor" />
         )}
 
         {activeItem === 'Self Buffs' && (
-          <ComingSoon label="Self Buffs" />
+          <div className={styles.single}>
+            <SelfBuffsPanel />
+          </div>
         )}
 
         {activeItem === 'Guild Buffs' && (

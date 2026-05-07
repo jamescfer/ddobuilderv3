@@ -20,6 +20,7 @@ export type NavItem =
   | 'Bonuses'
   | 'Stances'
   | 'Past Lives'
+  | 'Tomes'
   | 'Favor'
   | 'Self Buffs'
   | 'Guild Buffs'
@@ -54,7 +55,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'History',
-    items: ['Past Lives', 'Favor'],
+    items: ['Past Lives', 'Tomes', 'Favor'],
   },
   {
     label: 'Buffs & Misc',
