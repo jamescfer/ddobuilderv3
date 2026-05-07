@@ -1,0 +1,24 @@
+name: Deploy to beyond4ever
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'webapp/**'
+      - 'deploy/**'
+
+jobs:
+  deploy:
+    name: SSH deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          script: |
+            export APP_DIR=${{ secrets.DEPLOY_APP_DIR || '$HOME/DDOBuilderV3' }}
+            bash "$APP_DIR/deploy/update.sh"
