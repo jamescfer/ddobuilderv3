@@ -318,8 +318,18 @@ export default function TreeGrid({
   const selectorItem = selectorTarget ? items.find(it => it.Name === selectorTarget) : null
   const selectorOptions = selectorItem ? getSelectorOptions(selectorItem) : []
 
+  const bgName = tree.Background
+  const bgStyle = bgName && bgName !== 'NoTreeBackground'
+    ? {
+        backgroundImage: `linear-gradient(rgba(8,4,0,0.58), rgba(8,4,0,0.58)), url(/images/UIImages/${bgName}.png)`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
+      }
+    : undefined
+
   return (
-    <div className={styles.gridWrapper}>
+    <div className={styles.gridWrapper} style={bgStyle}>
       {/* Tier rows T1→T5 (ascending Y = ascending tier) */}
       {tierRows.map(yVal => {
         const rowItems = tierItems.filter(it => (it.YPosition ?? 0) === yVal)

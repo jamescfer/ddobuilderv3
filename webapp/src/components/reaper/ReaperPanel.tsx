@@ -9,9 +9,21 @@ import styles from './ReaperPanel.module.css'
 // Helpers
 // ---------------------------------------------------------------------------
 
-function parseCosts(costPerRank: string | undefined, maxRanks: number): number[] {
-  if (!costPerRank) return Array(maxRanks).fill(1)
-  const parts = costPerRank.trim().split(/\s+/).map(Number)
+function normalizeCostPerRank(raw: unknown): string {
+  if (raw == null) return '1'
+  if (typeof raw === 'number' && isFinite(raw)) return String(raw)
+  if (typeof raw === 'string') return raw || '1'
+  if (typeof raw === 'object' && !Array.isArray(raw) && '#text' in (raw as object)) {
+    const t = (raw as Record<string, unknown>)['#text']
+    if (t != null) return String(t) || '1'
+  }
+  return '1'
+}
+
+function parseCosts(costPerRank: unknown, maxRanks: number): number[] {
+  const str = normalizeCostPerRank(costPerRank)
+  const parts = str.trim().split(/\s+/).map(Number).filter(isFinite)
+  if (parts.length === 0) return Array(maxRanks).fill(1)
   if (parts.length === 1) return Array(maxRanks).fill(parts[0])
   const out: number[] = []
   for (let i = 0; i < maxRanks; i++) {
