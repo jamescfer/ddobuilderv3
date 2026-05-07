@@ -7,21 +7,21 @@ import styles from './TreeGrid.module.css'
 // Helpers
 // ---------------------------------------------------------------------------
 
-function normalizeCostPerRank(raw: unknown): string | undefined {
-  if (raw == null) return undefined
-  if (typeof raw === 'number') return String(raw)
-  if (typeof raw === 'string') return raw
-  if (typeof raw === 'object' && '#text' in (raw as object)) {
+function normalizeCostPerRank(raw: unknown): string {
+  if (raw == null) return '1'
+  if (typeof raw === 'number' && isFinite(raw)) return String(raw)
+  if (typeof raw === 'string') return raw || '1'
+  if (typeof raw === 'object' && !Array.isArray(raw) && '#text' in (raw as object)) {
     const t = (raw as Record<string, unknown>)['#text']
-    return t != null ? String(t) : undefined
+    if (t != null) return String(t) || '1'
   }
-  return undefined
+  return '1'
 }
 
 function parseCosts(costPerRank: unknown, maxRanks: number): number[] {
   const str = normalizeCostPerRank(costPerRank)
-  if (!str) return Array(maxRanks).fill(1)
-  const parts = str.trim().split(/\s+/).map(Number)
+  const parts = str.trim().split(/\s+/).map(Number).filter(isFinite)
+  if (parts.length === 0) return Array(maxRanks).fill(1)
   if (parts.length === 1) return Array(maxRanks).fill(parts[0])
   const out: number[] = []
   for (let i = 0; i < maxRanks; i++) {

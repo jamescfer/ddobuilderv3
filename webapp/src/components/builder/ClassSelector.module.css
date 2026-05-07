@@ -27,6 +27,23 @@
   background: rgba(0,0,0,0.2);
 }
 
+.classCountBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  background: rgba(0,0,0,0.2);
+  margin-left: auto;
+}
+
+.classCountFull {
+  color: var(--color-gold);
+  border-color: var(--color-gold-dark);
+  background: rgba(200,136,42,0.12);
+}
+
 /* ── Quick-fill row ──────────────────────────────────────────────────── */
 .quickFill,
 .fillEmpty {
