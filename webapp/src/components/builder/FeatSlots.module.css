@@ -3,65 +3,73 @@
   color: var(--color-text-muted);
 }
 
+/* ── Slot list ───────────────────────────────────────────────────────── */
 .list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 
+/* Single compact row */
 .slot {
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.slotMeta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 180px;
-  flex-shrink: 0;
+  gap: 4px;
+  min-height: 28px;
 }
 
 .slotLevel {
-  font-size: 11px;
+  flex-shrink: 0;
+  font-size: 10px;
   font-weight: 700;
   color: var(--color-gold);
-  background: rgba(200, 136, 42, 0.15);
+  background: rgba(200, 136, 42, 0.12);
   border: 1px solid var(--color-gold-dark);
   border-radius: var(--radius-sm);
-  padding: 1px 5px;
-  white-space: nowrap;
+  padding: 1px 4px;
+  min-width: 34px;
+  text-align: center;
 }
 
 .slotType {
-  font-size: 11px;
-  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  min-width: 44px;
+  text-align: right;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .slotClass {
-  font-size: 11px;
+  flex-shrink: 0;
+  font-size: 10px;
   color: var(--color-blue, #6ab0de);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 52px;
 }
 
-/* ── Icon picker trigger button ─────────────────────────────────────── */
+/* ── Feat picker button (inline) ─────────────────────────────────────── */
 .featPickerBtn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex: 1;
   min-width: 0;
-  padding: 4px 8px;
+  padding: 3px 6px;
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-secondary);
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background 0.1s, border-color 0.1s;
+  height: 28px;
+  overflow: hidden;
 }
 
 .featPickerBtn:hover {
@@ -73,7 +81,6 @@
   border-style: solid;
   border-color: var(--color-gold-dark);
   background: var(--color-bg-active, rgba(200,136,42,0.08));
-  color: var(--color-text-primary);
 }
 
 .chosenIcon {
@@ -81,7 +88,7 @@
 }
 
 .chosenName {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--color-text-primary);
   white-space: nowrap;
@@ -91,14 +98,18 @@
 
 .emptySlotLabel {
   font-style: italic;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-muted);
 }
 
 .clearBtn {
   flex-shrink: 0;
-  padding: 2px 6px;
-  font-size: 11px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 10px;
+  line-height: 20px;
+  text-align: center;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: transparent;
@@ -178,16 +189,16 @@
   overflow-y: auto;
   padding: 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 5px;
 }
 
 .pickerItem {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 8px 6px;
+  gap: 3px;
+  padding: 6px 4px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-secondary);

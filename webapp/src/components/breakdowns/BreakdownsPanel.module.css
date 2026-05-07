@@ -1,38 +1,57 @@
-.sections {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.empty {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
+.note {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 0 0 12px;
+}
+
+/* ── 2-column responsive grid ────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px 20px;
+  align-items: start;
+}
+
+/* ── Section ─────────────────────────────────────────────────────────── */
 .section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .sectionTitle {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-muted);
+  letter-spacing: 0.07em;
+  color: var(--color-gold-dark);
   padding-bottom: 4px;
   border-bottom: 1px solid var(--color-border);
+  margin-bottom: 2px;
 }
 
+/* ── Table rows ──────────────────────────────────────────────────────── */
 .table {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 
 .row {
   display: grid;
-  grid-template-columns: 80px 90px 1fr;
+  grid-template-columns: 130px 60px 1fr;
   align-items: baseline;
-  gap: 8px;
-  padding: 3px 4px;
+  gap: 4px;
+  padding: 2px 4px;
   border-radius: var(--radius-sm);
+  cursor: default;
 }
 
 .row:hover {
@@ -40,16 +59,19 @@
 }
 
 .label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-secondary);
-  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .value {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--color-gold);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .detail {
@@ -58,18 +80,4 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.empty {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  font-style: italic;
-  margin: 0;
-}
-
-.note {
-  font-size: 10px;
-  color: var(--color-text-muted);
-  font-style: italic;
-  margin: 0;
 }
