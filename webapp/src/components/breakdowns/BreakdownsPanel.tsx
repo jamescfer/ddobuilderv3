@@ -44,22 +44,30 @@ function saveBonus(saveType: string | undefined, levels: number): number {
   return Math.floor(levels / 3)
 }
 
-function babPerLevel(babStr: string | undefined): number {
-  switch (babStr) {
-    case 'Full': return 1
-    case '3/4': return 0.75
-    case '1/2': return 0.5
-    default: return 0.75
+function babPerLevel(babRaw: unknown): number {
+  if (babRaw == null) return 0.75
+  // Class XML stores BAB as a space-separated level array e.g. "0 1 2 3 ... 20"
+  const str = String(babRaw).trim()
+  const arr = str.split(/\s+/).map(Number).filter(n => !isNaN(n))
+  if (arr.length >= 20) {
+    // Derive approximate rate from arr[1] and arr[20] (if present)
+    return (arr[20] ?? arr[arr.length - 1]) / 20
   }
+  // Legacy string values
+  if (str === 'Full') return 1
+  if (str === '3/4') return 0.75
+  if (str === '1/2') return 0.5
+  return 0.75
 }
 
-/** Parse SpellPointsPerLevel like "10+2*CasterLevel" or a plain number */
-function computeSpellPoints(formula: string | undefined, casterLevel: number): number {
-  if (!formula) return 0
-  // Simple heuristic: look for a multiplier pattern like "10+2*CasterLevel"
-  const match = formula.match(/(\d+)\s*\+\s*(\d+)\s*\*/)
+/** Parse SpellPointsPerLevel — may be a number, string, or formula */
+function computeSpellPoints(formula: unknown, casterLevel: number): number {
+  if (formula == null) return 0
+  const str = String(formula).trim()
+  if (!str) return 0
+  const match = str.match(/(\d+)\s*\+\s*(\d+)\s*\*/)
   if (match) return parseInt(match[1]) + parseInt(match[2]) * casterLevel
-  const plain = parseInt(formula)
+  const plain = parseInt(str)
   return isNaN(plain) ? 0 : plain * casterLevel
 }
 

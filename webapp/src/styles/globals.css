@@ -1,4 +1,4 @@
-/* Cinzel — Roman-engraved capitals for panel headers */
+/* Cinzel — Roman-engraved capitals for panel headers & section titles */
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap');
 
 @import './theme.css';
@@ -14,19 +14,19 @@ html, body, #root {
 }
 
 body {
-  /* Subtle stone-block grid texture layered over a deep warm dark */
+  /* Subtle diamond-mesh texture — modern game UI feel */
   background:
     repeating-linear-gradient(
-      0deg,
-      rgba(0,0,0,0) 0px,    rgba(0,0,0,0) 40px,
-      rgba(0,0,0,0.07) 40px, rgba(0,0,0,0.07) 41px
+      45deg,
+      rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px,
+      transparent 1px, transparent 28px
     ),
     repeating-linear-gradient(
-      90deg,
-      rgba(0,0,0,0) 0px,    rgba(0,0,0,0) 56px,
-      rgba(0,0,0,0.05) 56px, rgba(0,0,0,0.05) 57px
+      -45deg,
+      rgba(255,255,255,0.008) 0px, rgba(255,255,255,0.008) 1px,
+      transparent 1px, transparent 28px
     ),
-    radial-gradient(ellipse at 50% 0%, rgba(32,24,10,0.6) 0%, rgba(8,5,2,0.9) 70%),
+    radial-gradient(ellipse 120% 60% at 50% 0%, rgba(20,28,60,0.6) 0%, transparent 70%),
     var(--color-bg-primary);
   color: var(--color-text-primary);
   font-family: var(--font-main);
@@ -39,29 +39,27 @@ button {
   font-size: inherit;
   cursor: pointer;
   border: 1px solid var(--color-border);
-  background: linear-gradient(180deg, var(--color-bg-hover) 0%, var(--color-bg-panel) 100%);
+  background: var(--color-bg-hover);
   color: var(--color-text-primary);
   border-radius: var(--radius-md);
   padding: 6px 14px;
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 3px rgba(0,0,0,0.5);
 }
 
 button:hover:not(:disabled) {
-  background: linear-gradient(180deg, var(--color-bg-active) 0%, var(--color-bg-hover) 100%);
+  background: var(--color-bg-active);
   border-color: var(--color-border-light);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 6px rgba(0,0,0,0.5);
+  box-shadow: 0 0 0 1px rgba(212,152,42,0.12);
 }
 
 button:active:not(:disabled) {
   transform: translateY(1px);
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
 }
 
 button:disabled {
   color: var(--color-text-disabled);
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 select, input {
@@ -78,7 +76,7 @@ select, input {
 
 select:focus, input:focus {
   border-color: var(--color-border-focus);
-  box-shadow: 0 0 0 2px rgba(200,154,42,0.18);
+  box-shadow: 0 0 0 2px rgba(212,152,42,0.2);
 }
 
 select option {
@@ -91,33 +89,38 @@ h1, h2, h3, h4 {
   font-weight: 600;
 }
 
-/* ── Panels ── carved stone frames with gold nameplate headers ────── */
+/* ── Panels ────────────────────────────────────────────────────────────── */
 .panel {
   background: var(--color-bg-panel);
   border: 1px solid var(--color-border);
-  /* Outer gold shimmer + inner depth */
-  box-shadow:
-    var(--shadow-panel),
-    0 0 0 1px rgba(200,154,42,0.08);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  /* Subtle outer gold shimmer */
+  outline: 1px solid rgba(212,152,42,0.07);
+  outline-offset: 1px;
   overflow: hidden;
 }
 
+/* Panel nameplate header — Cinzel engraved-gold look */
 .panel-header {
   padding: 10px 16px;
-  border-bottom: 2px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   color: var(--color-gold);
-  background: linear-gradient(180deg, #261e10 0%, #1d1610 100%);
+  /* Two-stop gradient: slightly lighter at top, darker below */
+  background: linear-gradient(180deg,
+    rgba(30,36,68,0.8) 0%,
+    rgba(17,22,40,0.95) 100%
+  );
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* Bottom border glows faintly gold */
-  box-shadow: 0 2px 0 rgba(200,154,42,0.12);
+  /* Gold underline glow */
+  box-shadow: 0 1px 0 rgba(212,152,42,0.18), 0 2px 8px rgba(0,0,0,0.4);
 }
 
 .panel-body {

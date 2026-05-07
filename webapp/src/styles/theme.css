@@ -1,51 +1,53 @@
 :root {
-  /* ── DDO Fantasy Backgrounds ─────────────────────────────────────────── */
-  /* Deep stone halls lit by torchlight — warm darks, not cold blue */
-  --color-bg-primary:   #0a0806;
-  --color-bg-secondary: #131009;
-  --color-bg-panel:     #1d1610;
-  --color-bg-input:     #120f09;
-  --color-bg-hover:     #252014;
-  --color-bg-active:    #2e2818;
-  --color-bg-sidebar:   #0d0b07;
+  /* ── Modern Dark Fantasy ─────────────────────────────────────────────────
+     Deep navy-charcoal foundations, crisp amber-gold accents, violet depth.
+     Think: ESO / Path of Exile / Diablo 4 — premium game UI, not parchment.
+  ──────────────────────────────────────────────────────────────────────── */
 
-  /* ── Borders ── aged bronze / tarnished steel ─────────────────────── */
-  --color-border:       #3c2e1a;
-  --color-border-light: #574020;
-  --color-border-focus: #c89a2a;
+  /* Backgrounds */
+  --color-bg-primary:   #07080f;   /* near-black with cold blue tint */
+  --color-bg-secondary: #0d0f1c;   /* deep navy */
+  --color-bg-panel:     #111628;   /* dark navy-charcoal */
+  --color-bg-input:     #090b17;   /* darkest input */
+  --color-bg-hover:     #191e34;   /* hover lift */
+  --color-bg-active:    #1f2644;   /* pressed/selected */
+  --color-bg-sidebar:   #080910;   /* deepest dark */
 
-  /* ── Text ── aged parchment and vellum ───────────────────────────── */
-  --color-text-primary:   #dfc9a0;
-  --color-text-secondary: #987850;
-  --color-text-muted:     #685038;
-  --color-text-disabled:  #483828;
+  /* Borders */
+  --color-border:       #1e2440;   /* dark blue-grey */
+  --color-border-light: #2e3860;   /* medium */
+  --color-border-focus: #d4982a;   /* gold focus ring */
 
-  /* ── Accents ── aged gold, jewel tones ───────────────────────────── */
-  --color-gold:       #c89a2a;
-  --color-gold-light: #e8b850;
-  --color-gold-dark:  #9a7020;
-  --color-red:        #b83030;
-  --color-green:      #407030;
-  --color-blue:       #2c4870;
-  --color-purple:     #5a3880;
+  /* Text */
+  --color-text-primary:   #f0e8d0; /* warm white — readability on dark */
+  --color-text-secondary: #8890b0; /* cool blue-grey */
+  --color-text-muted:     #505878; /* dim slate-purple */
+  --color-text-disabled:  #303550; /* near-invisible */
 
-  /* ── Typography ──────────────────────────────────────────────────── */
-  /* Cinzel: Roman-engraved capitals — perfect for panel nameplate headers */
-  --font-heading: 'Cinzel', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
-  /* Body stays readable at small sizes */
-  --font-main: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  /* Accents — amber gold + arcane violet */
+  --color-gold:         #d4982a;
+  --color-gold-light:   #f0b840;
+  --color-gold-dark:    #a07020;
+  --color-red:          #c04040;
+  --color-green:        #3a8050;
+  --color-blue:         #3060b0;
+  --color-purple:       #7050c0;   /* arcane accent */
 
-  /* ── Shape ── tighter corners, more angular/medieval ─────────────── */
-  --radius-sm: 2px;
-  --radius-md: 3px;
-  --radius-lg: 5px;
-  --radius-xl: 8px;
+  /* Typography */
+  --font-heading: 'Cinzel', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --font-main:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
 
-  /* ── Shadows ── deeper, warmer ───────────────────────────────────── */
-  --shadow-sm:      0 1px 4px rgba(0,0,0,0.7);
-  --shadow-panel:   0 4px 24px rgba(0,0,0,0.8), inset 0 1px 0 rgba(200,154,42,0.05);
-  --shadow-dropdown:0 8px 48px rgba(0,0,0,0.9);
-  --shadow-sidebar: 4px 0 24px rgba(0,0,0,0.6);
-  --shadow-gold:    0 0 10px rgba(200,154,42,0.35);
+  /* Shape — sharp but not harsh */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Shadows */
+  --shadow-sm:      0 2px 6px rgba(0,0,0,0.7);
+  --shadow-panel:   0 4px 32px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.03);
+  --shadow-dropdown:0 8px 48px rgba(0,0,0,0.92);
+  --shadow-sidebar: 4px 0 32px rgba(0,0,0,0.7);
+  --shadow-gold:    0 0 16px rgba(212,152,42,0.45);
 }
