@@ -1,0 +1,110 @@
+.activeCount {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--color-gold-light);
+}
+
+.levelControl {
+  margin-bottom: 12px;
+}
+
+.levelLabel {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+
+.levelLabel strong {
+  color: var(--color-text-primary);
+}
+
+.levelInputRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider {
+  flex: 1;
+  accent-color: var(--color-gold);
+  cursor: pointer;
+}
+
+.numberInput {
+  width: 56px;
+  padding: 3px 6px;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.numberInput:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin: 0;
+  padding: 8px 0;
+}
+
+.buffList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sectionHeader {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 2px;
+}
+
+.buffRow {
+  padding: 6px 8px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.buffLocked {
+  opacity: 0.45;
+}
+
+.buffName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 2px;
+}
+
+.buffDesc {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  margin-bottom: 3px;
+}
+
+.buffLevel {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}

@@ -1,0 +1,101 @@
+@import './theme.css';
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-main);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+button:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-light);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+select, input {
+  font-family: inherit;
+  font-size: inherit;
+  background: var(--color-bg-input);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 7px 10px;
+  outline: none;
+  width: 100%;
+}
+
+select:focus, input:focus {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 2px rgba(245,158,11,0.15);
+}
+
+select option {
+  background: var(--color-bg-secondary);
+}
+
+h1, h2, h3, h4 {
+  color: var(--color-gold);
+  font-weight: 600;
+}
+
+.panel {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-body {
+  padding: 14px 16px;
+}
+
+label {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}

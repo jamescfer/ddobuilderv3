@@ -1,0 +1,174 @@
+/* ── TreeGrid layout ─────────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  overflow: auto;
+  /* columns/rows set inline from item positions */
+}
+
+.empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* ── Enhancement cells ───────────────────────────────────────────────── */
+.cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  font-size: 11px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  user-select: none;
+  min-width: 0;
+}
+
+.cell:hover.available,
+.cell:hover.active {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-light);
+}
+
+/* Purchased at least 1 rank */
+.active {
+  border-color: var(--color-gold-dark);
+  background: var(--color-bg-active);
+}
+
+/* Available but not yet purchased */
+.available {
+  background: var(--color-bg-secondary);
+}
+
+/* MinSpent gate not met */
+.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+/* ── Cell contents ───────────────────────────────────────────────────── */
+.cellName {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rankRow {
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.rankPipFilled,
+.rankPipEmpty {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-light);
+}
+
+.rankPipFilled {
+  background: var(--color-gold);
+  border-color: var(--color-gold-light);
+}
+
+.rankPipEmpty {
+  background: var(--color-bg-input);
+}
+
+.cellMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.rankText {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+}
+
+.costText {
+  color: var(--color-gold);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* ── Decrement button ────────────────────────────────────────────────── */
+.decrementBtn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 14px;
+  min-width: 16px;
+  height: 16px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 2;
+}
+
+.cell:hover .decrementBtn {
+  opacity: 1;
+}
+
+.decrementBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-light);
+}
+
+/* ── Lock badge ──────────────────────────────────────────────────────── */
+.lockBadge {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 10px;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ── Arrow connectors ────────────────────────────────────────────────── */
+.arrowRight {
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-gold-dark);
+  font-size: 16px;
+  line-height: 1;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.arrowUp {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--color-gold-dark);
+  font-size: 14px;
+  line-height: 1;
+  z-index: 3;
+  pointer-events: none;
+}

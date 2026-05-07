@@ -1,0 +1,200 @@
+/* ── Panel header extras ─────────────────────────────────────────────── */
+.apTotal {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ── Status / empty states ───────────────────────────────────────────── */
+.statusMsg {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.errorMsg {
+  color: var(--color-red);
+  font-style: normal;
+}
+
+/* ── AP budget bar ───────────────────────────────────────────────────── */
+.budgetBar {
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.budgetLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+
+.budgetValue {
+  color: var(--color-red, #c84a4a);
+  font-size: 14px;
+  font-weight: 700;
+  min-width: 36px;
+}
+
+.budgetSlider {
+  width: 100%;
+  max-width: 400px;
+  margin-bottom: 6px;
+  accent-color: var(--color-red, #c84a4a);
+}
+
+.budgetNote {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin-bottom: 2px;
+}
+
+.reaperNote {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* ── Tree selector tabs ──────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  max-width: 140px;
+}
+
+.tab:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.tabActive {
+  background: var(--color-bg-panel);
+  color: var(--color-red, #c84a4a);
+  border-color: var(--color-border-light);
+  border-bottom-color: var(--color-bg-panel);
+  position: relative;
+  z-index: 1;
+}
+
+.tabName {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.tabAP {
+  font-size: 10px;
+  color: var(--color-red, #c84a4a);
+  font-weight: 600;
+  margin-top: 1px;
+}
+
+/* ── Active tree info bar ────────────────────────────────────────────── */
+.treeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.treeTitle {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.treeBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--color-red, #c84a4a);
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.treeAP {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.apCurrent {
+  color: var(--color-red, #c84a4a);
+  font-weight: 700;
+}
+
+.apLabel,
+.apRemaining {
+  color: var(--color-text-muted);
+}
+
+.apRemaining {
+  margin-left: 4px;
+}
+
+/* ── Reset button ────────────────────────────────────────────────────── */
+.resetBtn {
+  margin-left: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.resetBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-light);
+}
+
+/* ── Grid scroll wrapper ─────────────────────────────────────────────── */
+.gridWrapper {
+  overflow: auto;
+  max-height: 480px;
+  background: var(--color-bg-primary);
+}

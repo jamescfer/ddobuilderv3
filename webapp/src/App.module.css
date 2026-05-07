@@ -1,0 +1,40 @@
+.content {
+  min-height: 0;
+}
+
+/* Builder tab: two-column layout */
+.builderLayout {
+  display: grid;
+  grid-template-columns: 290px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.builderSidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.builderMain {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Single-column panels */
+.single {
+  max-width: 900px;
+}
+
+@media (max-width: 1024px) {
+  .builderLayout {
+    grid-template-columns: 260px 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .builderLayout {
+    grid-template-columns: 1fr;
+  }
+}

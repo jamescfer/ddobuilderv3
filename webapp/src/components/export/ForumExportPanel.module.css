@@ -1,0 +1,65 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.copyBtn {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--color-bg-active);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.copyBtn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-gold-dark);
+}
+
+.copyBtn.copied {
+  background: color-mix(in srgb, var(--color-green) 20%, transparent);
+  border-color: var(--color-green);
+  color: var(--color-green);
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.textarea {
+  flex: 1;
+  min-height: 400px;
+  width: 100%;
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  resize: vertical;
+  outline: none;
+  cursor: default;
+  box-sizing: border-box;
+  user-select: all;
+}
+
+.textarea:focus {
+  border-color: var(--color-border-focus);
+}
