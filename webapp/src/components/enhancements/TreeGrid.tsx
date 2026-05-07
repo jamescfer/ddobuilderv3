@@ -105,7 +105,7 @@ function EnhancementCell({ item, rank, treeSpent, totalSpent, totalAP, isCore, c
         <DdoIcon
           category="EnhancementImages"
           name={item.Icon ?? item.Name}
-          size={isCore ? 46 : 54}
+          size={isCore ? 24 : 28}
           className={`${styles.cellIcon} ${rank > 0 ? styles.cellIconActive : ''}`}
         />
         {locked && (
@@ -171,7 +171,7 @@ const TIER_LABELS: Record<number, string> = {
   4: 'T1',
 }
 
-const CELL_SIZE = 90
+const CELL_SIZE = 68
 const CORE_Y_THRESHOLD = 5 // YPosition >= this value is treated as a core row
 
 export default function TreeGrid({ tree, choices, totalSpentAllTrees, totalAP = 80, onChoicesChange }: TreeGridProps) {
