@@ -11,6 +11,7 @@
 
 import { useMemo } from 'react'
 import { useCharacter } from '../context/CharacterContext'
+import { SKILLS } from '../lib/gamedata'
 import type {
   Race, DDOClass, Feat, EnhancementTree, EnhancementTreeItem, Item,
   Effect, EnhancementSelection, Augment, SetBonus, FiligreeSetBonus, Filigree,
@@ -587,21 +588,18 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       for (const s of toArray(cls.ClassSkill)) classSkillSet.add(s)
     }
 
-    const SKILL_ABILITY_MODS: Record<string, number> = {
-      Balance: dexMod, Bluff: chaMod, Concentration: conModFull, Diplomacy: chaMod,
-      'Disable Device': intModFull, Haggle: chaMod, Heal: wisMod, Hide: dexMod,
-      Intimidate: chaMod, Jump: strMod, Listen: wisMod, 'Move Silently': dexMod,
-      'Open Lock': dexMod, Perform: chaMod, Repair: intModFull, Search: intModFull,
-      Spellcraft: intModFull, Spot: wisMod, Swim: strMod, Tumble: dexMod,
-      'Use Magic Device': chaMod,
+    const abilModMap: Record<string, number> = {
+      Strength: strMod, Dexterity: dexMod, Constitution: conModFull,
+      Intelligence: intModFull, Wisdom: wisMod, Charisma: chaMod,
     }
 
-    for (const [skill, abilMod] of Object.entries(SKILL_ABILITY_MODS)) {
+    for (const { name: skill, ability } of SKILLS) {
+      const abilMod = abilModMap[ability] ?? 0
       if (abilMod !== 0) {
         add(map, `skill.${skill}`, {
           value: abilMod,
           type: 'Ability mod',
-          source: `${SKILL_ABILITY_NAME[skill] ?? 'Ability'} mod`,
+          source: `${ability} mod`,
         })
       }
       const ranks = build.skillRanks?.[skill] ?? 0
@@ -642,14 +640,3 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
 
 // ---------------------------------------------------------------------------
 // Skill → ability name lookup
-// ---------------------------------------------------------------------------
-
-const SKILL_ABILITY_NAME: Record<string, string> = {
-  Balance: 'Dexterity', Bluff: 'Charisma', Concentration: 'Constitution',
-  Diplomacy: 'Charisma', 'Disable Device': 'Intelligence', Haggle: 'Charisma',
-  Heal: 'Wisdom', Hide: 'Dexterity', Intimidate: 'Charisma', Jump: 'Strength',
-  Listen: 'Wisdom', 'Move Silently': 'Dexterity', 'Open Lock': 'Dexterity',
-  Perform: 'Charisma', Repair: 'Intelligence', Search: 'Intelligence',
-  Spellcraft: 'Intelligence', Spot: 'Wisdom', Swim: 'Strength',
-  Tumble: 'Dexterity', 'Use Magic Device': 'Charisma',
-}

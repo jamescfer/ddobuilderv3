@@ -2,32 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { DDOClass } from '../../types/ddo'
+import { SKILLS } from '../../lib/gamedata'
 import styles from './Skills.module.css'
 
-const SKILLS = [
-  'Balance',
-  'Bluff',
-  'Concentration',
-  'Diplomacy',
-  'Disable Device',
-  'Haggle',
-  'Heal',
-  'Hide',
-  'Intimidate',
-  'Jump',
-  'Listen',
-  'Move Silently',
-  'Open Lock',
-  'Perform',
-  'Repair',
-  'Search',
-  'Spot',
-  'Swim',
-  'Tumble',
-  'Use Magic Device',
-] as const
-
-type SkillName = (typeof SKILLS)[number]
+type SkillName = typeof SKILLS[number]['name']
 
 function intModifier(score: number): number {
   return Math.floor((score - 10) / 2)
@@ -96,9 +74,9 @@ export default function Skills() {
 
   const totalSpent = useMemo(() => {
     let spent = 0
-    for (const skill of SKILLS) {
-      const ranks = skillRanks[skill] ?? 0
-      const isClass = classSkills.has(skill)
+    for (const { name } of SKILLS) {
+      const ranks = skillRanks[name] ?? 0
+      const isClass = classSkills.has(name)
       spent += isClass ? ranks : ranks * 2
     }
     return spent
@@ -143,7 +121,7 @@ export default function Skills() {
               <span className={styles.colMax}>Max</span>
               <span className={styles.colCost}>Cost</span>
             </div>
-            {SKILLS.map(skill => {
+            {SKILLS.map(({ name: skill }) => {
               const rank = skillRanks[skill] ?? 0
               const isClass = classSkills.has(skill)
               const max = maxRanks(skill)

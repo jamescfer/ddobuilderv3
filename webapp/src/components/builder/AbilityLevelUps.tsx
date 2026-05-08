@@ -1,10 +1,10 @@
 import { useCharacter } from '../../context/CharacterContext'
 import type { Ability } from '../../types/ddo'
+import { LEVELUP_LEVELS } from '../../lib/gamedata'
+import type { LevelUpLevel } from '../../lib/gamedata'
 import styles from './AbilityLevelUps.module.css'
 
 const ABILITIES: Ability[] = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']
-const LEVELUP_LEVELS = [4, 8, 12, 16, 20, 24, 28, 32, 36, 40] as const
-type LevelUpLevel = typeof LEVELUP_LEVELS[number]
 
 export default function AbilityLevelUps() {
   const { build, dispatch } = useCharacter()

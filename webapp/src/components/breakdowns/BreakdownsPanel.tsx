@@ -4,6 +4,7 @@ import { useCharacter } from '../../context/CharacterContext'
 import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff } from '../../types/ddo'
 import { useBuildStats } from '../../hooks/useBuildStats'
 import type { ResolvedBonus } from '../../lib/bonus'
+import { SKILLS, SCHOOL_DCS, SPELL_POWER_TYPES, SPELL_POWER_LABELS } from '../../lib/gamedata'
 import styles from './BreakdownsPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -28,41 +29,6 @@ const AB3: Record<Ab, string> = {
   Strength: 'STR', Dexterity: 'DEX', Constitution: 'CON',
   Intelligence: 'INT', Wisdom: 'WIS', Charisma: 'CHA',
 }
-
-const ALL_SKILLS: { name: string; ability: Ab }[] = [
-  { name: 'Balance',          ability: 'Dexterity' },
-  { name: 'Bluff',            ability: 'Charisma' },
-  { name: 'Concentration',    ability: 'Constitution' },
-  { name: 'Diplomacy',        ability: 'Charisma' },
-  { name: 'Disable Device',   ability: 'Intelligence' },
-  { name: 'Haggle',           ability: 'Charisma' },
-  { name: 'Heal',             ability: 'Wisdom' },
-  { name: 'Hide',             ability: 'Dexterity' },
-  { name: 'Intimidate',       ability: 'Charisma' },
-  { name: 'Jump',             ability: 'Strength' },
-  { name: 'Listen',           ability: 'Wisdom' },
-  { name: 'Move Silently',    ability: 'Dexterity' },
-  { name: 'Open Lock',        ability: 'Dexterity' },
-  { name: 'Perform',          ability: 'Charisma' },
-  { name: 'Repair',           ability: 'Intelligence' },
-  { name: 'Search',           ability: 'Intelligence' },
-  { name: 'Spellcraft',       ability: 'Intelligence' },
-  { name: 'Spot',             ability: 'Wisdom' },
-  { name: 'Swim',             ability: 'Strength' },
-  { name: 'Tumble',           ability: 'Dexterity' },
-  { name: 'Use Magic Device', ability: 'Charisma' },
-]
-
-const SPELL_POWER_TYPES = [
-  'Universal', 'Acid', 'Cold', 'Electric', 'Fire', 'Force',
-  'LightAlignment', 'Negative', 'Positive', 'Repair', 'Rust',
-  'Sonic', 'Poison', 'Physical', 'Chaos', 'Evil', 'Lawful', 'Untyped',
-]
-const SPELL_POWER_LABELS: Record<string, string> = {
-  LightAlignment: 'Light/Alignment',
-}
-
-const SCHOOL_DCS = ['Evocation', 'Conjuration', 'Necromancy', 'Enchantment', 'Transmutation', 'Illusion', 'Abjuration', 'Divination']
 
 // ---------------------------------------------------------------------------
 // Math helpers
@@ -413,7 +379,7 @@ export default function BreakdownsPanel() {
     statRow('Helpless Dmg', 'helpless',        pct),
   ]
 
-  const skillStats: StatRowData[] = ALL_SKILLS.map(({ name }) => {
+  const skillStats: StatRowData[] = SKILLS.map(({ name }) => {
     const resolved = stats.resolve(`skill.${name}`)
     return {
       label:   name,
