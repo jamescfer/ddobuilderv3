@@ -1,7 +1,7 @@
 // Core DDO types matching the XML data structure
 
 export type Ability = 'Strength' | 'Dexterity' | 'Constitution' | 'Intelligence' | 'Wisdom' | 'Charisma'
-export type SaveType = 'Strong' | 'Weak'
+export type SaveType = 'Strong' | 'Weak' | 'Type1' | 'Type2'
 export type BonusType = 'Enhancement' | 'Competence' | 'Insight' | 'Morale' | 'Sacred' | 'Profane' | 'Luck' | 'Alchemical' | string
 
 export interface AbilityScores {
@@ -39,10 +39,12 @@ export interface Effect {
   Type: string
   Bonus?: string
   AType?: string
-  Amount?: number[] | string
+  Amount?: unknown           // number | string | { '#text': unknown } from XML
   Item?: string | string[]
   DisplayName?: string
   Requirements?: Requirements
+  StackSource?: string
+  ApplyAsItemEffect?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -344,6 +346,12 @@ export interface CharacterBuild {
   /** setName → slot → itemName */
   namedGearSets: Record<string, Record<string, string>>
   activeGearSetName: string
+  /** heroic enhancement choices: treeName → itemName → rank */
+  enhancementChoices: Record<string, Record<string, number>>
+  /** heroic enhancement selector choices: treeName → itemName → selected option name */
+  enhancementSelections: Record<string, Record<string, string>>
+  /** ordered list of pinned heroic enhancement tree names */
+  enhancementPinned: string[]
 }
 
 function generateId(): string {
@@ -389,6 +397,9 @@ export function emptyBuild(): CharacterBuild {
     sentientGem: '',
     namedGearSets: {},
     activeGearSetName: '',
+    enhancementChoices: {},
+    enhancementSelections: {},
+    enhancementPinned: [],
   }
 }
 
