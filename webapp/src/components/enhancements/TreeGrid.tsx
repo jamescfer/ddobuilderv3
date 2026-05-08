@@ -58,15 +58,75 @@ export type TreeChoices = Record<string, number>
 export type TreeSelections = Record<string, string>
 
 // ---------------------------------------------------------------------------
-// Tier / Core constants
-// DDO data: YPosition=0 → Core row (sequential AP gates)
-//           YPosition=1 → T1, 2→T2, 3→T3, 4→T4, 5→T5
+// Layout constants — matches v2 DDOBuilder canvas (299×466px, scaled ~1.15×)
+// Core (Y=0): smaller cells at bottom; Tiers (Y=1..5): larger cells above
 // ---------------------------------------------------------------------------
 const CORE_Y = 0
-const TIER_LABELS: Record<number, string> = {
-  1: 'T1', 2: 'T2', 3: 'T3', 4: 'T4', 5: 'T5',
+
+// Tier cell
+const T_W = 52          // cell width
+const T_H = 60          // cell height
+const T_COL = 56        // horizontal step (cell + gap)
+const T_ROW = 70        // vertical step between tier rows
+
+// Core cell
+const C_W = 44          // core cell width
+const C_H = 50          // core cell height
+const C_COL = 50        // horizontal step for core cells
+
+// Canvas padding
+const PAD_X = 8
+const PAD_Y = 6
+const CORE_GAP = 6      // gap between bottom tier row and core row
+
+// ---------------------------------------------------------------------------
+// Canvas sizing
+// ---------------------------------------------------------------------------
+
+interface CanvasLayout {
+  width: number
+  height: number
+  maxTierY: number
+  maxTierX: number
+  maxCoreX: number
 }
-const CELL_SIZE = 68
+
+function computeLayout(items: EnhancementTreeItem[]): CanvasLayout {
+  const tierItems = items.filter(it => (it.YPosition ?? 0) !== CORE_Y)
+  const coreItems = items.filter(it => (it.YPosition ?? 0) === CORE_Y)
+
+  const maxTierX = tierItems.reduce((m, it) => Math.max(m, it.XPosition ?? 0), 0)
+  const maxCoreX = coreItems.reduce((m, it) => Math.max(m, it.XPosition ?? 0), 0)
+  const maxTierY = tierItems.reduce((m, it) => Math.max(m, it.YPosition ?? 1), 1)
+
+  const tierColsNeeded = Math.max(maxTierX + 1, 1)
+  const coreColsNeeded = Math.max(maxCoreX + 1, 1)
+  const tierWidth = PAD_X * 2 + tierColsNeeded * T_COL
+  const coreWidth = PAD_X * 2 + coreColsNeeded * C_COL
+  const width = Math.max(tierWidth, coreWidth)
+
+  const tierAreaH = maxTierY * T_ROW + T_H
+  const height = coreItems.length > 0
+    ? PAD_Y + tierAreaH + CORE_GAP + C_H + PAD_Y
+    : PAD_Y + tierAreaH + PAD_Y
+
+  return { width, height, maxTierY, maxTierX, maxCoreX }
+}
+
+function itemPos(item: EnhancementTreeItem, layout: CanvasLayout): { left: number; top: number } {
+  const y = item.YPosition ?? 0
+  const x = item.XPosition ?? 0
+  if (y === CORE_Y) {
+    return {
+      left: PAD_X + x * C_COL,
+      top: PAD_Y + layout.maxTierY * T_ROW + T_H + CORE_GAP,
+    }
+  }
+  return {
+    left: PAD_X + x * T_COL,
+    top: PAD_Y + (layout.maxTierY - y) * T_ROW,
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Selector picker modal
@@ -119,6 +179,7 @@ interface CellProps {
   totalAP: number
   isCore: boolean
   coreUnlocked?: boolean
+  pos: { left: number; top: number }
   onIncrement: () => void
   onDecrement: () => void
   onShowSelector: () => void
@@ -126,7 +187,7 @@ interface CellProps {
 
 function EnhancementCell({
   item, rank, selectedOption, treeSpent, totalSpent, totalAP,
-  isCore, coreUnlocked = true, onIncrement, onDecrement, onShowSelector,
+  isCore, coreUnlocked = true, pos, onIncrement, onDecrement, onShowSelector,
 }: CellProps) {
   const maxRanks = item.Ranks ?? 1
   const minSpent = item.MinSpent ?? 0
@@ -156,11 +217,20 @@ function EnhancementCell({
     hasSelector && !selectedOption ? 'Click to choose an option' : '',
   ].filter(Boolean).join('\n')
 
-  let cellClass = `${styles.cell} ${isCore ? styles.coreCell : styles.tierCell}`
-  if (locked) cellClass += ` ${styles.locked}`
-  else if (rank > 0) cellClass += ` ${styles.active}`
-  else if (canBuy || (hasSelector && !selectedOption)) cellClass += ` ${styles.available}`
-  else cellClass += ` ${styles.unavailable}`
+  const w = isCore ? C_W : T_W
+  const h = isCore ? C_H : T_H
+
+  let stateClass = ''
+  if (locked) stateClass = styles.locked
+  else if (rank > 0) stateClass = styles.active
+  else if (canBuy || (hasSelector && !selectedOption)) stateClass = styles.available
+  else stateClass = styles.unavailable
+
+  const cellClass = [
+    styles.cell,
+    isCore ? styles.coreCell : styles.tierCell,
+    stateClass,
+  ].join(' ')
 
   function handleClick() {
     if (locked) return
@@ -174,6 +244,7 @@ function EnhancementCell({
   return (
     <div
       className={cellClass}
+      style={{ left: pos.left, top: pos.top, width: w, height: h }}
       title={tooltip}
       onClick={handleClick}
       onContextMenu={canSell ? (e) => { e.preventDefault(); onDecrement() } : undefined}
@@ -245,6 +316,8 @@ export default function TreeGrid({
     return <div className={styles.empty}>No enhancements found for this tree.</div>
   }
 
+  const layout = computeLayout(items)
+
   const treeSpent = items.reduce((sum, item) => {
     return sum + costUpToRank(item, choices[item.Name] ?? 0)
   }, 0)
@@ -252,10 +325,6 @@ export default function TreeGrid({
   const coreItems = items
     .filter(it => (it.YPosition ?? 0) === CORE_Y)
     .sort((a, b) => (a.XPosition ?? 0) - (b.XPosition ?? 0))
-  const tierItems = items.filter(it => (it.YPosition ?? 0) !== CORE_Y)
-  const tierRows = Array.from(new Set(tierItems.map(it => it.YPosition ?? 1))).sort((a, b) => b - a)
-  const maxX = items.reduce((m, it) => Math.max(m, it.XPosition ?? 0), 0)
-  const gridCols = maxX + 1
 
   function coreIsUnlocked(item: EnhancementTreeItem): boolean {
     const idx = coreItems.findIndex(c => c.Name === item.Name)
@@ -275,7 +344,6 @@ export default function TreeGrid({
     const isCore = (item.YPosition ?? 0) === CORE_Y
     if (isCore && !coreIsUnlocked(item)) return
 
-    // Selector: require a choice before first purchase
     const options = getSelectorOptions(item)
     if (options.length > 0 && !selections[item.Name]) {
       setSelectorTarget(item.Name)
@@ -295,7 +363,6 @@ export default function TreeGrid({
     }
     const newRank = rank - 1
     onChoicesChange({ ...choices, [item.Name]: newRank })
-    // Clear selection when all ranks sold
     if (newRank === 0 && selections[item.Name]) {
       const next = { ...selections }
       delete next[item.Name]
@@ -306,7 +373,6 @@ export default function TreeGrid({
   function handleSelection(itemName: string, optionName: string) {
     const item = items.find(it => it.Name === itemName)
     if (!item) return
-    // Record selection then buy rank 1
     onSelectionsChange({ ...selections, [itemName]: optionName })
     const rank = choices[itemName] ?? 0
     const cost = nextRankCost(item, rank)
@@ -321,7 +387,7 @@ export default function TreeGrid({
   const bgName = tree.Background
   const bgStyle = bgName && bgName !== 'NoTreeBackground'
     ? {
-        backgroundImage: `linear-gradient(rgba(8,4,0,0.58), rgba(8,4,0,0.58)), url(/images/UIImages/${bgName}.png)`,
+        backgroundImage: `linear-gradient(rgba(8,4,0,0.52), rgba(8,4,0,0.52)), url(/images/UIImages/${bgName}.png)`,
         backgroundSize: 'cover',
         backgroundPosition: 'center top',
         backgroundRepeat: 'no-repeat',
@@ -329,69 +395,57 @@ export default function TreeGrid({
     : undefined
 
   return (
-    <div className={styles.gridWrapper} style={bgStyle}>
-      {/* Tier rows T5→T1 (descending so T5 is at top, T1 just above Core) */}
-      {tierRows.map(yVal => {
-        const rowItems = tierItems.filter(it => (it.YPosition ?? 0) === yVal)
-        const label = TIER_LABELS[yVal] ?? `T${yVal}`
+    <div
+      className={styles.canvas}
+      style={{ width: layout.width, height: layout.height, ...bgStyle }}
+    >
+      {/* Tier dividers (subtle horizontal lines) */}
+      {Array.from({ length: layout.maxTierY }, (_, i) => {
+        const tier = layout.maxTierY - i
+        const y = PAD_Y + i * T_ROW + T_H
         return (
-          <div key={`tier-${yVal}`} className={styles.tierRow}>
-            <div className={styles.tierLabel}>{label}</div>
-            <div className={styles.cellRow}
-              style={{ gridTemplateColumns: `repeat(${gridCols}, ${CELL_SIZE}px)` }}>
-              {Array.from({ length: gridCols }, (_, col) => {
-                const item = rowItems.find(it => (it.XPosition ?? 0) === col)
-                if (!item) return <div key={col} className={styles.cellEmpty} />
-                return (
-                  <EnhancementCell
-                    key={item.Name}
-                    item={item}
-                    rank={choices[item.Name] ?? 0}
-                    selectedOption={selections[item.Name]}
-                    treeSpent={treeSpent}
-                    totalSpent={totalSpentAllTrees}
-                    totalAP={totalAP}
-                    isCore={false}
-                    onIncrement={() => handleIncrement(item)}
-                    onDecrement={() => handleDecrement(item)}
-                    onShowSelector={() => setSelectorTarget(item.Name)}
-                  />
-                )
-              })}
-            </div>
-          </div>
+          <div
+            key={`div-${tier}`}
+            className={styles.tierDivider}
+            style={{ top: y, left: PAD_X, width: layout.width - PAD_X * 2 }}
+          />
         )
       })}
 
-      {/* Core row */}
+      {/* Core separator */}
       {coreItems.length > 0 && (
-        <div className={styles.tierRow}>
-          <div className={`${styles.tierLabel} ${styles.coreTierLabel}`}>Core</div>
-          <div className={styles.cellRow}
-            style={{ gridTemplateColumns: `repeat(${gridCols}, ${CELL_SIZE}px)` }}>
-            {Array.from({ length: gridCols }, (_, col) => {
-              const item = coreItems.find(it => (it.XPosition ?? 0) === col)
-              if (!item) return <div key={col} className={styles.cellEmpty} />
-              return (
-                <EnhancementCell
-                  key={item.Name}
-                  item={item}
-                  rank={choices[item.Name] ?? 0}
-                  selectedOption={selections[item.Name]}
-                  treeSpent={treeSpent}
-                  totalSpent={totalSpentAllTrees}
-                  totalAP={totalAP}
-                  isCore={true}
-                  coreUnlocked={coreIsUnlocked(item)}
-                  onIncrement={() => handleIncrement(item)}
-                  onDecrement={() => handleDecrement(item)}
-                  onShowSelector={() => setSelectorTarget(item.Name)}
-                />
-              )
-            })}
-          </div>
-        </div>
+        <div
+          className={styles.coreSeparator}
+          style={{
+            top: PAD_Y + layout.maxTierY * T_ROW + T_H + CORE_GAP / 2,
+            left: 0,
+            width: layout.width,
+          }}
+        />
       )}
+
+      {/* All items — absolutely positioned */}
+      {items.map(item => {
+        const isCore = (item.YPosition ?? 0) === CORE_Y
+        const pos = itemPos(item, layout)
+        return (
+          <EnhancementCell
+            key={item.Name}
+            item={item}
+            rank={choices[item.Name] ?? 0}
+            selectedOption={selections[item.Name]}
+            treeSpent={treeSpent}
+            totalSpent={totalSpentAllTrees}
+            totalAP={totalAP}
+            isCore={isCore}
+            coreUnlocked={isCore ? coreIsUnlocked(item) : true}
+            pos={pos}
+            onIncrement={() => handleIncrement(item)}
+            onDecrement={() => handleDecrement(item)}
+            onShowSelector={() => setSelectorTarget(item.Name)}
+          />
+        )
+      })}
 
       {selectorTarget && selectorOptions.length > 0 && (
         <SelectorPicker
