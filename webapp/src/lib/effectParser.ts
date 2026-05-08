@@ -22,6 +22,13 @@ export interface EffectContext {
   stances: Set<string>                      // active stances (Cloth Armor, Tower Shield, …)
   bab: number
   weaponTypes: Set<string>                  // currently equipped weapon types
+  // Optional fields used by AType resolution and weapon-class requirements.
+  // Older callers that don't populate these get conservative fallbacks.
+  featCounts?: Record<string, number>       // feat → number of times trained
+  setBonusCounts?: Record<string, number>   // set bonus name → equipped tier count
+  sliderValues?: Record<string, number>     // slider name → current value
+  weaponClassMain?: Set<string>             // main-hand weapon class memberships
+  weaponClassOffhand?: Set<string>          // off-hand weapon class memberships
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +96,13 @@ function checkRequirement(req: Requirement, ctx: EffectContext): boolean {
     }
     case 'WeaponTypesEquipped':
       return its.some(i => ctx.weaponTypes.has(i))
+    case 'WeaponClassMainHand':
+      // Conservative pass when caller hasn't populated weaponClassMain.
+      if (!ctx.weaponClassMain) return true
+      return its.some(i => ctx.weaponClassMain!.has(i))
+    case 'WeaponClassOffHand':
+      if (!ctx.weaponClassOffhand) return true
+      return its.some(i => ctx.weaponClassOffhand!.has(i))
     case 'Skill':
       // Skill ranks ≥ value — V3 tracks skill totals via build stats not in
       // ctx; conservative pass to avoid false negatives.
@@ -260,18 +274,39 @@ function hasStanceRequirement(effect: Effect): boolean {
 // AType → numeric value
 // ---------------------------------------------------------------------------
 
+function abilityModFromTotal(total: number): number {
+  // V2: AbilityMod = (score - 10) / 2 floored, including for negatives.
+  return Math.floor((total - 10) / 2)
+}
+
+function firstItem(effect: Effect): string | undefined {
+  const it = effect.Item
+  if (!it) return undefined
+  if (Array.isArray(it)) return it[0]
+  return it
+}
+
 function resolveValue(
   effect: Effect,
   rank: number,
   classLevels: number,
   treeTotalAP: number,
+  ctx?: EffectContext,
 ): number | null {
   const atype = effect.AType ?? 'Stacks'
 
   switch (atype) {
-    case 'SpellInfo':
+    // ---------------------------------------------------------------------
+    // Non-numeric / informational ATypes — produce no flat value.
+    // ---------------------------------------------------------------------
+    case 'Unknown':
     case 'NotNeeded':
-    case 'UserList':
+    case 'SpellInfo':
+    case 'SLA':                     // SLA: caster level + charges + recharge — handled separately
+    case 'Dice':                    // Damage dice — modeled by weapon breakdown
+    case 'CriticalDice':            // Critical damage dice — modeled by weapon breakdown
+    case 'Slider':                  // Slider definition — UI metadata, not a stat value
+    case 'UserList':                // V3 legacy alias — selector requiring user input
       return null
 
     case 'Simple':
@@ -294,6 +329,80 @@ function resolveValue(
     case 'APCount': {
       const base = getAmountAtRank(effect.Amount, 1)
       return base * treeTotalAP
+    }
+
+    // ---------------------------------------------------------------------
+    // Ability-driven stack counts. V2 indexes Amount by ability score for
+    // AbilityValue/Total, by mod for AbilityMod variants. We approximate by
+    // multiplying base * derived-count (matches the typical Simple+stacks shape).
+    // ---------------------------------------------------------------------
+    case 'AbilityValue':
+    case 'AbilityTotal':
+    case 'AbilityTotalIndex': {
+      const ability = firstItem(effect)
+      const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
+      const base = getAmountAtRank(effect.Amount, 1)
+      return base * total
+    }
+
+    case 'AbilityMod': {
+      const ability = firstItem(effect)
+      const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
+      const base = getAmountAtRank(effect.Amount, 1)
+      return base * abilityModFromTotal(total)
+    }
+
+    case 'HalfAbilityMod': {
+      const ability = firstItem(effect)
+      const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
+      const base = getAmountAtRank(effect.Amount, 1)
+      return base * Math.floor(abilityModFromTotal(total) / 2)
+    }
+
+    case 'ThirdAbilityMod': {
+      const ability = firstItem(effect)
+      const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
+      const base = getAmountAtRank(effect.Amount, 1)
+      return base * Math.floor(abilityModFromTotal(total) / 3)
+    }
+
+    case 'BAB': {
+      const base = getAmountAtRank(effect.Amount, 1)
+      return base * (ctx?.bab ?? 0)
+    }
+
+    case 'FeatCount': {
+      const feat = firstItem(effect)
+      if (!feat) return 0
+      const base = getAmountAtRank(effect.Amount, 1)
+      const count =
+        ctx?.featCounts?.[feat] ??
+        (ctx?.feats.has(feat) ? 1 : 0)
+      return base * count
+    }
+
+    case 'SetBonusCount': {
+      const setName = firstItem(effect)
+      if (!setName) return 0
+      const base = getAmountAtRank(effect.Amount, 1)
+      const count = ctx?.setBonusCounts?.[setName] ?? 0
+      return base * count
+    }
+
+    case 'SliderValue': {
+      const sliderName = firstItem(effect)
+      if (!sliderName) return 0
+      const base = getAmountAtRank(effect.Amount, 1)
+      const value = ctx?.sliderValues?.[sliderName] ?? 0
+      return base * value
+    }
+
+    case 'SliderValueLookup': {
+      // V2 multiplies SliderValue by an Amount-array lookup at slider-value index.
+      const sliderName = firstItem(effect)
+      if (!sliderName) return 0
+      const value = ctx?.sliderValues?.[sliderName] ?? 0
+      return getAmountAtRank(effect.Amount, value)
     }
 
     case 'Stacks':
@@ -333,8 +442,9 @@ export function parseEffect(
     if (hasStanceRequirement(effect)) return []
   }
 
-  const value = resolveValue(effect, rank, classLevels, treeTotalAP)
-  if (value === null) return []
+  const resolved = resolveValue(effect, rank, classLevels, treeTotalAP, ctx)
+  if (resolved === null) return []
+  const value: number = resolved
 
   const bonusType = effect.Bonus ?? 'Enhancement'
   const items = toStringArray(effect.Item)
@@ -619,6 +729,509 @@ export function parseEffect(
     case 'TurnUndead':
     case 'ExtraTurns':
       return [make('turnUndead')]
+
+    // -----------------------------------------------------------------------
+    // V2 parity: bypasses (DR / fortification / dodge / missile deflection)
+    // -----------------------------------------------------------------------
+    case 'DRBypass':
+      if (items.length > 0) return items.map(item => make(`drBypass.${item}`))
+      return [make('drBypass.Untyped')]
+
+    case 'FortificationBypass':
+      return [make('fortBypass')]
+
+    case 'DodgeBypass':
+      return [make('dodgeBypass')]
+
+    case 'MissileDeflection':
+      return [make('missileDeflection')]
+
+    case 'MissileDeflectionBypass':
+      return [make('missileDeflectionBypass')]
+
+    // -----------------------------------------------------------------------
+    // V2 parity: armor / shield specific AC and check penalty effects.
+    // Bonus-type-coded variants flow into the same 'ac' stat key with the
+    // appropriate exclusive-stack type per V2.
+    // -----------------------------------------------------------------------
+    case 'ArmorACBonus':
+      return [make('ac', 'Armor')]
+
+    case 'ACBonusShield':
+      return [make('ac', 'Shield')]
+
+    case 'ArmorCheckPenalty':
+      return [make('armorCheckPenalty', 'Penalty')]
+
+    case 'ArmorCheckPenaltyShield':
+      return [make('armorCheckPenaltyShield', 'Penalty')]
+
+    case 'ArcaneSpellFailure':
+      return [make('arcaneSpellFailure')]
+
+    case 'ArcaneSpellFailureShields':
+      return [make('arcaneSpellFailureShield')]
+
+    // Tower-shield-gated dodge / mdb — V2 gates these via Requirements; if
+    // the requirement evaluator passes, treat them as standard dodge / mdb.
+    case 'DodgeBonusTowerShield':
+      return [make('dodge', 'Dodge')]
+
+    case 'MaxDexBonusTowerShield':
+      return [make('mdb')]
+
+    case 'BlockingDR':
+      return [make('blockingDR')]
+
+    case 'EnchantArmor':
+      return [make('armor.enchantment')]
+
+    case 'ShieldEnchantment':
+      return [make('shield.enchantment')]
+
+    // -----------------------------------------------------------------------
+    // Healing / repair / negative-energy amplification
+    // -----------------------------------------------------------------------
+    case 'HealingAmplification':
+      return [make('healAmp')]
+
+    case 'NegativeHealingAmplification':
+      return [make('negHealAmp')]
+
+    case 'RepairAmplification':
+      return [make('repairAmp')]
+
+    // -----------------------------------------------------------------------
+    // Hitpoint variants
+    // -----------------------------------------------------------------------
+    case 'HitpointsReaper':
+      return [make('hp', 'Reaper')]
+
+    case 'HitpointsStyleBonus':
+      return [make('hp')]
+
+    case 'FalseLife':
+      return [make('hp', 'False Life')]
+
+    // -----------------------------------------------------------------------
+    // Sneak attack: V2 splits Dice / Damage / Range / Attack and main-vs-ranged.
+    // -----------------------------------------------------------------------
+    case 'SneakAttackAttack':
+      return [make('melee.sneakAttack')]
+
+    case 'SneakAttackDamage':
+      return [make('melee.sneakDamage')]
+
+    case 'SneakAttackRange':
+      return [make('melee.sneakRange')]
+
+    case 'RangedSneakAttackDamage':
+      return [make('ranged.sneakDamage')]
+
+    case 'RangedSneakAttackRange':
+      return [make('ranged.sneakRange')]
+
+    // -----------------------------------------------------------------------
+    // AP / fate point bonuses
+    // -----------------------------------------------------------------------
+    case 'DestinyAPBonus':
+      return [make('destinyAP')]
+
+    case 'RAPBonus':
+      return [make('reaperAP')]
+
+    case 'UAPBonus':
+      return [make('universalAP')]
+
+    case 'FatePoint':
+      return [make('fatePoint')]
+
+    // -----------------------------------------------------------------------
+    // Threat / tactical / spell DC
+    // -----------------------------------------------------------------------
+    case 'ThreatBonusMelee':
+      return [make('threat.melee')]
+
+    case 'ThreatBonusRanged':
+      return [make('threat.ranged')]
+
+    case 'ThreatBonusSpell':
+      return [make('threat.spell')]
+
+    case 'TacticalDC':
+      if (items.length > 0) return items.map(item => make(`tacticalDC.${item}`))
+      return [make('tacticalDC.All')]
+
+    // -----------------------------------------------------------------------
+    // Turn-undead (V2 splits these into multiple effects)
+    // -----------------------------------------------------------------------
+    case 'TurnBonus':
+      return [make('turnUndead.bonus')]
+
+    case 'TurnDiceBonus':
+      return [make('turnUndead.diceBonus')]
+
+    case 'TurnLevelBonus':
+      return [make('turnUndead.levelBonus')]
+
+    case 'TurnMaxDice':
+      return [make('turnUndead.maxDice')]
+
+    // -----------------------------------------------------------------------
+    // Ki (monk)
+    // -----------------------------------------------------------------------
+    case 'KiCritical':
+      return [make('ki.critical')]
+
+    case 'KiHit':
+      return [make('ki.hit')]
+
+    case 'KiMaximum':
+      return [make('ki.max')]
+
+    case 'KiPassive':
+      return [make('ki.passive')]
+
+    // -----------------------------------------------------------------------
+    // Songs (bard) — V2 emits these as Music-typed bonuses to the corresponding
+    // primary stat key. We carry the V2 stat shape and tag the bonus type as
+    // 'Music' so they stack-resolve correctly under the bard exclusive type.
+    // -----------------------------------------------------------------------
+    case 'SongCount':
+      return [make('song.count')]
+
+    case 'SongDuration':
+      return [make('song.duration')]
+
+    case 'SongACBonus':
+      return [make('ac', 'Music')]
+
+    case 'SongDodgeBonus':
+      return [make('dodge', 'Music')]
+
+    case 'SongSaveBonus': {
+      const targets = items.length > 0 ? items : ['All']
+      const out: ParsedBonus[] = []
+      for (const t of targets) {
+        switch (t) {
+          case 'All':
+            out.push(make('save.Fort', 'Music'))
+            out.push(make('save.Reflex', 'Music'))
+            out.push(make('save.Will', 'Music'))
+            break
+          case 'Fortitude': out.push(make('save.Fort', 'Music')); break
+          case 'Reflex':    out.push(make('save.Reflex', 'Music')); break
+          case 'Will':      out.push(make('save.Will', 'Music')); break
+          default:          break
+        }
+      }
+      return out
+    }
+
+    case 'SongAttackBonus':
+      return [make('melee.toHit', 'Music')]
+
+    case 'SongDoublestrike':
+      return [make('melee.doublestrike', 'Music')]
+
+    case 'SongDoubleshot':
+      return [make('ranged.doubleshot', 'Music')]
+
+    case 'SongDamageBonus':
+      return [make('melee.damage', 'Music')]
+
+    case 'SongUniversalSpellPower':
+      return [make('sp.Universal', 'Music')]
+
+    case 'SongSpellPenetration':
+      return [make('spellPenetration', 'Music')]
+
+    case 'SongCasterLevel':
+      if (items.length > 0) return items.map(item => make(`cl.${item}`, 'Music'))
+      return [make('cl.All', 'Music')]
+
+    case 'SongSkillBonus':
+      if (items.length > 0) return items.map(item => make(`skill.${item}`, 'Music'))
+      return []
+
+    case 'SongPRR':
+      return [make('prr', 'Music')]
+
+    case 'SongMRR':
+      return [make('mrr', 'Music')]
+
+    case 'SongHealingAmp':
+      return [make('healAmp', 'Music')]
+
+    case 'SongNegativeHealingAmp':
+      return [make('negHealAmp', 'Music')]
+
+    case 'SongRepairAmp':
+      return [make('repairAmp', 'Music')]
+
+    // -----------------------------------------------------------------------
+    // Damage ability multipliers (Strength 1.5x for THF, 0.5x for offhand, …)
+    // -----------------------------------------------------------------------
+    case 'DamageAbilityMultiplier':
+      return [make('melee.damageAbilityMult')]
+
+    case 'DamageAbilityMultiplierOffhand':
+      return [make('offhand.damageAbilityMult')]
+
+    // -----------------------------------------------------------------------
+    // Helpless (extra damage vs. helpless / damage taken while helpless)
+    // -----------------------------------------------------------------------
+    case 'HelplessDamage':
+      return [make('helpless')]
+
+    case 'HelplessDamageReduction':
+      return [make('helplessDR')]
+
+    // -----------------------------------------------------------------------
+    // Miscellaneous combat / movement / utility
+    // -----------------------------------------------------------------------
+    case 'DivineGrace':
+      return [make('save.divineGrace')]
+
+    case 'OverrideBAB':
+      return [make('babOverride')]
+
+    case 'DoublestrikeOffhand':
+      return [make('offhand.doublestrike')]
+
+    case 'PointBlankShotRange':
+      return [make('pointBlankShotRange')]
+
+    case 'SecondaryShieldBash':
+      return [make('secondaryShieldBash')]
+
+    case 'TumbleCharge':
+      return [make('tumbleCharge')]
+
+    case 'TrueSeeing':
+      return [make('trueSeeing')]
+
+    case 'UnconsciousRange':
+      return [make('unconsciousRange')]
+
+    case 'WildsurgeChance':
+      return [make('wildsurgeChance')]
+
+    case 'Incorporeality':
+      return [make('incorporeality')]
+
+    case 'ImbueDice':
+      return [make('imbueDice')]
+
+    case 'Immunity':
+      return [make(`immunity.${items[0] ?? 'All'}`)]
+
+    case 'DragonmarkUse':
+      return [make('dragonmark.uses')]
+
+    case 'NegativeLevel':
+      return [make('negativeLevel')]
+
+    case 'OffHandAttackBonus':
+      return [make('offhand.attack')]
+
+    case 'ImplementBonus':
+      return [make('implementBonus')]
+
+    // -----------------------------------------------------------------------
+    // Caster level — spell-specific / school-specific maxima
+    // -----------------------------------------------------------------------
+    case 'CasterLevelSpell':
+      if (items.length > 0) return items.map(item => make(`clSpell.${item}`))
+      return []
+
+    case 'MaxCasterLevelSpell':
+      if (items.length > 0) return items.map(item => make(`maxClSpell.${item}`))
+      return []
+
+    case 'MaxCasterLevelSchool':
+      if (items.length > 0) return items.map(item => make(`maxClSchool.${item}`))
+      return []
+
+    // -----------------------------------------------------------------------
+    // Spell cost / spell critical damage
+    // -----------------------------------------------------------------------
+    case 'SpellCostReduction':
+      if (items.length > 0) return items.map(item => make(`spellCost.${item}`))
+      return [make('spellCost.All')]
+
+    case 'SpellPointCostPercent':
+      return [make('spellCostPct')]
+
+    case 'SpellCriticalDamage':
+      if (items.length > 0) return items.map(item => make(`spCritDmg.${normalizeSpellElement(item)}`))
+      return []
+
+    case 'UniversalSpellCriticalDamage':
+      return [make('spCritDmg.Universal')]
+
+    // -----------------------------------------------------------------------
+    // Metamagic cost reductions
+    // -----------------------------------------------------------------------
+    case 'MetamagicCostAccelerate':       return [make('metamagic.cost.Accelerate')]
+    case 'MetamagicCostEschewMaterials':  return [make('metamagic.cost.EschewMaterials')]
+    case 'MetamagicCostEmbolden':         return [make('metamagic.cost.Embolden')]
+    case 'MetamagicCostEmpower':          return [make('metamagic.cost.Empower')]
+    case 'MetamagicCostEmpowerHealing':   return [make('metamagic.cost.EmpowerHealing')]
+    case 'MetamagicCostEnlarge':          return [make('metamagic.cost.Enlarge')]
+    case 'MetamagicCostExtend':           return [make('metamagic.cost.Extend')]
+    case 'MetamagicCostHeighten':         return [make('metamagic.cost.Heighten')]
+    case 'MetamagicCostIntensify':        return [make('metamagic.cost.Intensify')]
+    case 'MetamagicCostMaximize':         return [make('metamagic.cost.Maximize')]
+    case 'MetamagicCostQuicken':          return [make('metamagic.cost.Quicken')]
+
+    // -----------------------------------------------------------------------
+    // Action boost / class extras (extra uses per rest)
+    // -----------------------------------------------------------------------
+    case 'ExtraActionBoost':       return [make('actionBoost.extra')]
+    case 'ExtraLayOnHands':        return [make('lohExtra')]
+    case 'LOHRegenRate':           return [make('lohRegen')]
+    case 'ExtraRage':              return [make('rageExtra')]
+    case 'ExtraSmite':             return [make('smiteExtra')]
+    case 'ExtraRemoveDisease':     return [make('removeDiseaseExtra')]
+    case 'ExtraWildEmpathy':       return [make('wildEmpathyExtra')]
+
+    // -----------------------------------------------------------------------
+    // Rune arm
+    // -----------------------------------------------------------------------
+    case 'RuneArmChargeRate':      return [make('runeArm.chargeRate')]
+    case 'RuneArmStableCharge':    return [make('runeArm.stableCharge')]
+
+    // -----------------------------------------------------------------------
+    // Save / skill ability replacement (e.g. "use Cha for Reflex saves").
+    // V2 models these as ability-substitution effects on the corresponding
+    // save / skill breakdown. We can't fully model that without a breakdown
+    // engine, so we surface them under a dedicated stat key for downstream
+    // engines to consume.
+    // -----------------------------------------------------------------------
+    case 'SaveBonusAbility':
+      if (items.length > 0) {
+        return items.map(item => {
+          switch (item) {
+            case 'Fortitude': return make('save.Fort.ability')
+            case 'Reflex':    return make('save.Reflex.ability')
+            case 'Will':      return make('save.Will.ability')
+            case 'All':       return make('save.All.ability')
+            default:          return make(`save.sub.${item}.ability`)
+          }
+        })
+      }
+      return []
+
+    case 'SaveNoFailOn1':
+      if (items.length > 0) {
+        return items.map(item => {
+          switch (item) {
+            case 'Fortitude': return make('save.Fort.noFailOn1')
+            case 'Reflex':    return make('save.Reflex.noFailOn1')
+            case 'Will':      return make('save.Will.noFailOn1')
+            default:          return make('save.All.noFailOn1')
+          }
+        })
+      }
+      return [make('save.All.noFailOn1')]
+
+    case 'SkillBonusAbility':
+      if (items.length > 0) return items.map(item => make(`skill.${item}.ability`))
+      return []
+
+    // -----------------------------------------------------------------------
+    // Hireling stats (modeled separately; not applied to the player build)
+    // -----------------------------------------------------------------------
+    case 'HirelingAbilityBonus':
+    case 'HirelingConcealment':
+    case 'HirelingHitpoints':
+    case 'HirelingFortification':
+    case 'HirelingPRR':
+    case 'HirelingMRR':
+    case 'HirelingDodge':
+    case 'HirelingMeleePower':
+    case 'HirelingRangedPower':
+    case 'HirelingSpellPower':
+    case 'HirelingSaveBonus':
+    case 'HirelingGrantFeat':
+      return []
+
+    // -----------------------------------------------------------------------
+    // Weapon-specific effects (modeled by the weapon breakdown engine, not
+    // the flat-stat aggregator). These touch only equipped weapons that match
+    // Item filters and are emitted into per-weapon breakdown items in V2.
+    // -----------------------------------------------------------------------
+    case 'Weapon_Alacrity':
+    case 'Weapon_AttackAbility':
+    case 'Weapon_BaseDamage':
+    case 'Weapon_CriticalMultiplier':
+    case 'Weapon_CriticalMultiplier19To20':
+    case 'Weapon_CriticalRange':
+    case 'Weapon_DamageAbility':
+    case 'Weapon_Enchantment':
+    case 'Weapon_Keen':
+    case 'Weapon_VorpalRange':
+    case 'Weapon_AttackCritical':
+    case 'Weapon_DamageCritical':
+    case 'Weapon_AttackAndDamageCritical':
+    case 'WeaponOtherDamageBonus':
+    case 'WeaponOtherDamageBonusCritical':
+    case 'WeaponOtherDamageBonusClass':
+    case 'WeaponOtherDamageBonusCriticalClass':
+    case 'WeaponAlacrityClass':
+    case 'WeaponAttackAbilityClass':
+    case 'WeaponDamageAbilityClass':
+    case 'WeaponDamageBonusCriticalStat':
+    case 'WeaponDamageBonusStat':
+    case 'WeaponProficiencyClass':
+    case 'WeaponAttackBonusClass':
+    case 'WeaponAttackBonusCriticalClass':
+    case 'WeaponDamageBonusClass':
+    case 'WeaponDamageBonusCriticalClass':
+    case 'WeaponCriticalMultiplierClass':
+    case 'WeaponCriticalRangeClass':
+    case 'Weapon_EnchantmentClass':
+    case 'WeaponAttackBonusDamageType':
+    case 'WeaponAttackBonusCriticalDamageType':
+    case 'WeaponDamageBonusDamageType':
+    case 'WeaponDamageBonusCriticalDamageType':
+    case 'WeaponKeenDamageType':
+      return []
+
+    // -----------------------------------------------------------------------
+    // Control-flow / UI-only effects (no flat stat contribution)
+    //   GrantFeat / GrantSpell / SpellListAddition / SpellLikeAbility — change
+    //     the available feats/spells, handled by feat/spell aggregation.
+    //   AddGroupWeapon / MergeGroups — modify weapon-group memberships.
+    //   ExclusionGroup / ExcludeFeatSelection — gate selectors.
+    //   CreateSlider — declares a slider; SliderValue effects consume it.
+    //   EnhancementTree / DestinyTree — declare tree availability.
+    //   ItemClickie / SLACharge — declares clickies / SLAs.
+    //   SpellPowerReplacement / ImplementInYourHands — caster-level overrides.
+    //   Regeneration / RustSusceptability — situational; not currently surfaced.
+    //   NotModeled / Unknown — explicitly inert.
+    // -----------------------------------------------------------------------
+    case 'AddGroupWeapon':
+    case 'MergeGroups':
+    case 'ExclusionGroup':
+    case 'ExcludeFeatSelection':
+    case 'GrantFeat':
+    case 'GrantSpell':
+    case 'SpellListAddition':
+    case 'SpellLikeAbility':
+    case 'CreateSlider':
+    case 'EnhancementTree':
+    case 'DestinyTree':
+    case 'ItemClickie':
+    case 'SLACharge':
+    case 'SpellPowerReplacement':
+    case 'ImplementInYourHands':
+    case 'Regeneration':
+    case 'RustSusceptability':
+    case 'NotModeled':
+    case 'Unknown':
+      return []
 
     // Unknown effect type — return nothing
     default:
@@ -909,7 +1522,416 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
       return [make('initiative')]
 
     case 'MoveSpeed':
+    case 'MovementSpeed':
       return [make('speed')]
+
+    // -----------------------------------------------------------------------
+    // V2 parity: bypasses
+    // -----------------------------------------------------------------------
+    case 'DRBypass':
+      if (items.length > 0) return items.map(item => make(`drBypass.${item}`))
+      return [make('drBypass.Untyped')]
+
+    case 'FortificationBypass':
+      return [make('fortBypass')]
+
+    case 'DodgeBypass':
+      return [make('dodgeBypass')]
+
+    case 'MissileDeflection':
+      return [make('missileDeflection')]
+
+    case 'MissileDeflectionBypass':
+      return [make('missileDeflectionBypass')]
+
+    // -----------------------------------------------------------------------
+    // V2 parity: armor / shield specific
+    // -----------------------------------------------------------------------
+    case 'ArmorACBonus':
+    case 'ArmorBonus':
+      return [make('ac', 'Armor')]
+
+    case 'ACBonusShield':
+    case 'ShieldBonus':
+      return [make('ac', 'Shield')]
+
+    case 'ArmorCheckPenalty':
+      return [make('armorCheckPenalty', 'Penalty')]
+
+    case 'ArmorCheckPenaltyShield':
+      return [make('armorCheckPenaltyShield', 'Penalty')]
+
+    case 'ArcaneSpellFailure':
+      return [make('arcaneSpellFailure')]
+
+    case 'ArcaneSpellFailureShields':
+      return [make('arcaneSpellFailureShield')]
+
+    case 'BlockingDR':
+      return [make('blockingDR')]
+
+    case 'EnchantArmor':
+    case 'ArmorEnchantment':
+      return [make('armor.enchantment')]
+
+    case 'ShieldEnchantment':
+      return [make('shield.enchantment')]
+
+    // -----------------------------------------------------------------------
+    // Healing / repair / negative-energy amplification
+    // -----------------------------------------------------------------------
+    case 'HealingAmplification':
+      return [make('healAmp')]
+
+    case 'NegativeHealingAmplification':
+      return [make('negHealAmp')]
+
+    case 'RepairAmplification':
+      return [make('repairAmp')]
+
+    // -----------------------------------------------------------------------
+    // HP variants
+    // -----------------------------------------------------------------------
+    case 'HitpointsReaper':
+      return [make('hp', 'Reaper')]
+
+    case 'FalseLife':
+      return [make('hp', 'False Life')]
+
+    // -----------------------------------------------------------------------
+    // Sneak attack
+    // -----------------------------------------------------------------------
+    case 'SneakAttackAttack':
+      return [make('melee.sneakAttack')]
+
+    case 'SneakAttackDamage':
+      return [make('melee.sneakDamage')]
+
+    case 'SneakAttackDice':
+      return [make('melee.sneakDice')]
+
+    case 'SneakAttackRange':
+      return [make('melee.sneakRange')]
+
+    case 'RangedSneakAttackDamage':
+      return [make('ranged.sneakDamage')]
+
+    case 'RangedSneakAttackRange':
+      return [make('ranged.sneakRange')]
+
+    // -----------------------------------------------------------------------
+    // Threat / tactical / spell DC
+    // -----------------------------------------------------------------------
+    case 'ThreatBonusMelee':
+      return [make('threat.melee')]
+
+    case 'ThreatBonusRanged':
+      return [make('threat.ranged')]
+
+    case 'ThreatBonusSpell':
+      return [make('threat.spell')]
+
+    case 'TacticalDC':
+      if (items.length > 0) return items.map(item => make(`tacticalDC.${item}`))
+      return [make('tacticalDC.All')]
+
+    // -----------------------------------------------------------------------
+    // Spell-related
+    // -----------------------------------------------------------------------
+    case 'SpellLore':
+    case 'SpellCritChance':
+      if (items.length > 0) return items.map(item => make(`spCrit.${normalizeSpellElement(item)}`))
+      return []
+
+    case 'UniversalSpellLore':
+    case 'UniversalSpellCritChance':
+      return [make('spCrit.Universal')]
+
+    case 'SpellCriticalDamage':
+      if (items.length > 0) return items.map(item => make(`spCritDmg.${normalizeSpellElement(item)}`))
+      return []
+
+    case 'UniversalSpellCriticalDamage':
+      return [make('spCritDmg.Universal')]
+
+    case 'SpellCostReduction':
+      if (items.length > 0) return items.map(item => make(`spellCost.${item}`))
+      return [make('spellCost.All')]
+
+    case 'SpellPointCostPercent':
+      return [make('spellCostPct')]
+
+    case 'CasterLevelSpell':
+      if (items.length > 0) return items.map(item => make(`clSpell.${item}`))
+      return []
+
+    case 'MaxCasterLevelSpell':
+      if (items.length > 0) return items.map(item => make(`maxClSpell.${item}`))
+      return []
+
+    case 'CasterLevelSchool':
+      if (items.length > 0) return items.map(item => make(`clSchool.${item}`))
+      return []
+
+    case 'MaxCasterLevelSchool':
+      if (items.length > 0) return items.map(item => make(`maxClSchool.${item}`))
+      return []
+
+    case 'CasterLevelEnergy':
+      if (items.length > 0) return items.map(item => make(`clEnergy.${normalizeSpellElement(item)}`))
+      return []
+
+    case 'EpicCasterLevel':
+      if (items.length > 0) return items.map(item => make(`cl.${item}`))
+      return [make('cl.All')]
+
+    // -----------------------------------------------------------------------
+    // Metamagic cost reductions
+    // -----------------------------------------------------------------------
+    case 'MetamagicCostAccelerate':       return [make('metamagic.cost.Accelerate')]
+    case 'MetamagicCostEschewMaterials':  return [make('metamagic.cost.EschewMaterials')]
+    case 'MetamagicCostEmbolden':         return [make('metamagic.cost.Embolden')]
+    case 'MetamagicCostEmpower':          return [make('metamagic.cost.Empower')]
+    case 'MetamagicCostEmpowerHealing':   return [make('metamagic.cost.EmpowerHealing')]
+    case 'MetamagicCostEnlarge':          return [make('metamagic.cost.Enlarge')]
+    case 'MetamagicCostExtend':           return [make('metamagic.cost.Extend')]
+    case 'MetamagicCostHeighten':         return [make('metamagic.cost.Heighten')]
+    case 'MetamagicCostIntensify':        return [make('metamagic.cost.Intensify')]
+    case 'MetamagicCostMaximize':         return [make('metamagic.cost.Maximize')]
+    case 'MetamagicCostQuicken':          return [make('metamagic.cost.Quicken')]
+
+    // -----------------------------------------------------------------------
+    // AP / fate / class extras
+    // -----------------------------------------------------------------------
+    case 'DestinyAPBonus':         return [make('destinyAP')]
+    case 'RAPBonus':               return [make('reaperAP')]
+    case 'UAPBonus':               return [make('universalAP')]
+    case 'FatePoint':              return [make('fatePoint')]
+    case 'ExtraActionBoost':       return [make('actionBoost.extra')]
+    case 'ExtraLayOnHands':        return [make('lohExtra')]
+    case 'LOHRegenRate':           return [make('lohRegen')]
+    case 'ExtraRage':              return [make('rageExtra')]
+    case 'ExtraSmite':             return [make('smiteExtra')]
+    case 'ExtraRemoveDisease':     return [make('removeDiseaseExtra')]
+    case 'ExtraWildEmpathy':       return [make('wildEmpathyExtra')]
+    case 'ExtraTurns':
+    case 'TurnUndead':             return [make('turnUndead')]
+    case 'TurnBonus':              return [make('turnUndead.bonus')]
+    case 'TurnDiceBonus':          return [make('turnUndead.diceBonus')]
+    case 'TurnLevelBonus':         return [make('turnUndead.levelBonus')]
+    case 'TurnMaxDice':            return [make('turnUndead.maxDice')]
+
+    // -----------------------------------------------------------------------
+    // Ki / monk
+    // -----------------------------------------------------------------------
+    case 'KiCritical':             return [make('ki.critical')]
+    case 'KiHit':                  return [make('ki.hit')]
+    case 'KiMaximum':              return [make('ki.max')]
+    case 'KiPassive':              return [make('ki.passive')]
+
+    // -----------------------------------------------------------------------
+    // Helpless / damage ability multiplier / divine grace
+    // -----------------------------------------------------------------------
+    case 'HelplessDamage':
+    case 'HelplessBonus':          return [make('helpless')]
+    case 'HelplessDamageReduction':return [make('helplessDR')]
+    case 'DamageAbilityMultiplier':         return [make('melee.damageAbilityMult')]
+    case 'DamageAbilityMultiplierOffhand':  return [make('offhand.damageAbilityMult')]
+    case 'DivineGrace':            return [make('save.divineGrace')]
+
+    // -----------------------------------------------------------------------
+    // Songs (bard) — Music-typed bonuses to the corresponding stat keys
+    // -----------------------------------------------------------------------
+    case 'SongCount':              return [make('song.count')]
+    case 'SongDuration':           return [make('song.duration')]
+    case 'SongACBonus':            return [make('ac', 'Music')]
+    case 'SongDodgeBonus':         return [make('dodge', 'Music')]
+    case 'SongAttackBonus':        return [make('melee.toHit', 'Music')]
+    case 'SongDoublestrike':       return [make('melee.doublestrike', 'Music')]
+    case 'SongDoubleshot':         return [make('ranged.doubleshot', 'Music')]
+    case 'SongDamageBonus':        return [make('melee.damage', 'Music')]
+    case 'SongUniversalSpellPower':return [make('sp.Universal', 'Music')]
+    case 'SongSpellPenetration':   return [make('spellPenetration', 'Music')]
+    case 'SongPRR':                return [make('prr', 'Music')]
+    case 'SongMRR':                return [make('mrr', 'Music')]
+    case 'SongHealingAmp':         return [make('healAmp', 'Music')]
+    case 'SongNegativeHealingAmp': return [make('negHealAmp', 'Music')]
+    case 'SongRepairAmp':          return [make('repairAmp', 'Music')]
+    case 'SongSaveBonus': {
+      const targets = items.length > 0 ? items : ['All']
+      const out: ParsedBonus[] = []
+      for (const t of targets) {
+        switch (t) {
+          case 'All':
+            out.push(make('save.Fort', 'Music'))
+            out.push(make('save.Reflex', 'Music'))
+            out.push(make('save.Will', 'Music'))
+            break
+          case 'Fortitude': out.push(make('save.Fort', 'Music')); break
+          case 'Reflex':    out.push(make('save.Reflex', 'Music')); break
+          case 'Will':      out.push(make('save.Will', 'Music')); break
+          default:          break
+        }
+      }
+      return out
+    }
+    case 'SongCasterLevel':
+      if (items.length > 0) return items.map(item => make(`cl.${item}`, 'Music'))
+      return [make('cl.All', 'Music')]
+    case 'SongSkillBonus':
+      if (items.length > 0) return items.map(item => make(`skill.${item}`, 'Music'))
+      return []
+
+    // -----------------------------------------------------------------------
+    // Threat / utility / misc
+    // -----------------------------------------------------------------------
+    case 'OffHandAttackBonus':
+    case 'OffHandAttack':
+    case 'OffhandAttack':          return [make('offhand.attack')]
+    case 'DoublestrikeOffhand':    return [make('offhand.doublestrike')]
+    case 'OverrideBAB':            return [make('babOverride')]
+    case 'PointBlankShotRange':    return [make('pointBlankShotRange')]
+    case 'SecondaryShieldBash':    return [make('secondaryShieldBash')]
+    case 'TumbleCharge':           return [make('tumbleCharge')]
+    case 'TrueSeeing':              return [make('trueSeeing')]
+    case 'UnconsciousRange':       return [make('unconsciousRange')]
+    case 'WildsurgeChance':        return [make('wildsurgeChance')]
+    case 'Incorporeality':         return [make('incorporeality')]
+    case 'ImbueDice':              return [make('imbueDice')]
+    case 'NegativeLevel':          return [make('negativeLevel')]
+    case 'DragonmarkUse':          return [make('dragonmark.uses')]
+    case 'ImplementBonus':         return [make('implementBonus')]
+    case 'Displacement':           return [make('displacement')]
+    case 'ThreatRange':
+    case 'ImprovedCritical':       return [make('weapon.threatRange')]
+
+    case 'Immunity':
+      return [make(`immunity.${items[0] ?? 'All'}`)]
+
+    // -----------------------------------------------------------------------
+    // Save / skill ability replacement
+    // -----------------------------------------------------------------------
+    case 'SaveBonusAbility':
+      if (items.length > 0) {
+        return items.map(item => {
+          switch (item) {
+            case 'Fortitude': return make('save.Fort.ability')
+            case 'Reflex':    return make('save.Reflex.ability')
+            case 'Will':      return make('save.Will.ability')
+            case 'All':       return make('save.All.ability')
+            default:          return make(`save.sub.${item}.ability`)
+          }
+        })
+      }
+      return []
+
+    case 'SkillBonusAbility':
+      if (items.length > 0) return items.map(item => make(`skill.${item}.ability`))
+      return []
+
+    case 'SaveNoFailOn1':
+      if (items.length > 0) {
+        return items.map(item => {
+          switch (item) {
+            case 'Fortitude': return make('save.Fort.noFailOn1')
+            case 'Reflex':    return make('save.Reflex.noFailOn1')
+            case 'Will':      return make('save.Will.noFailOn1')
+            default:          return make('save.All.noFailOn1')
+          }
+        })
+      }
+      return [make('save.All.noFailOn1')]
+
+    // -----------------------------------------------------------------------
+    // Rune arm
+    // -----------------------------------------------------------------------
+    case 'RuneArmChargeRate':      return [make('runeArm.chargeRate')]
+    case 'RuneArmStableCharge':    return [make('runeArm.stableCharge')]
+
+    // -----------------------------------------------------------------------
+    // Hireling stats — modeled separately from the player build.
+    // -----------------------------------------------------------------------
+    case 'HirelingAbilityBonus':
+    case 'HirelingConcealment':
+    case 'HirelingHitpoints':
+    case 'HirelingFortification':
+    case 'HirelingPRR':
+    case 'HirelingMRR':
+    case 'HirelingDodge':
+    case 'HirelingMeleePower':
+    case 'HirelingRangedPower':
+    case 'HirelingSpellPower':
+    case 'HirelingSaveBonus':
+    case 'HirelingGrantFeat':
+      return []
+
+    // -----------------------------------------------------------------------
+    // Weapon-specific (modeled by the weapon breakdown engine)
+    // -----------------------------------------------------------------------
+    case 'Weapon_Alacrity':
+    case 'Weapon_Attack':
+    case 'Weapon_AttackAbility':
+    case 'Weapon_AttackAndDamage':
+    case 'Weapon_AttackAndDamageCritical':
+    case 'Weapon_AttackCritical':
+    case 'Weapon_BaseDamage':
+    case 'Weapon_CriticalMultiplier':
+    case 'Weapon_CriticalMultiplier19To20':
+    case 'Weapon_CriticalRange':
+    case 'Weapon_Damage':
+    case 'Weapon_DamageAbility':
+    case 'Weapon_DamageCritical':
+    case 'Weapon_Enchantment':
+    case 'Weapon_Keen':
+    case 'Weapon_OtherDamageBonus':
+    case 'Weapon_VorpalRange':
+    case 'WeaponOtherDamageBonus':
+    case 'WeaponOtherDamageBonusCritical':
+    case 'WeaponOtherDamageBonusClass':
+    case 'WeaponOtherDamageBonusCriticalClass':
+    case 'WeaponAlacrityClass':
+    case 'WeaponAttackAbilityClass':
+    case 'WeaponDamageAbilityClass':
+    case 'WeaponDamageBonusCriticalStat':
+    case 'WeaponDamageBonusStat':
+    case 'WeaponProficiencyClass':
+    case 'WeaponAttackBonusClass':
+    case 'WeaponAttackBonusCriticalClass':
+    case 'WeaponDamageBonusClass':
+    case 'WeaponDamageBonusCriticalClass':
+    case 'WeaponCriticalMultiplierClass':
+    case 'WeaponCriticalRangeClass':
+    case 'Weapon_EnchantmentClass':
+    case 'WeaponAttackBonusDamageType':
+    case 'WeaponAttackBonusCriticalDamageType':
+    case 'WeaponDamageBonusDamageType':
+    case 'WeaponDamageBonusCriticalDamageType':
+    case 'WeaponKeenDamageType':
+      return []
+
+    // -----------------------------------------------------------------------
+    // Control-flow / UI-only
+    // -----------------------------------------------------------------------
+    case 'AddGroupWeapon':
+    case 'MergeGroups':
+    case 'ExclusionGroup':
+    case 'ExcludeFeatSelection':
+    case 'GrantFeat':
+    case 'GrantSpell':
+    case 'SpellListAddition':
+    case 'SpellLikeAbility':
+    case 'CreateSlider':
+    case 'EnhancementTree':
+    case 'DestinyTree':
+    case 'ItemClickie':
+    case 'SLACharge':
+    case 'SpellPowerReplacement':
+    case 'ImplementInYourHands':
+    case 'Regeneration':
+    case 'RustSusceptability':
+    case 'NotModeled':
+    case 'Unknown':
+      return []
 
     // Unknown buff type
     default:
