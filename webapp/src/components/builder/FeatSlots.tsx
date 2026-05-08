@@ -262,6 +262,54 @@ function formatPrerequisites(feat: Feat): string {
 }
 
 // ---------------------------------------------------------------------------
+// Build snapshot at a specific slot's level (V2 behavior)
+// ---------------------------------------------------------------------------
+// Returns a "view" of the build as it looked when the character was about to
+// choose the feat in `slot`.  Three things are adjusted:
+//   1. totalLevel is capped to the slot's ordering level.
+//   2. Each class's levels are scaled proportionally so they add up to at
+//      most totalLevel at that point.  For a class-specific slot the owning
+//      class is pinned to exactly slot.level so prerequisites that require
+//      "N levels of X" are checked against the right value.
+//   3. featChoices only contains feats from slots whose level < slot.level,
+//      so a feat trained at level 9 doesn't satisfy a prerequisite for a
+//      level 4 slot.
+function buildSnapshotForSlot(
+  slot: SlotEntry,
+  slots: SlotEntry[],
+  build: CharacterBuild,
+): CharacterBuild {
+  const snapLevel = Math.min(slot.level, build.totalLevel || slot.level)
+
+  // --- feat choices: only from slots that come before this one ---
+  const featChoices: Record<string, string> = {}
+  for (const [key, value] of Object.entries(build.featChoices)) {
+    if (!value || key === slot.key) continue
+    const other = slots.find(s => s.key === key)
+    if (!other) continue
+    if (other.level < slot.level) {
+      featChoices[key] = value
+    }
+  }
+
+  // --- class levels: proportional scale, owner class pinned to slot.level ---
+  const totalFinal = build.totalLevel || 1
+  const scaledClasses = build.classes.map(bc => {
+    if (!bc.name || bc.levels === 0) return bc
+    if (bc.name === slot.className) {
+      // Class-specific slot: this class is exactly at slot.level here
+      return { name: bc.name, levels: Math.min(bc.levels, slot.level) }
+    }
+    return {
+      name: bc.name,
+      levels: Math.floor(bc.levels * snapLevel / totalFinal),
+    }
+  }) as [BuildClass, BuildClass, BuildClass]
+
+  return { ...build, totalLevel: snapLevel, featChoices, classes: scaledClasses }
+}
+
+// ---------------------------------------------------------------------------
 // Option filtering
 // ---------------------------------------------------------------------------
 interface FeatOption {
@@ -271,11 +319,16 @@ interface FeatOption {
 
 function getOptions(
   slot: SlotEntry,
+  slots: SlotEntry[],
   feats: Feat[],
   build: CharacterBuild,
   allClasses: DDOClass[],
 ): FeatOption[] {
-  // Exclude already-chosen feats in other slots
+  // Snapshot of the build state just before this slot is chosen
+  const snap = buildSnapshotForSlot(slot, slots, build)
+
+  // Exclude already-chosen feats in other slots (use FULL build for exclusion
+  // so feats taken later are still blocked from being double-taken)
   const chosenElsewhere = new Set(
     Object.entries(build.featChoices)
       .filter(([k, v]) => k !== slot.key && v)
@@ -298,7 +351,7 @@ function getOptions(
       const featGroups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
       return slotMatchesFeat(slot.featType, featGroups)
     })
-    .map(f => ({ feat: f, prereqsMet: meetsRequirements(f, build, allClasses) }))
+    .map(f => ({ feat: f, prereqsMet: meetsRequirements(f, snap, allClasses) }))
     .sort((a, b) => {
       if (a.prereqsMet !== b.prereqsMet) return a.prereqsMet ? -1 : 1
       return a.feat.Name.localeCompare(b.feat.Name)
@@ -413,7 +466,7 @@ export default function FeatSlots() {
 
   const openSlot = openSlotKey ? slots.find(s => s.key === openSlotKey) : null
   const pickerOptions = openSlot
-    ? getOptions(openSlot, feats, build, allClasses)
+    ? getOptions(openSlot, slots, feats, build, allClasses)
     : []
 
   return (
