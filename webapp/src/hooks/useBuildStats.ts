@@ -18,6 +18,7 @@ import type {
   OptionalBuff, FiligreeSlot,
 } from '../types/ddo'
 import { parseEffect, parseItemBuff } from '../lib/effectParser'
+import type { EffectContext } from '../lib/effectParser'
 import { resolveBonus, emptyResolvedStat } from '../lib/bonus'
 import type { RawBonus, ResolvedStat } from '../lib/bonus'
 
@@ -92,6 +93,19 @@ function abMod(score: number): number {
   return Math.floor((score - 10) / 2)
 }
 
+/** V2 Life::TomeAtLevel — caps tome value by character level. */
+function tomeCapAtLevel(level: number): number {
+  if (level <= 2) return 2
+  if (level <= 6) return 3
+  if (level <= 10) return 4
+  if (level <= 14) return 5
+  if (level <= 18) return 6
+  if (level <= 21) return 7
+  return 999
+}
+
+const MAX_BAB = 25
+
 // ---------------------------------------------------------------------------
 // Save / BAB / SP helpers
 // ---------------------------------------------------------------------------
@@ -102,20 +116,35 @@ function saveBase(saveType: unknown, levels: number): number {
   return Math.floor(levels / 3)
 }
 
+/** V2 BAB: per-class fraction is truncated, then summed across classes. */
 function classBAB(cls: DDOClass, levels: number): number {
   const arr = String(cls.BAB ?? '').trim().split(/\s+/).map(Number).filter(n => !isNaN(n))
-  if (arr.length > levels) return arr[levels]
-  if (arr.length > 0) return arr[arr.length - 1]
-  return Math.floor(levels * 0.75)
+  let raw = 0
+  if (arr.length > levels) raw = arr[levels]
+  else if (arr.length > 0) raw = arr[arr.length - 1]
+  return Math.trunc(raw)
 }
 
-function computeSpellPoints(formula: unknown, levels: number): number {
-  if (formula == null) return 0
-  const s = String(formula).trim()
-  const m = s.match(/(\d+)\s*\+\s*(\d+)\s*\*/)
-  if (m) return parseInt(m[1]) + parseInt(m[2]) * levels
-  const p = parseInt(s)
-  return isNaN(p) ? 0 : p * levels
+/** V2 SpellPointsPerLevel is a 21-entry table indexed by class levels (0..20). */
+function spellPointsAtLevel(perLevel: unknown, levels: number): number {
+  if (perLevel == null) return 0
+  const arr = String(perLevel).trim().split(/\s+/).map(Number).filter(n => !isNaN(n))
+  if (arr.length === 0) return 0
+  const idx = Math.min(Math.max(levels, 0), arr.length - 1)
+  return arr[idx] | 0
+}
+
+/** Pick the highest-value casting stat for multi-stat classes (e.g. Favored Soul). */
+function pickCastingStat(
+  cs: string | string[] | undefined,
+  abilModMap: Record<string, number>,
+): string | null {
+  if (!cs) return null
+  const list = Array.isArray(cs) ? cs : [cs]
+  if (list.length === 0) return null
+  return list.reduce((best, ab) =>
+    (abilModMap[ab] ?? -Infinity) > (abilModMap[best] ?? -Infinity) ? ab : best,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -179,7 +208,8 @@ function accumulateClass(
 ): void {
   const label = `${cls.Name} (${levels} lv)`
 
-  add(map, 'bab', { value: classBAB(cls, levels), type: 'Base', source: label })
+  // V2: per-class BAB is truncated, then summed — must NOT use the EXCLUSIVE 'Base' type
+  add(map, 'bab', { value: classBAB(cls, levels), type: 'Stacking', source: label })
   add(map, 'save.Fort',   { value: saveBase(cls.Fortitude, levels), type: 'Base', source: label })
   add(map, 'save.Reflex', { value: saveBase(cls.Reflex,    levels), type: 'Base', source: label })
   add(map, 'save.Will',   { value: saveBase(cls.Will,      levels), type: 'Base', source: label })
@@ -187,7 +217,8 @@ function accumulateClass(
   const hpPerLv = (cls.HitPoints ?? 6) + conMod
   add(map, 'hp', { value: levels * hpPerLv, type: 'Base', source: `${label} (d${cls.HitPoints ?? 6}+CON)` })
 
-  const sp = computeSpellPoints(cls.SpellPointsPerLevel, levels)
+  // V2: SpellPointsPerLevel is a 21-entry table indexed by class level
+  const sp = spellPointsAtLevel(cls.SpellPointsPerLevel, levels)
   if (sp > 0) add(map, 'spellPoints', { value: sp, type: 'Base', source: label })
 
   const spp = Math.max(1, cls.SkillPoints ?? 2)
@@ -195,9 +226,10 @@ function accumulateClass(
   if (skillPts > 0) add(map, 'skillPoints', { value: skillPts, type: 'Base', source: label })
 }
 
-function accumulateFeat(map: StatMap, feat: Feat, rank: number, source: string): void {
+function accumulateFeat(map: StatMap, feat: Feat, rank: number, source: string, totalLevel = 0, ctx?: EffectContext): void {
   for (const eff of toArray(feat.Effect)) {
-    addParsed(map, parseEffect(eff, rank, source, 0, 0))
+    // For AType=TotalLevel / ClassLevel etc. effects in feats, pass totalLevel as the level arg
+    addParsed(map, parseEffect(eff, rank, source, totalLevel, 0, ctx))
   }
 }
 
@@ -207,6 +239,7 @@ function accumulateEnhancementTree(
   choices: Record<string, number>,
   selections: Record<string, string>,
   classLevels: number,
+  ctx?: EffectContext,
 ): void {
   const items = tree.EnhancementTreeItem ?? []
   const treeAP = computeTreeAP(items, choices)
@@ -223,14 +256,14 @@ function accumulateEnhancementTree(
       const opt = options.find(o => o.Name === selectedOption)
       if (opt) {
         for (const eff of toArray(opt.Effect as Effect | Effect[] | undefined)) {
-          addParsed(map, parseEffect(eff, rank, `${source} (${selectedOption})`, classLevels, treeAP))
+          addParsed(map, parseEffect(eff, rank, `${source} (${selectedOption})`, classLevels, treeAP, ctx))
         }
         continue
       }
     }
 
     for (const eff of toArray(item.Effect)) {
-      addParsed(map, parseEffect(eff, rank, source, classLevels, treeAP))
+      addParsed(map, parseEffect(eff, rank, source, classLevels, treeAP, ctx))
     }
   }
 }
@@ -248,13 +281,54 @@ function accumulateGear(map: StatMap, gearItems: Record<string, Item>): void {
     if (item.ShieldBonus) {
       add(map, 'ac', { value: item.ShieldBonus, type: 'Shield', source })
     }
+    // V2 armor check penalty: armor and shield clamped to ≤0, accumulated separately.
+    if (item.ArmorCheckPenalty != null && item.ArmorCheckPenalty < 0) {
+      const slotLower = slot.toLowerCase()
+      const isShield = slotLower.includes('shield') || (item.Armor === 'Shield' || item.Armor === 'TowerShield')
+      const key = isShield ? 'armorCheckPenaltyShield' : 'armorCheckPenalty'
+      add(map, key, {
+        value: item.ArmorCheckPenalty,
+        type: 'Penalty',
+        source: `${item.Name} ACP`,
+      })
+    }
   }
+}
+
+/**
+ * V2 armor stance detection: returns the active armor stance from the equipped
+ * armor item (Cloth/Light/Medium/Heavy) plus shield-type stances.
+ */
+function deriveArmorStances(gearItems: Record<string, Item>): Set<string> {
+  const stances = new Set<string>()
+  const armor = gearItems['Armor'] ?? gearItems['Body']
+  if (armor) {
+    const t = armor.Armor
+    if (t === 'Cloth' || t == null) stances.add('Cloth Armor')
+    else if (t === 'Light')  stances.add('Light Armor')
+    else if (t === 'Medium') stances.add('Medium Armor')
+    else if (t === 'Heavy')  stances.add('Heavy Armor')
+    // Docent (warforged): treat per item.Material? Default to Cloth Armor.
+  } else {
+    stances.add('Cloth Armor')
+  }
+  // Shield stance from off-hand
+  const shield = gearItems['OffHand'] ?? gearItems['Shield']
+  if (shield) {
+    const t = shield.Armor
+    if (t === 'Tower Shield' || t === 'TowerShield') stances.add('Tower Shield')
+    else if (t === 'Heavy Shield' || t === 'HeavyShield') stances.add('Heavy Shield')
+    else if (t === 'Light Shield' || t === 'LightShield') stances.add('Light Shield')
+    else if (t === 'Buckler') stances.add('Buckler')
+  }
+  return stances
 }
 
 function accumulateAugments(
   map: StatMap,
   augmentChoices: Record<string, string>,
   allAugments: Augment[],
+  ctx?: EffectContext,
 ): void {
   for (const augName of Object.values(augmentChoices)) {
     if (!augName) continue
@@ -262,7 +336,7 @@ function accumulateAugments(
     if (!aug) continue
     const source = `Augment: ${aug.Name}`
     for (const eff of toArray(aug.Effect)) {
-      addParsed(map, parseEffect(eff, 1, source, 0, 0))
+      addParsed(map, parseEffect(eff, 1, source, 0, 0, ctx))
     }
   }
 }
@@ -271,6 +345,7 @@ function accumulateSetBonuses(
   map: StatMap,
   gearItems: Record<string, Item>,
   allSetBonuses: SetBonus[],
+  ctx?: EffectContext,
 ): void {
   // Count equipped items per set bonus name
   const counts = new Map<string, number>()
@@ -286,7 +361,7 @@ function accumulateSetBonuses(
       if (count < buff.EquippedCount) continue
       const source = `${bonusName} set (${buff.EquippedCount}pc)`
       for (const eff of toArray(buff.Effect)) {
-        addParsed(map, parseEffect(eff, 1, source, 0, 0))
+        addParsed(map, parseEffect(eff, 1, source, 0, 0, ctx))
       }
     }
   }
@@ -298,6 +373,7 @@ function accumulateFiligreeSlots(
   allFiligrees: Filigree[],
   sourcePrefix: string,
   setCounts: Map<string, number>,
+  ctx?: EffectContext,
 ): void {
   const byName = new Map<string, Filigree>(allFiligrees.map(f => [f.Name, f]))
   for (const slot of slots) {
@@ -307,7 +383,7 @@ function accumulateFiligreeSlots(
     const source = `${sourcePrefix}: ${fil.Name}`
     for (const eff of toArray(fil.Effect)) {
       if (eff.Rare && !slot.rare) continue  // rare effects only apply when slot is marked rare
-      addParsed(map, parseEffect(eff, 1, source, 0, 0))
+      addParsed(map, parseEffect(eff, 1, source, 0, 0, ctx))
     }
     if (fil.SetBonus) {
       setCounts.set(fil.SetBonus, (setCounts.get(fil.SetBonus) ?? 0) + 1)
@@ -321,11 +397,12 @@ function accumulateFiligrees(
   artifactFiligreeSlots: FiligreeSlot[],
   allFiligrees: Filigree[],
   allFiligreeBonuses: FiligreeSetBonus[],
+  ctx?: EffectContext,
 ): void {
   const setCounts = new Map<string, number>()
 
-  accumulateFiligreeSlots(map, filigreeSlots, allFiligrees, 'Filigree', setCounts)
-  accumulateFiligreeSlots(map, artifactFiligreeSlots, allFiligrees, 'Artifact Filigree', setCounts)
+  accumulateFiligreeSlots(map, filigreeSlots, allFiligrees, 'Filigree', setCounts, ctx)
+  accumulateFiligreeSlots(map, artifactFiligreeSlots, allFiligrees, 'Artifact Filigree', setCounts, ctx)
 
   for (const [bonusName, count] of setCounts) {
     const fsb = allFiligreeBonuses.find(s => s.Type === bonusName)
@@ -334,7 +411,7 @@ function accumulateFiligrees(
       if (count < buff.EquippedCount) continue
       const source = `${bonusName} filigree set (${buff.EquippedCount}pc)`
       for (const eff of toArray(buff.Effect)) {
-        addParsed(map, parseEffect(eff, 1, source, 0, 0))
+        addParsed(map, parseEffect(eff, 1, source, 0, 0, ctx))
       }
     }
   }
@@ -344,13 +421,14 @@ function accumulateSelfBuffs(
   map: StatMap,
   activeBuffNames: string[],
   allSelfBuffs: OptionalBuff[],
+  ctx?: EffectContext,
 ): void {
   for (const buffName of activeBuffNames) {
     const buff = allSelfBuffs.find(b => b.Name === buffName)
     if (!buff) continue
     const source = `Buff: ${buff.Name}`
     for (const eff of toArray(buff.Effect)) {
-      addParsed(map, parseEffect(eff, 1, source, 0, 0))
+      addParsed(map, parseEffect(eff, 1, source, 0, 0, ctx))
     }
   }
 }
@@ -402,15 +480,107 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
     } = input
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Build the EffectContext used to gate effects via Requirements::Met.
+    // Uses a chargen-time snapshot of the build (ability scores from base+
+    // race+levelup only — no gear/enhancement bonuses) to avoid cycles.
+    // ──────────────────────────────────────────────────────────────────────
+    const ctxRace = allRaces.find(r => r.Name === build.race)
+    const ctxClassLevels: Record<string, number> = {}
+    const ctxBaseClassLevels: Record<string, number> = {}
+    for (const bc of build.classes) {
+      if (!bc.name || bc.levels <= 0) continue
+      ctxClassLevels[bc.name] = (ctxClassLevels[bc.name] ?? 0) + bc.levels
+      const cls = allClasses.find(c => c.Name === bc.name)
+      const baseClass = cls?.BaseClass ?? bc.name
+      ctxBaseClassLevels[baseClass] = (ctxBaseClassLevels[baseClass] ?? 0) + bc.levels
+      // The class itself counts as its own base
+      if (baseClass !== bc.name) {
+        ctxBaseClassLevels[bc.name] = (ctxBaseClassLevels[bc.name] ?? 0) + bc.levels
+      }
+    }
+    const ctxFeats = new Set<string>()
+    for (const f of Object.values(build.featChoices)) if (f) ctxFeats.add(f)
+    if (ctxRace) for (const f of toArray(ctxRace.GrantedFeat)) ctxFeats.add(f)
+    for (const bc of build.classes) {
+      if (!bc.name || bc.levels <= 0) continue
+      const cls = allClasses.find(c => c.Name === bc.name)
+      for (const af of toArray(cls?.AutomaticFeats)) {
+        const lvl = af.Level ?? 0
+        if (lvl > bc.levels) continue
+        const names = af.Feats
+        if (typeof names === 'string') ctxFeats.add(names)
+        else if (Array.isArray(names)) for (const n of names) ctxFeats.add(n)
+      }
+    }
+    const ctxEnhancements = new Set<string>()
+    for (const choices of Object.values(build.enhancementChoices)) {
+      for (const [name, rank] of Object.entries(choices)) {
+        if (rank > 0) ctxEnhancements.add(name)
+      }
+    }
+    for (const choices of Object.values(build.destinyChoices)) {
+      for (const [name, rank] of Object.entries(choices)) {
+        if (rank > 0) ctxEnhancements.add(name)
+      }
+    }
+    for (const choices of Object.values(build.reaperChoices ?? {})) {
+      for (const [name, rank] of Object.entries(choices)) {
+        if (rank > 0) ctxEnhancements.add(name)
+      }
+    }
+    // Inherent-only ability totals (base + race + levelup, no tome at ctx time)
+    const ctxAbilityTotals: Record<string, number> = {}
+    const ABILITIES_C = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'] as const
+    for (const ab of ABILITIES_C) {
+      const base = build.baseAbilities[ab] ?? 8
+      const racial = ctxRace ? Number((ctxRace as unknown as Record<string, number>)[ab]) || 0 : 0
+      const lv = Object.values(build.abilityLevelUps).filter(v => v === ab).length
+      ctxAbilityTotals[ab] = base + racial + lv
+    }
+    const ctxStances = deriveArmorStances(gearItems)
+    // Approximate BAB from class progressions (heroic only). Avoids cycles.
+    let ctxBAB = 0
+    for (const bc of build.classes) {
+      if (!bc.name || bc.levels <= 0) continue
+      const cls = allClasses.find(c => c.Name === bc.name)
+      if (cls) ctxBAB += classBAB(cls, bc.levels)
+    }
+    ctxBAB = Math.min(MAX_BAB, ctxBAB)
+    const ctxWeaponTypes = new Set<string>()
+    for (const item of Object.values(gearItems)) {
+      if (item.Weapon) ctxWeaponTypes.add(item.Weapon)
+    }
+    const ctx: EffectContext = {
+      race: build.race,
+      alignment: build.alignment,
+      classLevels: ctxClassLevels,
+      baseClassLevels: ctxBaseClassLevels,
+      totalLevel: build.totalLevel,
+      feats: ctxFeats,
+      enhancements: ctxEnhancements,
+      abilityTotals: ctxAbilityTotals,
+      stances: ctxStances,
+      bab: ctxBAB,
+      weaponTypes: ctxWeaponTypes,
+    }
+
     // ── Ability base scores ───────────────────────────────────────────────
     const ABILITIES = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'] as const
+    const tomeCap = tomeCapAtLevel(Math.max(1, build.totalLevel))
     for (const ab of ABILITIES) {
       const base = build.baseAbilities[ab]
       if (base) add(map, `ability.${ab}`, { value: base, type: 'Base', source: 'Point buy' })
-      const tome = build.abilityTomes[ab] ?? 0
-      if (tome) add(map, `ability.${ab}`, { value: tome, type: 'Tome', source: 'Ability tome' })
+      // V2: tomes are Inherent type (capped by character level)
+      const rawTome = build.abilityTomes[ab] ?? 0
+      const tome = Math.min(rawTome, tomeCap)
+      if (tome) add(map, `ability.${ab}`, {
+        value: tome, type: 'Inherent',
+        source: rawTome > tome ? `Ability tome (+${rawTome}, capped at +${tome})` : 'Ability tome',
+      })
+      // V2: level-up bonuses are 'Level Up' type
       const lvlUps = Object.values(build.abilityLevelUps).filter(v => v === ab).length
-      if (lvlUps) add(map, `ability.${ab}`, { value: lvlUps, type: 'Level-up', source: 'Level-up bonuses' })
+      if (lvlUps) add(map, `ability.${ab}`, { value: lvlUps, type: 'Level Up', source: 'Level-up bonuses' })
     }
 
     // ── Race ─────────────────────────────────────────────────────────────
@@ -419,7 +589,7 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       accumulateRace(map, race)
       for (const featName of toArray(race.GrantedFeat)) {
         const feat = allFeats.find(f => f.Name === featName)
-        if (feat) accumulateFeat(map, feat, 1, `${build.race}: ${featName}`)
+        if (feat) accumulateFeat(map, feat, 1, `${build.race}: ${featName}`, build.totalLevel, ctx)
       }
     }
 
@@ -445,7 +615,7 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
         )
         for (const featName of names) {
           const feat = allFeats.find(f => f.Name === featName)
-          if (feat) accumulateFeat(map, feat, 1, `${bc.name}: ${featName}`)
+          if (feat) accumulateFeat(map, feat, 1, `${bc.name}: ${featName}`, build.totalLevel, ctx)
         }
       }
     }
@@ -454,14 +624,14 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     for (const [slotKey, featName] of Object.entries(build.featChoices)) {
       if (!featName) continue
       const feat = allFeats.find(f => f.Name === featName)
-      if (feat) accumulateFeat(map, feat, 1, `Feat: ${featName} (${slotKey})`)
+      if (feat) accumulateFeat(map, feat, 1, `Feat: ${featName} (${slotKey})`, build.totalLevel, ctx)
     }
 
     // ── Past lives ────────────────────────────────────────────────────────
     for (const [source, count] of Object.entries(build.pastLives)) {
       if (!count) continue
       const feat = allFeats.find(f => f.Name === source || f.Name === `Past Life: ${source}`)
-      if (feat) accumulateFeat(map, feat, count, `Past life: ${source} ×${count}`)
+      if (feat) accumulateFeat(map, feat, count, `Past life: ${source} ×${count}`, build.totalLevel, ctx)
     }
 
     // ── Heroic enhancements ───────────────────────────────────────────────
@@ -472,42 +642,55 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       const matchedClass = build.classes.find(bc =>
         bc.name && treeName.toLowerCase().includes(bc.name.toLowerCase())
       )
-      accumulateEnhancementTree(map, tree, choices, selections, matchedClass?.levels ?? build.totalLevel)
+      accumulateEnhancementTree(map, tree, choices, selections, matchedClass?.levels ?? build.totalLevel, ctx)
     }
 
     // ── Epic destiny ──────────────────────────────────────────────────────
     for (const [treeName, choices] of Object.entries(build.destinyChoices)) {
       const tree = allTrees.find(t => t.Name === treeName)
       if (!tree) continue
-      accumulateEnhancementTree(map, tree, choices, {}, build.totalLevel)
+      accumulateEnhancementTree(map, tree, choices, {}, build.totalLevel, ctx)
     }
 
     // ── Reaper ────────────────────────────────────────────────────────────
     for (const [treeName, choices] of Object.entries(build.reaperChoices)) {
       const tree = allTrees.find(t => t.Name === treeName)
       if (!tree) continue
-      accumulateEnhancementTree(map, tree, choices, {}, build.totalLevel)
+      accumulateEnhancementTree(map, tree, choices, {}, build.totalLevel, ctx)
     }
 
     // ── Gear item buffs ───────────────────────────────────────────────────
     accumulateGear(map, gearItems)
 
     // ── Augments ─────────────────────────────────────────────────────────
-    accumulateAugments(map, build.augmentChoices, allAugments)
+    accumulateAugments(map, build.augmentChoices, allAugments, ctx)
 
     // ── Gear set bonuses ──────────────────────────────────────────────────
-    accumulateSetBonuses(map, gearItems, allSetBonuses)
+    accumulateSetBonuses(map, gearItems, allSetBonuses, ctx)
 
     // ── Filigrees + filigree set bonuses ──────────────────────────────────
-    accumulateFiligrees(map, build.filigreeSlots, build.artifactFiligreeSlots ?? [], allFiligrees, allFiligreeBonuses)
+    accumulateFiligrees(map, build.filigreeSlots, build.artifactFiligreeSlots ?? [], allFiligrees, allFiligreeBonuses, ctx)
 
     // ── Self / party buffs ────────────────────────────────────────────────
-    accumulateSelfBuffs(map, build.activeBuffs, allSelfBuffs)
+    accumulateSelfBuffs(map, build.activeBuffs, allSelfBuffs, ctx)
 
     // ── Skill tomes ───────────────────────────────────────────────────────
     for (const [skill, bonus] of Object.entries(build.skillTomes ?? {})) {
       if (!bonus) continue
       add(map, `skill.${skill}`, { value: bonus, type: 'Tome', source: `${skill} tome` })
+    }
+
+    // ── Armor stance derivation ──────────────────────────────────────────
+    // V2 derives the armor stance from the equipped armor's <Armor> field.
+    // Used for: PRR derivation (BAB×multiplier), MRR cap (Cloth=50, Light=100),
+    // dodge cap (Cloth = no MDB cap), AC stacking-armor%, etc.
+    const armorStances = deriveArmorStances(gearItems)
+
+    // V2 BreakdownItemMRRCap: Cloth Armor → 50, Light Armor → 100, Medium/Heavy → none.
+    if (armorStances.has('Cloth Armor')) {
+      add(map, 'mrrCap', { value: 50,  type: 'Stance', source: 'Cloth Armor' })
+    } else if (armorStances.has('Light Armor')) {
+      add(map, 'mrrCap', { value: 100, type: 'Stance', source: 'Light Armor' })
     }
 
     // =========================================================================
@@ -529,6 +712,26 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     if (conModFull !== 0) add(map, 'save.Fort',   { value: conModFull, type: 'Ability mod', source: 'Constitution' })
     if (dexMod !== 0)     add(map, 'save.Reflex', { value: dexMod,     type: 'Ability mod', source: 'Dexterity' })
     if (wisMod !== 0)     add(map, 'save.Will',   { value: wisMod,     type: 'Ability mod', source: 'Wisdom' })
+
+    // V2 Divine Grace: Paladin (auto at level 2) and Sacred Fist add CHA mod to all saves,
+    // capped at 2 + 3*levels of the relevant class.
+    {
+      const palLevels = build.classes.filter(c => c.name === 'Paladin').reduce((s, c) => s + c.levels, 0)
+      const sfLevels  = build.classes.filter(c => c.name === 'Sacred Fist').reduce((s, c) => s + c.levels, 0)
+      if (chaMod > 0 && (palLevels >= 2 || sfLevels >= 2)) {
+        const cap = Math.max(
+          palLevels >= 2 ? 2 + 3 * palLevels : 0,
+          sfLevels  >= 2 ? 2 + 3 * sfLevels  : 0,
+        )
+        const bonus = Math.min(chaMod, cap)
+        if (bonus > 0) {
+          const src = `Divine Grace (Charisma, capped @ ${cap})`
+          add(map, 'save.Fort',   { value: bonus, type: 'Divine', source: src })
+          add(map, 'save.Reflex', { value: bonus, type: 'Divine', source: src })
+          add(map, 'save.Will',   { value: bonus, type: 'Divine', source: src })
+        }
+      }
+    }
 
     // Melee (weapon attack modifier checked — could be DEX for finesse weapons)
     const weaponInfo = extractWeaponInfo(gearItems)
@@ -562,24 +765,45 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     // Speed base
     add(map, 'speed', { value: 100, type: 'Base', source: 'Base movement speed' })
 
-    // Skill points: INT mod × levels (first class gets ×4 at level 1)
-    if (intModFull !== 0) {
-      let firstClassDone = false
+    // ── Skill points ──────────────────────────────────────────────────────
+    // V2 Class::SkillPoints: max(1, classBase + raceSkillBonus + intModForLevel),
+    // ×4 at character level 1. INT-for-level uses base+race+levelup only (no
+    // tomes at L1, no gear/enhancements ever — gear isn't equipped at chargen).
+    {
+      const intInherent = (build.baseAbilities.Intelligence ?? 8)
+        + (race ? Number((race as unknown as Record<string, number>).Intelligence) || 0 : 0)
+      const intLvlUps = Object.values(build.abilityLevelUps).filter(v => v === 'Intelligence').length
+      const intModL1 = abMod(intInherent)
+      const intModL2 = abMod(intInherent + intLvlUps)
+      const raceSP = (race as unknown as Record<string, unknown>)?.SkillPoints
+      const raceSkillBonus = typeof raceSP === 'number' ? raceSP : 0
+
+      // Replace the per-class 'Base' skillPoints with a precise V2 sum.
+      // (accumulateClass already added a 'Base' entry; we replace that path
+      // with a single corrective term tagged differently to avoid double-counting.)
+      // Simpler: zero out the existing Base entries and re-add per-level.
+      const existing = map.get('skillPoints')
+      if (existing) map.set('skillPoints', existing.filter(b => b.type !== 'Base'))
+
+      let classIdx = 0  // 0-based char level
       for (const bc of build.classes) {
         if (!bc.name || bc.levels <= 0) continue
-        const mult = !firstClassDone ? bc.levels + 3 : bc.levels
-        if (mult !== 0) {
+        const cls = allClasses.find(c => c.Name === bc.name)
+        const baseSpp = cls?.SkillPoints ?? 2
+        for (let i = 0; i < bc.levels && classIdx < 20; i++, classIdx++) {
+          const mod = classIdx === 0 ? intModL1 : intModL2
+          const pts = Math.max(1, baseSpp + raceSkillBonus + mod)
+          const total = classIdx === 0 ? pts * 4 : pts
           add(map, 'skillPoints', {
-            value: intModFull * mult,
-            type: 'Ability mod',
-            source: `Intelligence (${bc.name} ×${bc.levels} lv)`,
+            value: total,
+            type: 'Stacking',
+            source: `${bc.name} L${classIdx + 1}: max(1, ${baseSpp}+${raceSkillBonus}+${mod})${classIdx === 0 ? '×4' : ''}`,
           })
         }
-        firstClassDone = true
       }
     }
 
-    // Skills: ability mod + ranks + class skill bonus
+    // ── Skills ────────────────────────────────────────────────────────────
     const classSkillSet = new Set<string>()
     for (const bc of build.classes) {
       if (!bc.name || bc.levels <= 0) continue
@@ -593,6 +817,13 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       Intelligence: intModFull, Wisdom: wisMod, Charisma: chaMod,
     }
 
+    // V2 ACP-affected skills (multiplier 1 unless noted)
+    const ACP_SKILLS: Record<string, number> = {
+      Balance: 1, Hide: 1, Jump: 1, 'Move Silently': 1, Tumble: 1, Swim: 2,
+    }
+    const armorACP  = Math.min(0, resolveBonus(map.get('armorCheckPenalty') ?? []).total)
+    const shieldACP = Math.min(0, resolveBonus(map.get('armorCheckPenaltyShield') ?? []).total)
+
     for (const { name: skill, ability } of SKILLS) {
       const abilMod = abilModMap[ability] ?? 0
       if (abilMod !== 0) {
@@ -602,11 +833,116 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
           source: `${ability} mod`,
         })
       }
-      const ranks = build.skillRanks?.[skill] ?? 0
-      if (ranks > 0) {
-        add(map, `skill.${skill}`, { value: ranks, type: 'Ranks', source: 'Skill ranks' })
-        if (classSkillSet.has(skill)) {
-          add(map, `skill.${skill}`, { value: 1, type: 'Class', source: 'Class skill bonus' })
+      // V2 stores trained levels; rank = trained for class skill, trained/2 for cross-class.
+      const trained = build.skillRanks?.[skill] ?? 0
+      if (trained > 0) {
+        const ranksValue = classSkillSet.has(skill) ? trained : trained / 2
+        add(map, `skill.${skill}`, { value: ranksValue, type: 'Ranks', source: 'Skill ranks' })
+      }
+
+      // V2 Armor Check Penalty: stacks separately from armor and shield.
+      const acpMult = ACP_SKILLS[skill]
+      if (acpMult) {
+        if (armorACP < 0) {
+          add(map, `skill.${skill}`, {
+            value: armorACP * acpMult,
+            type: 'Penalty',
+            source: acpMult > 1 ? `Armor check penalty ×${acpMult}` : 'Armor check penalty',
+          })
+        }
+        if (shieldACP < 0) {
+          add(map, `skill.${skill}`, {
+            value: shieldACP * acpMult,
+            type: 'Penalty',
+            source: acpMult > 1 ? `Armor check penalty (Shield) ×${acpMult}` : 'Armor check penalty (Shield)',
+          })
+        }
+      }
+    }
+
+    // ── Armor PRR (BAB × armor multiplier) ───────────────────────────────
+    // V2 BreakdownItemPRR::CreateOtherEffects (BreakdownItemPRR.cpp:43-122):
+    //   Light Armor + Light Armor Proficiency: BAB × 1
+    //   Mithral Body feat: BAB × 1
+    //   Medium Armor + Medium Armor Proficiency: round(BAB × 1.5)
+    //   Heavy Armor + Heavy Armor Proficiency: BAB × 2
+    //   Adamantine Body feat: BAB × 2
+    {
+      const babTotal = Math.min(MAX_BAB, resolveBonus(map.get('bab') ?? []).total)
+      if (babTotal > 0) {
+        const trainedFeats = new Set<string>(Object.values(build.featChoices).filter(Boolean))
+        // Auto-feats from classes & race
+        for (const bc of build.classes) {
+          if (!bc.name || bc.levels <= 0) continue
+          const cls = allClasses.find(c => c.Name === bc.name)
+          for (const af of toArray(cls?.AutomaticFeats)) {
+            const names = af.Feats
+            if (typeof names === 'string') trainedFeats.add(names)
+            else if (Array.isArray(names)) names.forEach(n => trainedFeats.add(n))
+          }
+        }
+        if (race) {
+          for (const f of toArray(race.GrantedFeat)) trainedFeats.add(f)
+        }
+        const has = (f: string) => trainedFeats.has(f)
+
+        if (armorStances.has('Light Armor') && has('Light Armor Proficiency')) {
+          add(map, 'prr', { value: babTotal, type: 'Stance', source: 'Light Armor PRR (BAB×1)' })
+        }
+        if (has('Mithral Body')) {
+          add(map, 'prr', { value: babTotal, type: 'Feat', source: 'Mithral Body PRR (BAB×1)' })
+        }
+        if (armorStances.has('Medium Armor') && has('Medium Armor Proficiency')) {
+          add(map, 'prr', { value: Math.round(babTotal * 1.5), type: 'Stance', source: 'Medium Armor PRR (BAB×1.5)' })
+        }
+        if (armorStances.has('Heavy Armor') && has('Heavy Armor Proficiency')) {
+          add(map, 'prr', { value: babTotal * 2, type: 'Stance', source: 'Heavy Armor PRR (BAB×2)' })
+        }
+        if (has('Adamantine Body')) {
+          add(map, 'prr', { value: babTotal * 2, type: 'Feat', source: 'Adamantine Body PRR (BAB×2)' })
+        }
+      }
+    }
+
+    // V2 SpellPoints: per-casting-class bonus = (classLevels + 9) * BaseStatToBonus(castingStat).
+    // Class::ClassCastingStat picks the highest-mod stat for multi-stat classes (FavoredSoul).
+    for (const bc of build.classes) {
+      if (!bc.name || bc.levels <= 0) continue
+      const cls = allClasses.find(c => c.Name === bc.name)
+      if (!cls) continue
+      if (spellPointsAtLevel(cls.SpellPointsPerLevel, bc.levels) <= 0) continue
+      const stat = pickCastingStat(cls.CastingStat as string | string[] | undefined, abilModMap)
+      if (!stat) continue
+      const mod = abilModMap[stat] ?? 0
+      const bonus = (bc.levels + 9) * mod
+      if (bonus !== 0) {
+        add(map, 'spellPoints', {
+          value: bonus,
+          type: 'Ability mod',
+          source: `${bc.name} (${stat}) bonus SP`,
+        })
+      }
+    }
+
+    // V2 Favored Soul / Sorcerer SP multiplier = 1 + (FvS+Sorc levels) / min(buildLevel, 20).
+    // Pure FvS/Sorc 20 → 2x SP; multiclass → partial multiplier.
+    {
+      const fvsLv  = build.classes.filter(c => c.name === 'Favored Soul').reduce((s, c) => s + c.levels, 0)
+      const sorcLv = build.classes.filter(c => c.name === 'Sorcerer').reduce((s, c) => s + c.levels, 0)
+      const total = fvsLv + sorcLv
+      if (total > 0) {
+        const lvCap = Math.min(build.totalLevel, 20)
+        if (lvCap > 0) {
+          const factor = total / lvCap
+          const baseSP = resolveBonus(map.get('spellPoints') ?? []).total
+          const bonus = Math.round(baseSP * factor)
+          if (bonus !== 0) {
+            add(map, 'spellPoints', {
+              value: bonus,
+              type: 'Multiplier',
+              source: `Favored Soul/Sorcerer SP multiplier (×${(1 + factor).toFixed(2)})`,
+            })
+          }
         }
       }
     }

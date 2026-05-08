@@ -294,24 +294,38 @@ export default function BreakdownsPanel() {
     subSave('vs Disease',     'save.Fort',   'save.sub.Disease'),
     statRow('Reflex',         'save.Reflex', sign),
     subSave('vs Traps',       'save.Reflex', 'save.sub.Traps'),
-    subSave('vs Spells',      'save.Reflex', 'save.sub.Spell'),
+    subSave('vs Spell',       'save.Reflex', 'save.sub.Spell'),
+    subSave('vs Magic',       'save.Reflex', 'save.sub.Magic'),
     statRow('Will',           'save.Will',   sign),
     subSave('vs Enchantment', 'save.Will',   'save.sub.Enchantment'),
+    subSave('vs Illusion',    'save.Will',   'save.sub.Illusion'),
     subSave('vs Fear',        'save.Will',   'save.sub.Fear'),
+    subSave('vs Curse',       'save.Will',   'save.sub.Curse'),
   ]
 
   const hpTotal = stats.total('hp')
   const acTotal = stats.total('ac')
-  const mrrCap  = stats.total('mrrCap')
+  const mrrCapTotal = stats.total('mrrCap')
   const spTotal = stats.total('spellPoints')
-  const babTotal = stats.total('bab')
+  // V2: BAB capped at MAX_BAB (25)
+  const babRaw = stats.total('bab')
+  const babTotal = Math.min(25, babRaw)
+  const prrTotal = stats.total('prr')
+  const mrrTotal = stats.total('mrr')
+
+  // Mitigation % = 100 - (100 / (100 + value)) * 100
+  function mitigation(n: number): string {
+    if (n === 0) return '+0'
+    const pctVal = 100 - (100 / (100 + n)) * 100
+    return `${sign(n)} (${pctVal.toFixed(1)}%)`
+  }
 
   const defenseStats: StatRowData[] = [
     fixedRow('Hit Points', hpTotal, String(hpTotal), stats.resolve('hp').bonuses, hpTotal === 0),
     fixedRow('AC', acTotal, String(acTotal), stats.resolve('ac').bonuses, acTotal <= 10),
-    statRow('PRR', 'prr', String),
-    statRow('MRR', 'mrr', String),
-    fixedRow('MRR Cap', mrrCap, mrrCap > 0 ? String(mrrCap) : '—', stats.resolve('mrrCap').bonuses, mrrCap === 0),
+    fixedRow('PRR', prrTotal, mitigation(prrTotal), stats.resolve('prr').bonuses, prrTotal === 0),
+    fixedRow('MRR', mrrTotal, mitigation(mrrTotal), stats.resolve('mrr').bonuses, mrrTotal === 0),
+    fixedRow('MRR Cap', mrrCapTotal, mrrCapTotal > 0 ? String(mrrCapTotal) : '—', stats.resolve('mrrCap').bonuses, mrrCapTotal === 0),
     statRow('Dodge',          'dodge',          pct),
     statRow('Fortification',  'fortification',  pct),
     statRow('Concealment',    'concealment',    pct),
@@ -319,6 +333,32 @@ export default function BreakdownsPanel() {
     fixedRow('Move Speed', stats.total('speed'), pct(stats.total('speed')), stats.resolve('speed').bonuses),
     statRow('Spell Resistance', 'spellResistance', String),
   ]
+
+  // Energy Resistance / Absorption / DR rows (one per element with non-zero value)
+  const ENERGY_TYPES = ['Fire','Cold','Acid','Electric','Sonic','Force','Light','Negative','Positive','Poison','Repair'] as const
+  const energyStats: StatRowData[] = []
+  for (const e of ENERGY_TYPES) {
+    const r = stats.resolve(`resist.${e}`)
+    const a = stats.resolve(`absorb.${e}`)
+    if (r.total !== 0) {
+      energyStats.push(fixedRow(`${e} Resistance`, r.total, String(r.total), r.bonuses))
+    }
+    if (a.total !== 0) {
+      // Multiplicative absorption: 100 - Π((100-x)/100)*100
+      let factor = 1
+      for (const b of a.bonuses) if (b.active) factor *= (100 - b.value) / 100
+      const absPct = 100 - factor * 100
+      energyStats.push(fixedRow(`${e} Absorption`, absPct, `${absPct.toFixed(1)}%`, a.bonuses))
+    }
+  }
+  const drKeys = stats.keys().filter(k => k.startsWith('dr.'))
+  for (const k of drKeys) {
+    const bypass = k.slice(3)
+    const r = stats.resolve(k)
+    if (r.total !== 0) {
+      energyStats.push(fixedRow(`DR ${r.total}/${bypass}`, r.total, `${r.total}/${bypass}`, r.bonuses))
+    }
+  }
 
   // melee.toHit / ranged.toHit already include STR/DEX mod from phase 2; bab is separate key
   const meleeToHitTotal  = babTotal + stats.total('melee.toHit')
@@ -361,18 +401,26 @@ export default function BreakdownsPanel() {
 
   const spellStats: StatRowData[] = [
     fixedRow('Spell Points', spTotal, String(spTotal), stats.resolve('spellPoints').bonuses, spTotal === 0),
-    ...casterClasses.map(({ name, levels }) =>
-      fixedRow(`${name} CL`, levels, String(levels),
-        [{ value: levels, type: 'Base', source: `${name} class levels`, active: true }])
-    ),
+    ...casterClasses.map(({ name, levels }) => {
+      const clClass = stats.resolve(`cl.${name}`)
+      const clAll = stats.resolve('cl.All')
+      const total = levels + clClass.total + clAll.total
+      return fixedRow(`${name} CL`, total, String(total),
+        [
+          { value: levels, type: 'Base', source: `${name} class levels`, active: true },
+          ...clClass.bonuses,
+          ...clAll.bonuses,
+        ])
+    }),
     statRow('Spell Penetration', 'spellPenetration'),
     ...SCHOOL_DCS.map(school => statRow(`${school} DC`, `dc.${school}`)),
   ]
 
   const initiativeTotal  = stats.total('initiative')
   const skillPointsTotal = stats.total('skillPoints')
+  const babDisplay = babRaw > babTotal ? `${sign(babTotal)} (capped, raw ${sign(babRaw)})` : sign(babTotal)
   const miscStats: StatRowData[] = [
-    fixedRow('BAB',        babTotal,        sign(babTotal),        stats.resolve('bab').bonuses),
+    fixedRow('BAB',        babTotal,        babDisplay,            stats.resolve('bab').bonuses),
     fixedRow('Initiative', initiativeTotal, sign(initiativeTotal), stats.resolve('initiative').bonuses),
     fixedRow('Skill Pts',  skillPointsTotal, String(skillPointsTotal), stats.resolve('skillPoints').bonuses),
     statRow('Off-hand Atk', 'offhand.attack', pct),
@@ -437,6 +485,12 @@ export default function BreakdownsPanel() {
             <Section title="Defense">
               {defenseStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
             </Section>
+
+            {energyStats.length > 0 && (
+              <Section title="Energy Resistance &amp; DR">
+                {energyStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
 
             <Section title="Melee">
               {meleeStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}

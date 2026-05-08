@@ -13,28 +13,15 @@ interface SlotEntry {
   featUpdateList?: string[]   // whitelist from class XML FeatUpdateList
 }
 
-// Fallback group-based filter (used when FeatUpdateList is absent)
-const FEAT_TYPE_TO_GROUPS: Record<string, string[]> = {
-  'Heroic':                              ['Standard'],
-  'Epic Feat':                           ['Epic Feat'],
-  'Legendary Feat':                      ['Epic Feat'],
-  'Epic Destiny Feat':                   ['Epic Feat'],
-  'Dark Gift Upgrade':                   ['Dark Gift Upgrade', 'Standard'],
-  'Alter Dark Gift':                     ['Alter Dark Gift', 'Standard'],
-  'Fighter Bonus Feat':                  ['Standard', 'Martial'],
-  'Artificer Bonus Feat':               ['Standard'],
-  'Alchemist Bonus Feat':               ['Standard'],
-  'Monk Bonus':                          ['Standard', 'Martial'],
-  'Bonus Magical Feat':                  ['Arcane', 'Divine', 'Primal'],
-  'Rogue Special Ability':               ['User'],
-  'Metamagic Feat':                      ['Metamagics'],
-  'Human Bonus Feat':                    ['Human Bonus Feat', 'Standard'],
-  'Purple Dragon Knight Bonus Feat':    ['Purple Dragon Knight Bonus Feat', 'Standard'],
-  'Deity':                               ['Deity'],
-  'Follower Of':                         ['Follower Of'],
-  'Child Of':                            ['Child Of'],
-  'Beloved Of':                          ['Beloved Of'],
-  'Domain Feat':                         ['Divine'],
+// V2 behavior: feats with <Group>X</Group> can be trained in slots whose
+// FeatType is X. The "Heroic" universal slot is treated as type "Standard".
+// "Epic Feat" slots additionally allow Standard-group feats (heroic feats
+// can be re-taken as Epic feats).
+function slotMatchesFeat(slotType: string, featGroups: string[]): boolean {
+  const matchType = slotType === 'Heroic' ? 'Standard' : slotType
+  if (featGroups.includes(matchType)) return true
+  if (matchType === 'Epic Feat' && featGroups.includes('Standard')) return true
+  return false
 }
 
 function toArray<T>(v: T | T[] | undefined): T[] {
@@ -181,11 +168,22 @@ function meetsSingleRequirement(req: Requirement, build: CharacterBuild, allClas
       return (bc?.levels ?? 0) >= value
     }
     case 'ClassMinLevel': {
-      return build.classes.some(c => c.levels >= value)
-    }
-    case 'BaseClassMinLevel': {
       const bc = build.classes.find(c => c.name === item)
       return (bc?.levels ?? 0) >= value
+    }
+    case 'BaseClassMinLevel': {
+      // Class with name == item, OR any class whose BaseClass == item
+      let total = 0
+      for (const bc of build.classes) {
+        if (!bc.name || bc.levels === 0) continue
+        if (bc.name === item) {
+          total += bc.levels
+        } else {
+          const cls = allClasses.find(c => c.Name === bc.name)
+          if (cls?.BaseClass === item) total += bc.levels
+        }
+      }
+      return total >= value
     }
     case 'Level':
       return build.totalLevel >= value
@@ -289,16 +287,16 @@ function getOptions(
   return feats
     .filter(f => {
       if (chosenElsewhere.has(f.Name)) return false
+      if (f.Acquire && f.Acquire !== 'Train') return false
 
       // If the slot has an explicit FeatUpdateList, it's the authoritative whitelist
       if (updateList && updateList.length > 0) {
         return updateList.includes(f.Name)
       }
 
-      // Fallback: filter by Group
-      const groups = FEAT_TYPE_TO_GROUPS[slot.featType] ?? ['Standard']
+      // Otherwise: match feat group to slot type (V2 behavior)
       const featGroups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
-      return featGroups.some(g => groups.includes(g))
+      return slotMatchesFeat(slot.featType, featGroups)
     })
     .map(f => ({ feat: f, prereqsMet: meetsRequirements(f, build, allClasses) }))
     .sort((a, b) => {

@@ -67,6 +67,7 @@ export interface Race {
   StartingWorld?: string
   BuildPoints?: unknown
   IconicClass?: string
+  SkillPoints?: number
   Strength?: number
   Dexterity?: number
   Constitution?: number
@@ -104,7 +105,10 @@ export interface DDOClass {
   Will?: SaveType
   SpellPointsPerLevel?: string
   BAB?: string
-  CastingStat?: Ability
+  // V2 Class::ClassCastingStat: classes can list multiple casting stats (e.g.
+  // FavoredSoul has CHA + WIS); the highest-mod ability is used.
+  CastingStat?: Ability | Ability[]
+  BaseClass?: string
   FeatSlot?: FeatSlot[]
   AutomaticFeats?: AutomaticFeat[]
   NotHeroic?: boolean

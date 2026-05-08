@@ -4,7 +4,135 @@
 // entries for specific stat keys. Stat keys are flat dot-separated strings
 // (e.g. "ability.Strength", "save.Fort", "skill.Heal", "sp.Fire", …).
 
-import type { Effect, ItemBuff } from '../types/ddo'
+import type { Effect, ItemBuff, Requirements, Requirement } from '../types/ddo'
+
+// ---------------------------------------------------------------------------
+// EffectContext: evaluated build state used to gate effects
+// ---------------------------------------------------------------------------
+
+export interface EffectContext {
+  race: string
+  alignment: string
+  classLevels: Record<string, number>       // exact class → levels
+  baseClassLevels: Record<string, number>   // base class (incl. derived) → total levels
+  totalLevel: number
+  feats: Set<string>                        // trained feats (player + auto + race)
+  enhancements: Set<string>                 // trained enhancement item names
+  abilityTotals: Record<string, number>     // ability → score (base+race+levelup)
+  stances: Set<string>                      // active stances (Cloth Armor, Tower Shield, …)
+  bab: number
+  weaponTypes: Set<string>                  // currently equipped weapon types
+}
+
+// ---------------------------------------------------------------------------
+// Requirements evaluator
+// ---------------------------------------------------------------------------
+
+function reqList(r: Requirement | Requirement[] | undefined): Requirement[] {
+  if (!r) return []
+  return Array.isArray(r) ? r : [r]
+}
+
+function items(req: Requirement): string[] {
+  if (!req.Item) return []
+  return Array.isArray(req.Item) ? req.Item : [req.Item]
+}
+
+/** Checks a single Requirement against a build context. */
+function checkRequirement(req: Requirement, ctx: EffectContext): boolean {
+  const its = items(req)
+  const v = req.Value ?? 0
+  switch (req.Type) {
+    case 'Stance':
+      return its.length === 0 || its.some(i => ctx.stances.has(i))
+    case 'Race':
+      return its.some(i => ctx.race === i)
+    case 'NotConstruct':
+      return !(ctx.race === 'Warforged' || ctx.race === 'Bladeforged')
+    case 'RaceConstruct':
+      return ctx.race === 'Warforged' || ctx.race === 'Bladeforged'
+    case 'Class':
+      return its.some(i => (ctx.classLevels[i] ?? 0) > 0)
+    case 'BaseClass':
+      return its.some(i => (ctx.baseClassLevels[i] ?? 0) > 0)
+    case 'ClassMinLevel':
+      return its.some(i => (ctx.classLevels[i] ?? 0) >= v)
+    case 'ClassAtLevel':
+      return its.some(i => (ctx.classLevels[i] ?? 0) === v)
+    case 'BaseClassMinLevel':
+      return its.some(i => (ctx.baseClassLevels[i] ?? 0) >= v)
+    case 'BaseClassAtLevel':
+      return its.some(i => (ctx.baseClassLevels[i] ?? 0) === v)
+    case 'Level':
+    case 'SpecificLevel':
+      return ctx.totalLevel >= v
+    case 'Feat':
+    case 'FeatAnySource':
+      return its.some(i => ctx.feats.has(i))
+    case 'Enhancement':
+      return its.some(i => ctx.enhancements.has(i))
+    case 'Ability':
+      return its.some(i => (ctx.abilityTotals[i] ?? 0) >= v)
+    case 'AbilityGreaterCondition':
+      // Item[0] > Item[1]
+      if (its.length < 2) return false
+      return (ctx.abilityTotals[its[0]] ?? 0) > (ctx.abilityTotals[its[1]] ?? 0)
+    case 'BAB':
+      return ctx.bab >= v
+    case 'Alignment':
+      return its.some(i => ctx.alignment === i)
+    case 'AlignmentType': {
+      // Lawful/Chaotic/Good/Evil/Neutral type-axis match
+      if (its.length === 0) return true
+      const a = ctx.alignment
+      return its.some(i => a.includes(i))
+    }
+    case 'WeaponTypesEquipped':
+      return its.some(i => ctx.weaponTypes.has(i))
+    case 'Skill':
+      // Skill ranks ≥ value — V3 tracks skill totals via build stats not in
+      // ctx; conservative pass to avoid false negatives.
+      return true
+    case 'GroupMember':
+    case 'GroupMember2':
+    case 'StartingWorld':
+    case 'EnemyType':
+    case 'ItemTypeInSlot':
+    case 'ItemSlot':
+    case 'MaterialType':
+    case 'Exclusive':
+      // Not gated client-side; always pass.
+      return true
+    default:
+      // Unknown requirement → conservative pass
+      return true
+  }
+}
+
+/** V2 Requirements::Met — top-level Requirements are AND'd; OneOf is OR; NoneOf is NOR. */
+export function requirementsMet(reqs: Requirements | undefined, ctx: EffectContext): boolean {
+  if (!reqs) return true
+
+  for (const r of reqList(reqs.Requirement)) {
+    if (!checkRequirement(r, ctx)) return false
+  }
+  const oneOfGroups = reqs.RequiresOneOf
+    ? (Array.isArray(reqs.RequiresOneOf) ? reqs.RequiresOneOf : [reqs.RequiresOneOf])
+    : []
+  for (const g of oneOfGroups) {
+    const list = reqList(g.Requirement)
+    if (list.length === 0) continue
+    if (!list.some(r => checkRequirement(r, ctx))) return false
+  }
+  const noneOfGroups = reqs.RequiresNoneOf
+    ? (Array.isArray(reqs.RequiresNoneOf) ? reqs.RequiresNoneOf : [reqs.RequiresNoneOf])
+    : []
+  for (const g of noneOfGroups) {
+    const list = reqList(g.Requirement)
+    if (list.some(r => checkRequirement(r, ctx))) return false
+  }
+  return true
+}
 
 // ---------------------------------------------------------------------------
 // Re-export (useful for callers)
@@ -147,11 +275,20 @@ function resolveValue(
       return null
 
     case 'Simple':
-      return getAmountAtRank(effect.Amount, 1)
+      // V2: m_Amount[0] * m_stacks
+      return getAmountAtRank(effect.Amount, 1) * Math.max(1, rank)
 
-    case 'ClassLevel': {
+    case 'ClassLevel':
+    case 'BaseClassLevel':
+    case 'ClassCasterLevel': {
       const base = getAmountAtRank(effect.Amount, 1)
       return base * classLevels
+    }
+
+    case 'TotalLevel': {
+      // V2: m_Amount[totalLevel-1] * m_stacks (40-entry array indexed by char level)
+      const idx = Math.max(1, classLevels)
+      return getAmountAtRank(effect.Amount, idx)
     }
 
     case 'APCount': {
@@ -185,9 +322,16 @@ export function parseEffect(
   source: string,
   classLevels = 0,
   treeTotalAP = 0,
+  ctx?: EffectContext,
 ): ParsedBonus[] {
-  // Skip stance-gated effects
-  if (hasStanceRequirement(effect)) return []
+  // V2 Effect::IsActive → Requirements::Met. Gate the effect entirely if any
+  // top-level requirement, OneOf group, or NoneOf group fails.
+  // When no ctx is supplied, fall back to the legacy stance-only check.
+  if (ctx) {
+    if (!requirementsMet(effect.Requirements, ctx)) return []
+  } else {
+    if (hasStanceRequirement(effect)) return []
+  }
 
   const value = resolveValue(effect, rank, classLevels, treeTotalAP)
   if (value === null) return []
@@ -236,6 +380,11 @@ export function parseEffect(
       const results: ParsedBonus[] = []
       for (const item of items) {
         switch (item) {
+          case 'All':
+            results.push(make('save.Fort'))
+            results.push(make('save.Reflex'))
+            results.push(make('save.Will'))
+            break
           case 'Fortitude':
             results.push(make('save.Fort'))
             break
@@ -249,12 +398,14 @@ export function parseEffect(
           case 'Disease':
           case 'Spell':
           case 'Traps':
+          case 'Magic':
           case 'Fear':
           case 'Enchantment':
+          case 'Illusion':
+          case 'Curse':
             results.push(make(`save.sub.${item}`))
             break
           default:
-            // Unknown save sub-type — skip
             break
         }
       }
@@ -289,9 +440,18 @@ export function parseEffect(
     case 'ShieldBonus':
       return [make('ac', 'Shield')]
 
+    case 'Deflection':
+      return [make('ac', 'Deflection')]
+
     case 'DodgeBonus':
     case 'Dodge':
       return [make('dodge', 'Dodge')]
+
+    case 'DodgeCap':
+      return [make('dodgeCap')]
+
+    case 'MaxDexBonus':
+      return [make('mdb')]
 
     case 'PRR':
       return [make('prr')]
@@ -301,6 +461,53 @@ export function parseEffect(
 
     case 'MRRCap':
       return [make('mrrCap')]
+
+    case 'BAB':
+      return [make('bab')]
+
+    case 'EnergyResistance':
+      if (items.length > 0) {
+        return items.flatMap(elem =>
+          elem === 'All'
+            ? ['Acid','Cold','Electric','Fire','Sonic','Force','Light','Negative','Positive','Poison','Repair','Untyped']
+                .map(e => make(`resist.${e}`))
+            : [make(`resist.${elem}`)],
+        )
+      }
+      return []
+
+    case 'EnergyAbsorbance':
+    case 'EnergyAbsorption':
+      if (items.length > 0) {
+        return items.flatMap(elem =>
+          elem === 'All'
+            ? ['Acid','Cold','Electric','Fire','Sonic','Force','Light','Negative','Positive','Poison','Repair','Untyped']
+                .map(e => make(`absorb.${e}`, 'Absorption'))
+            : [make(`absorb.${elem}`, 'Absorption')],
+        )
+      }
+      return []
+
+    case 'DR':
+      if (items.length > 0) return [make(`dr.${items[0]}`)]
+      return [make('dr.Untyped')]
+
+    case 'CasterLevel':
+    case 'EpicCasterLevel':
+      if (items.length > 0) return items.map(item => make(`cl.${item}`))
+      return [make('cl.All')]
+
+    case 'MaxCasterLevel':
+      if (items.length > 0) return items.map(item => make(`maxCl.${item}`))
+      return [make('maxCl.All')]
+
+    case 'CasterLevelSchool':
+      if (items.length > 0) return items.map(item => make(`clSchool.${item}`))
+      return []
+
+    case 'CasterLevelEnergy':
+      if (items.length > 0) return items.map(item => make(`clEnergy.${normalizeSpellElement(item)}`))
+      return []
 
     case 'Fortification':
       return [make('fortification')]
@@ -495,7 +702,27 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
       if (items.length === 0) {
         return [make('save.Fort'), make('save.Reflex'), make('save.Will')]
       }
-      return items.map(item => make(`save.sub.${item}`))
+      const results: ParsedBonus[] = []
+      for (const item of items) {
+        switch (item) {
+          case 'All':
+            results.push(make('save.Fort'), make('save.Reflex'), make('save.Will'))
+            break
+          case 'Fortitude':
+            results.push(make('save.Fort')); break
+          case 'Reflex':
+            results.push(make('save.Reflex')); break
+          case 'Will':
+            results.push(make('save.Will')); break
+          case 'Poison': case 'Disease': case 'Spell': case 'Traps':
+          case 'Magic': case 'Fear': case 'Enchantment':
+          case 'Illusion': case 'Curse':
+            results.push(make(`save.sub.${item}`)); break
+          default:
+            break
+        }
+      }
+      return results
     }
 
     // -----------------------------------------------------------------------
@@ -527,6 +754,51 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
     case 'MRRCap':
       return [make('mrrCap')]
 
+    case 'BAB':
+      return [make('bab')]
+
+    case 'MaxDexBonus':
+      return [make('mdb')]
+
+    case 'DodgeCap':
+      return [make('dodgeCap')]
+
+    case 'EnergyResistance':
+      if (items.length > 0) {
+        return items.flatMap(elem =>
+          elem === 'All'
+            ? ['Acid','Cold','Electric','Fire','Sonic','Force','Light','Negative','Positive','Poison','Repair','Untyped']
+                .map(e => make(`resist.${e}`))
+            : [make(`resist.${elem}`)],
+        )
+      }
+      return []
+
+    case 'EnergyAbsorbance':
+    case 'EnergyAbsorption':
+      if (items.length > 0) {
+        return items.flatMap(elem =>
+          elem === 'All'
+            ? ['Acid','Cold','Electric','Fire','Sonic','Force','Light','Negative','Positive','Poison','Repair','Untyped']
+                .map(e => make(`absorb.${e}`, 'Absorption'))
+            : [make(`absorb.${elem}`, 'Absorption')],
+        )
+      }
+      return []
+
+    case 'DR':
+      if (items.length > 0) return [make(`dr.${items[0]}`)]
+      return [make('dr.Untyped')]
+
+    case 'CasterLevel':
+    case 'EpicCasterLevel':
+      if (items.length > 0) return items.map(item => make(`cl.${item}`))
+      return [make('cl.All')]
+
+    case 'MaxCasterLevel':
+      if (items.length > 0) return items.map(item => make(`maxCl.${item}`))
+      return [make('maxCl.All')]
+
     case 'Fortification':
       return [make('fortification')]
 
@@ -535,6 +807,11 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
 
     case 'SpellResistance':
       return [make('spellResistance')]
+
+    case 'SpellFocus':
+    case 'SpellDC':
+      if (items.length > 0) return items.map(item => make(`dc.${item}`))
+      return [make('dc.All')]
 
     // -----------------------------------------------------------------------
     // Skills — by group type
