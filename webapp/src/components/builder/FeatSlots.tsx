@@ -13,12 +13,14 @@ interface SlotEntry {
   featUpdateList?: string[]   // whitelist from class XML FeatUpdateList
 }
 
-const EPIC_FEAT_LEVELS = [21, 24, 27, 30, 33, 36, 39]
+const EPIC_FEAT_LEVELS = [21, 24, 27, 30]
+const LEGENDARY_FEAT_LEVELS = [31, 32, 33, 34]
 
 // Fallback group-based filter (used when FeatUpdateList is absent)
 const FEAT_TYPE_TO_GROUPS: Record<string, string[]> = {
   'Heroic':                              ['Standard'],
   'Epic Feat':                           ['Epic Feat'],
+  'Legendary Feat':                      ['Epic Feat'],
   'Epic Destiny Feat':                   ['Epic Feat'],
   'Fighter Bonus Feat':                  ['Standard', 'Martial'],
   'Artificer Bonus Feat':               ['Standard'],
@@ -69,6 +71,11 @@ function buildSlots(classes: { name: string; levels: number }[], allClasses: DDO
   EPIC_FEAT_LEVELS.forEach(lvl => {
     if (totalLevel >= lvl) {
       slots.push({ key: `epic-${lvl}`, level: lvl, featType: 'Epic Feat', className: 'Epic' })
+    }
+  })
+  LEGENDARY_FEAT_LEVELS.forEach(lvl => {
+    if (totalLevel >= lvl) {
+      slots.push({ key: `legendary-${lvl}`, level: lvl, featType: 'Legendary Feat', className: 'Legendary' })
     }
   })
   slots.sort((a, b) => a.level - b.level || a.className.localeCompare(b.className))
@@ -341,7 +348,8 @@ export default function FeatSlots() {
     api.feats().then(setFeats)
   }, [])
 
-  const slots = buildSlots(build.classes, allClasses, build.totalLevel)
+  const fullLevel = build.totalLevel + (build.epicLevels ?? 0) + (build.legendaryLevels ?? 0)
+  const slots = buildSlots(build.classes, allClasses, fullLevel)
 
   const openSlot = openSlotKey ? slots.find(s => s.key === openSlotKey) : null
   const pickerOptions = openSlot
@@ -368,7 +376,7 @@ export default function FeatSlots() {
                   <span className={styles.slotType} title={slot.featType}>
                     {slot.featType.replace(' Feat', '')}
                   </span>
-                  {slot.className !== 'Universal' && slot.className !== 'Epic' && (
+                  {slot.className !== 'Universal' && slot.className !== 'Epic' && slot.className !== 'Legendary' && (
                     <span className={styles.slotClass}>{slot.className}</span>
                   )}
                   <button

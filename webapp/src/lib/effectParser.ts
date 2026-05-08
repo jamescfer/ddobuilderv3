@@ -395,6 +395,24 @@ export function parseEffect(
     case 'Initiative':
       return [make('initiative')]
 
+    case 'ThreatRange':
+    case 'ImprovedCritical':
+      return [make('weapon.threatRange')]
+
+    case 'OffHandAttack':
+    case 'OffhandAttack':
+      return [make('offhand.attack')]
+
+    case 'Displacement':
+      return [make('displacement')]
+
+    case 'HelplessBonus':
+      return [make('helpless')]
+
+    case 'TurnUndead':
+    case 'ExtraTurns':
+      return [make('turnUndead')]
+
     // Unknown effect type — return nothing
     default:
       return []

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { CharacterBuild, Ability } from '../types/ddo'
+import type { CharacterBuild, Ability, FiligreeSlot } from '../types/ddo'
 import { emptyBuild } from '../types/ddo'
 
 type Action =
@@ -20,6 +20,9 @@ type Action =
   | { type: 'CLEAR_AUGMENT'; key: string }
   | { type: 'SET_PAST_LIFE'; source: string; count: number }
   | { type: 'SET_FILIGREE'; slotIndex: number; name: string }
+  | { type: 'SET_FILIGREE_RARE'; slotIndex: number; rare: boolean }
+  | { type: 'SET_ARTIFACT_FILIGREE'; slotIndex: number; name: string }
+  | { type: 'SET_ARTIFACT_FILIGREE_RARE'; slotIndex: number; rare: boolean }
   | { type: 'SET_DESTINY_CHOICE'; treeName: string; itemName: string; rank: number }
   | { type: 'SET_REAPER_CHOICE'; treeName: string; itemName: string; rank: number }
   | { type: 'SET_ABILITY_TOME'; ability: Ability; bonus: number }
@@ -38,6 +41,18 @@ type Action =
   | { type: 'LOAD_BUILD'; build: CharacterBuild }
   | { type: 'RESET' }
 
+function migrateFiligreeSlots(raw: unknown, count: number): FiligreeSlot[] {
+  const arr: FiligreeSlot[] = []
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (typeof item === 'string') arr.push({ name: item, rare: false })
+      else if (item && typeof item === 'object' && 'name' in item) arr.push(item as FiligreeSlot)
+    }
+  }
+  while (arr.length < count) arr.push({ name: '', rare: false })
+  return arr.slice(0, count)
+}
+
 function migrateLoad(raw: CharacterBuild): CharacterBuild {
   return {
     ...raw,
@@ -50,7 +65,8 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     gear: raw.gear ?? {},
     augmentChoices: raw.augmentChoices ?? {},
     pastLives: raw.pastLives ?? {},
-    filigreeSlots: raw.filigreeSlots ?? ['', '', '', '', '', ''],
+    filigreeSlots: migrateFiligreeSlots(raw.filigreeSlots as unknown, 6),
+    artifactFiligreeSlots: migrateFiligreeSlots((raw as unknown as { artifactFiligreeSlots?: unknown }).artifactFiligreeSlots, 10),
     destinyChoices: raw.destinyChoices ?? {},
     reaperChoices: raw.reaperChoices ?? {},
     abilityTomes: raw.abilityTomes ?? {},
@@ -121,9 +137,24 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
     case 'SET_PAST_LIFE':
       return { ...state, pastLives: { ...state.pastLives, [action.source]: action.count } }
     case 'SET_FILIGREE': {
-      const filigreeSlots = [...state.filigreeSlots]
-      filigreeSlots[action.slotIndex] = action.name
+      const filigreeSlots = [...state.filigreeSlots] as CharacterBuild['filigreeSlots']
+      filigreeSlots[action.slotIndex] = { ...(filigreeSlots[action.slotIndex] ?? { name: '', rare: false }), name: action.name }
       return { ...state, filigreeSlots }
+    }
+    case 'SET_FILIGREE_RARE': {
+      const filigreeSlots = [...state.filigreeSlots] as CharacterBuild['filigreeSlots']
+      filigreeSlots[action.slotIndex] = { ...(filigreeSlots[action.slotIndex] ?? { name: '', rare: false }), rare: action.rare }
+      return { ...state, filigreeSlots }
+    }
+    case 'SET_ARTIFACT_FILIGREE': {
+      const artifactFiligreeSlots = [...(state.artifactFiligreeSlots ?? [])] as CharacterBuild['artifactFiligreeSlots']
+      artifactFiligreeSlots[action.slotIndex] = { ...(artifactFiligreeSlots[action.slotIndex] ?? { name: '', rare: false }), name: action.name }
+      return { ...state, artifactFiligreeSlots }
+    }
+    case 'SET_ARTIFACT_FILIGREE_RARE': {
+      const artifactFiligreeSlots = [...(state.artifactFiligreeSlots ?? [])] as CharacterBuild['artifactFiligreeSlots']
+      artifactFiligreeSlots[action.slotIndex] = { ...(artifactFiligreeSlots[action.slotIndex] ?? { name: '', rare: false }), rare: action.rare }
+      return { ...state, artifactFiligreeSlots }
     }
     case 'SET_DESTINY_CHOICE': {
       const treeChoices = { ...(state.destinyChoices[action.treeName] ?? {}), [action.itemName]: action.rank }

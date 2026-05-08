@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { Filigree, FiligreeSetBonus, FiligreeSetBuff, SentientGem } from '../../types/ddo'
+import type { Filigree, FiligreeSetBonus, FiligreeSetBuff, FiligreeSlot, SentientGem } from '../../types/ddo'
 import styles from './FiligreePanel.module.css'
 
-const SLOT_COUNT = 6
+const WEAPON_SLOT_COUNT = 6
+const ARTIFACT_SLOT_COUNT = 10
 
 function toArray<T>(val: T | T[] | undefined): T[] {
   if (val == null) return []
   return Array.isArray(val) ? val : [val]
 }
 
-/** Group filigrees by Menu for optgroup display */
 function groupByMenu(filigrees: Filigree[]): Map<string, Filigree[]> {
   const groups = new Map<string, Filigree[]>()
   for (const f of filigrees) {
@@ -22,17 +22,61 @@ function groupByMenu(filigrees: Filigree[]): Map<string, Filigree[]> {
   return groups
 }
 
-/** Count how many of each SetBonus type are equipped */
-function countSetBonuses(slots: string[], filigrees: Filigree[]): Map<string, number> {
-  const filigreeByName = new Map<string, Filigree>(filigrees.map(f => [f.Name, f]))
+function countSetBonuses(slots: FiligreeSlot[], filigrees: Filigree[]): Map<string, number> {
+  const byName = new Map<string, Filigree>(filigrees.map(f => [f.Name, f]))
   const counts = new Map<string, number>()
-  for (const name of slots) {
-    if (!name) continue
-    const f = filigreeByName.get(name)
+  for (const slot of slots) {
+    if (!slot.name) continue
+    const f = byName.get(slot.name)
     if (!f?.SetBonus) continue
     counts.set(f.SetBonus, (counts.get(f.SetBonus) ?? 0) + 1)
   }
   return counts
+}
+
+interface SlotRowProps {
+  index: number
+  label: string
+  slot: FiligreeSlot
+  groups: Map<string, Filigree[]>
+  menuNames: string[]
+  onNameChange: (name: string) => void
+  onRareToggle: (rare: boolean) => void
+}
+
+function FiligreeSlotRow({ index, label, slot, groups, menuNames, onNameChange, onRareToggle }: SlotRowProps) {
+  return (
+    <div className={styles.slotRow}>
+      <span className={styles.slotLabel}>{label} {index + 1}</span>
+      <select
+        className={styles.slotSelect}
+        value={slot.name}
+        onChange={e => onNameChange(e.target.value)}
+      >
+        <option value="">— Empty —</option>
+        {menuNames.map(menu => (
+          <optgroup key={menu} label={menu}>
+            {(groups.get(menu) ?? [])
+              .slice()
+              .sort((a, b) => a.Name.localeCompare(b.Name))
+              .map(f => (
+                <option key={f.Name} value={f.Name}>{f.Name}</option>
+              ))}
+          </optgroup>
+        ))}
+      </select>
+      {slot.name && (
+        <label className={`${styles.rareToggle} ${slot.rare ? styles.rareToggleOn : ''}`} title="Rare variant — applies rare effects">
+          <input
+            type="checkbox"
+            checked={slot.rare}
+            onChange={e => onRareToggle(e.target.checked)}
+          />
+          Rare
+        </label>
+      )}
+    </div>
+  )
 }
 
 export default function FiligreePanel() {
@@ -58,28 +102,21 @@ export default function FiligreePanel() {
       .finally(() => setLoading(false))
   }, [])
 
-  const slots = build.filigreeSlots ?? Array(SLOT_COUNT).fill('')
+  const weaponSlots: FiligreeSlot[] = build.filigreeSlots ?? Array.from({ length: WEAPON_SLOT_COUNT }, () => ({ name: '', rare: false }))
+  const artifactSlots: FiligreeSlot[] = build.artifactFiligreeSlots ?? Array.from({ length: ARTIFACT_SLOT_COUNT }, () => ({ name: '', rare: false }))
+
   const groups = groupByMenu(filigrees)
   const menuNames = Array.from(groups.keys()).sort()
 
-  const equippedCounts = countSetBonuses(slots, filigrees)
-
-  // Build a lookup for set bonus data by Type
+  const allSlots = [...weaponSlots, ...artifactSlots]
+  const equippedCounts = countSetBonuses(allSlots, filigrees)
   const setBonusByType = new Map<string, FiligreeSetBonus>(setBonuses.map(sb => [sb.Type, sb]))
-
-  function handleChange(slotIndex: number, name: string) {
-    dispatch({ type: 'SET_FILIGREE', slotIndex, name })
-  }
-
-  function handleGemChange(gem: string) {
-    dispatch({ type: 'SET_SENTIENT_GEM', gem })
-  }
 
   const selectedGem = build.sentientGem ?? ''
 
   return (
     <div className="panel">
-      <div className="panel-header">Sentient Jewel Filigrees</div>
+      <div className="panel-header">Sentient Jewel &amp; Artifact Filigrees</div>
       <div className="panel-body">
         {loading ? (
           <p className={styles.empty}>Loading filigrees&hellip;</p>
@@ -92,45 +129,50 @@ export default function FiligreePanel() {
                 id="sentient-gem-select"
                 className={styles.gemSelect}
                 value={selectedGem}
-                onChange={e => handleGemChange(e.target.value)}
+                onChange={e => dispatch({ type: 'SET_SENTIENT_GEM', gem: e.target.value })}
               >
                 <option value="">— None —</option>
                 {gems.map(gem => (
                   <option key={gem.Name} value={gem.Name}>{gem.Name}</option>
                 ))}
               </select>
-              {selectedGem && (
-                <span className={styles.gemSelected}>{selectedGem}</span>
-              )}
             </div>
 
+            {/* Weapon Filigree Slots */}
+            <div className={styles.sectionHeader}>Weapon Filigrees</div>
             <div className={styles.slotsSection}>
-              {Array.from({ length: SLOT_COUNT }, (_, i) => (
-                <div key={i} className={styles.slotRow}>
-                  <span className={styles.slotLabel}>Slot {i + 1}</span>
-                  <select
-                    className={styles.slotSelect}
-                    value={slots[i] ?? ''}
-                    onChange={e => handleChange(i, e.target.value)}
-                  >
-                    <option value="">— Empty —</option>
-                    {menuNames.map(menu => (
-                      <optgroup key={menu} label={menu}>
-                        {(groups.get(menu) ?? [])
-                          .slice()
-                          .sort((a, b) => a.Name.localeCompare(b.Name))
-                          .map(f => (
-                            <option key={f.Name} value={f.Name}>
-                              {f.Name}
-                            </option>
-                          ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
+              {Array.from({ length: WEAPON_SLOT_COUNT }, (_, i) => (
+                <FiligreeSlotRow
+                  key={i}
+                  index={i}
+                  label="Slot"
+                  slot={weaponSlots[i] ?? { name: '', rare: false }}
+                  groups={groups}
+                  menuNames={menuNames}
+                  onNameChange={name => dispatch({ type: 'SET_FILIGREE', slotIndex: i, name })}
+                  onRareToggle={rare => dispatch({ type: 'SET_FILIGREE_RARE', slotIndex: i, rare })}
+                />
               ))}
             </div>
 
+            {/* Artifact Filigree Slots */}
+            <div className={styles.sectionHeader}>Artifact Filigrees</div>
+            <div className={styles.slotsSection}>
+              {Array.from({ length: ARTIFACT_SLOT_COUNT }, (_, i) => (
+                <FiligreeSlotRow
+                  key={i}
+                  index={i}
+                  label="Artifact"
+                  slot={artifactSlots[i] ?? { name: '', rare: false }}
+                  groups={groups}
+                  menuNames={menuNames}
+                  onNameChange={name => dispatch({ type: 'SET_ARTIFACT_FILIGREE', slotIndex: i, name })}
+                  onRareToggle={rare => dispatch({ type: 'SET_ARTIFACT_FILIGREE_RARE', slotIndex: i, rare })}
+                />
+              ))}
+            </div>
+
+            {/* Active Set Bonuses */}
             <div className={styles.setBonusSection}>
               <div className={styles.setBonusHeader}>Active Set Bonuses</div>
               {equippedCounts.size === 0 ? (

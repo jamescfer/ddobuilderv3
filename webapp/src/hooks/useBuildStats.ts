@@ -14,7 +14,7 @@ import { useCharacter } from '../context/CharacterContext'
 import type {
   Race, DDOClass, Feat, EnhancementTree, EnhancementTreeItem, Item,
   Effect, EnhancementSelection, Augment, SetBonus, FiligreeSetBonus, Filigree,
-  OptionalBuff,
+  OptionalBuff, FiligreeSlot,
 } from '../types/ddo'
 import { parseEffect, parseItemBuff } from '../lib/effectParser'
 import { resolveBonus, emptyResolvedStat } from '../lib/bonus'
@@ -291,26 +291,40 @@ function accumulateSetBonuses(
   }
 }
 
-function accumulateFiligrees(
+function accumulateFiligreeSlots(
   map: StatMap,
-  filigreeSlots: string[],
+  slots: FiligreeSlot[],
   allFiligrees: Filigree[],
-  allFiligreeBonuses: FiligreeSetBonus[],
+  sourcePrefix: string,
+  setCounts: Map<string, number>,
 ): void {
-  const setCounts = new Map<string, number>()
-
-  for (const name of filigreeSlots) {
-    if (!name) continue
-    const fil = allFiligrees.find(f => f.Name === name)
+  const byName = new Map<string, Filigree>(allFiligrees.map(f => [f.Name, f]))
+  for (const slot of slots) {
+    if (!slot.name) continue
+    const fil = byName.get(slot.name)
     if (!fil) continue
-    const source = `Filigree: ${fil.Name}`
+    const source = `${sourcePrefix}: ${fil.Name}`
     for (const eff of toArray(fil.Effect)) {
+      if (eff.Rare && !slot.rare) continue  // rare effects only apply when slot is marked rare
       addParsed(map, parseEffect(eff, 1, source, 0, 0))
     }
     if (fil.SetBonus) {
       setCounts.set(fil.SetBonus, (setCounts.get(fil.SetBonus) ?? 0) + 1)
     }
   }
+}
+
+function accumulateFiligrees(
+  map: StatMap,
+  filigreeSlots: FiligreeSlot[],
+  artifactFiligreeSlots: FiligreeSlot[],
+  allFiligrees: Filigree[],
+  allFiligreeBonuses: FiligreeSetBonus[],
+): void {
+  const setCounts = new Map<string, number>()
+
+  accumulateFiligreeSlots(map, filigreeSlots, allFiligrees, 'Filigree', setCounts)
+  accumulateFiligreeSlots(map, artifactFiligreeSlots, allFiligrees, 'Artifact Filigree', setCounts)
 
   for (const [bonusName, count] of setCounts) {
     const fsb = allFiligreeBonuses.find(s => s.Type === bonusName)
@@ -484,7 +498,7 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     accumulateSetBonuses(map, gearItems, allSetBonuses)
 
     // ── Filigrees + filigree set bonuses ──────────────────────────────────
-    accumulateFiligrees(map, build.filigreeSlots, allFiligrees, allFiligreeBonuses)
+    accumulateFiligrees(map, build.filigreeSlots, build.artifactFiligreeSlots ?? [], allFiligrees, allFiligreeBonuses)
 
     // ── Self / party buffs ────────────────────────────────────────────────
     accumulateSelfBuffs(map, build.activeBuffs, allSelfBuffs)

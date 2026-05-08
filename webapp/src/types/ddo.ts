@@ -45,6 +45,7 @@ export interface Effect {
   Requirements?: Requirements
   StackSource?: string
   ApplyAsItemEffect?: boolean
+  Rare?: boolean             // effect only applies when filigree slot is marked rare
 }
 
 // ---------------------------------------------------------------------------
@@ -277,6 +278,12 @@ export interface Filigree {
   SetBonus?: string
 }
 
+/** A single filigree slot in the character build — tracks name and whether it is the rare variant */
+export interface FiligreeSlot {
+  name: string
+  rare: boolean
+}
+
 // ---------------------------------------------------------------------------
 // Optional (Self & Party) Buff
 // ---------------------------------------------------------------------------
@@ -352,8 +359,10 @@ export interface CharacterBuild {
   augmentChoices: Record<string, string>
   /** className|raceName → count of past lives */
   pastLives: Record<string, number>
-  /** filigree slot index (0-5) → filigree name */
-  filigreeSlots: string[]
+  /** sentient weapon filigree slots (6 slots) */
+  filigreeSlots: FiligreeSlot[]
+  /** artifact filigree slots (up to 10) */
+  artifactFiligreeSlots: FiligreeSlot[]
   /** epic destiny tree choices: treeName → itemName → ranks */
   destinyChoices: Record<string, Record<string, number>>
   /** reaper enhancement choices: treeName → itemName → ranks */
@@ -412,7 +421,8 @@ export function emptyBuild(): CharacterBuild {
     gear: {},
     augmentChoices: {},
     pastLives: {},
-    filigreeSlots: ['', '', '', '', '', ''],
+    filigreeSlots: Array.from({ length: 6 }, () => ({ name: '', rare: false })),
+    artifactFiligreeSlots: Array.from({ length: 10 }, () => ({ name: '', rare: false })),
     destinyChoices: {},
     reaperChoices: {},
     abilityTomes: {},
