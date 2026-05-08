@@ -265,122 +265,6 @@
   background: var(--color-bg-primary);
 }
 
-/* ── Twists of Fate ──────────────────────────────────────────────────── */
-.twistSection {
-  padding: 10px 12px;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-}
-
-.twistHeader {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.twistTitle {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.fateCount {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-gold);
-}
-
-.fateOver {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-red);
-}
-
-.twistNote {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  font-style: italic;
-  margin-bottom: 8px;
-}
-
-.twistRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.twistRowCompletionist {
-  opacity: 0.65;
-}
-
-.twistLabel {
-  width: 60px;
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  text-align: right;
-}
-
-.twistSelect {
-  flex: 1;
-  min-width: 0;
-  height: 26px;
-  padding: 0 6px;
-  background: var(--color-bg-input);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-size: 12px;
-  cursor: pointer;
-  transition: border-color 0.12s;
-}
-
-.twistSelect:hover {
-  border-color: var(--color-border-light);
-}
-
-.twistSelect:focus {
-  outline: none;
-  border-color: var(--color-border-focus);
-}
-
-.twistTree {
-  font-size: 10px;
-  color: var(--color-gold-dark);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 90px;
-  flex-shrink: 0;
-}
-
-.twistClear {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-panel);
-  color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.12s;
-}
-
-.twistClear:hover {
-  background: rgba(220, 50, 50, 0.15);
-  border-color: var(--color-red);
-  color: var(--color-red);
-}
-
 /* ── Unlocked Destinies ──────────────────────────────────────────────── */
 .unlockedSection {
   border-top: 1px solid var(--color-border);
@@ -441,13 +325,7 @@
   cursor: pointer;
   transition: all 0.12s;
   user-select: none;
-}
-
-.unlockedItem input {
-  width: 12px;
-  height: 12px;
-  cursor: pointer;
-  accent-color: var(--color-gold);
+  text-align: left;
 }
 
 .unlockedItem:hover {
@@ -459,6 +337,12 @@
   border-color: var(--color-gold-dark);
   background: rgba(212, 175, 55, 0.12);
   color: var(--color-gold);
+}
+
+.unlockedSpend {
+  font-size: 10px;
+  color: var(--color-green, #4caf50);
+  font-weight: 700;
 }
 
 .unlockedActions {

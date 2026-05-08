@@ -11,8 +11,6 @@ import styles from './EpicDestiniesPanel.module.css'
 
 const DESTINY_AP_CAP = 24        // per-tree AP cap
 const MAX_DESTINY_TREES = 3      // exactly 3 selected destiny trees
-const MAX_TWISTS = 5             // 4 normally; 5th requires Epic Completionist
-const BASE_FATE_POINTS = 3       // base fate points in DDO
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,30 +77,18 @@ export default function EpicDestiniesPanel() {
   const selectedDestinyTrees: [string, string, string] = build.selectedDestinyTrees ?? ['', '', '']
   const activeEpicDestiny = build.activeEpicDestiny ?? ''
   const unlockedDestinyTrees: string[] = build.unlockedDestinyTrees ?? []
-  const twistChoices: string[] = build.twistChoices ?? ['', '', '', '', '']
   const destinyChoices = build.destinyChoices
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
-  // Fate point total (base 3; extra fate points can come from enhancements/feats)
-  const totalFatePoints = useMemo(() => {
-    let pts = BASE_FATE_POINTS
-    // Each unlock beyond the base 3 adds to fate points (common DDO rule: 1 FP per destiny level)
-    // Simplified: just show base 3 + any extra from effects (future)
-    return pts
-  }, [])
+  // Trees the character has marked as unlocked in-game
+  const availableForSelect = useMemo(() =>
+    unlockedDestinyTrees.length > 0
+      ? allTrees.filter(t => unlockedDestinyTrees.includes(t.Name))
+      : allTrees,
+  [allTrees, unlockedDestinyTrees])
 
-  const spentFatePoints = twistChoices.filter(t => t !== '').length
-
-  // All destiny tree names with any AP spent
-  const spentInTrees = useMemo(() =>
-    allTrees.filter(t => {
-      const choices = destinyChoices[t.Name] ?? {}
-      return Object.values(choices).some(v => v > 0)
-    }).map(t => t.Name),
-  [allTrees, destinyChoices])
-
-  // Selected (non-empty) slots
+  // Selected (non-empty) slot names
   const selectedSlots = selectedDestinyTrees.filter(n => n !== '')
 
   // The tree currently being viewed
@@ -116,17 +102,10 @@ export default function EpicDestiniesPanel() {
   const viewedSpent = viewedTree ? computeTreeSpent(viewedTree, viewedChoices) : 0
   const atDestinyCap = viewedSpent >= DESTINY_AP_CAP
 
-  // For twist picker: all items from unlocked trees
-  const twistableItems = useMemo(() => {
-    const out: Array<{ treeName: string; item: EnhancementTreeItem }> = []
-    for (const tree of allTrees) {
-      if (!unlockedDestinyTrees.includes(tree.Name)) continue
-      for (const item of tree.EnhancementTreeItem ?? []) {
-        if ((item.YPosition ?? 0) > 0) out.push({ treeName: tree.Name, item })
-      }
-    }
-    return out
-  }, [allTrees, unlockedDestinyTrees])
+  // Trees with any AP spent (for AP annotations)
+  const spentInTrees = useMemo(() =>
+    allTrees.filter(t => Object.values(destinyChoices[t.Name] ?? {}).some(v => v > 0)).map(t => t.Name),
+  [allTrees, destinyChoices])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -152,14 +131,12 @@ export default function EpicDestiniesPanel() {
   }
 
   function handleClaimCores() {
-    // Train all Core (YPosition === 0) enhancements in all selected destiny trees to rank 1
-    for (const treeName of selectedSlots) {
-      const tree = allTrees.find(t => t.Name === treeName)
-      if (!tree) continue
-      const choices = destinyChoices[treeName] ?? {}
+    // V2: trains Core (YPosition === 0) enhancements in ALL destiny trees, not just selected ones
+    for (const tree of allTrees) {
+      const choices = destinyChoices[tree.Name] ?? {}
       for (const item of tree.EnhancementTreeItem ?? []) {
         if ((item.YPosition ?? 0) === 0 && (choices[item.Name] ?? 0) === 0) {
-          dispatch({ type: 'SET_DESTINY_CHOICE', treeName, itemName: item.Name, rank: 1 })
+          dispatch({ type: 'SET_DESTINY_CHOICE', treeName: tree.Name, itemName: item.Name, rank: 1 })
         }
       }
     }
@@ -184,16 +161,67 @@ export default function EpicDestiniesPanel() {
       <div className="panel-header">Epic Destinies</div>
       <div className="panel-body" style={{ padding: 0 }}>
 
-        {/* ── 1. Destiny slot selectors ─────────────────────────────────── */}
+        {/* ── 1. Unlocked Destiny Trees ─────────────────────────────────── */}
+        <div className={styles.unlockedSection}>
+          <button
+            className={styles.unlockedToggle}
+            onClick={() => setUnlockedOpen(v => !v)}
+          >
+            <span className={styles.unlockedToggleIcon}>{unlockedOpen ? '▾' : '▸'}</span>
+            Unlocked Destiny Trees
+            <span className={styles.unlockedCount}>
+              {unlockedDestinyTrees.length} / {allTrees.length} unlocked
+            </span>
+          </button>
+          {unlockedOpen && (
+            <div className={styles.unlockedGrid}>
+              {allTrees.map(tree => {
+                const isUnlocked = unlockedDestinyTrees.includes(tree.Name)
+                const hasSpend = spentInTrees.includes(tree.Name)
+                return (
+                  <button
+                    key={tree.Name}
+                    className={`${styles.unlockedItem} ${isUnlocked ? styles.unlockedItemOn : ''}`}
+                    onClick={() => dispatch({ type: 'TOGGLE_UNLOCKED_DESTINY', name: tree.Name })}
+                    title={`Mark ${tree.Name} as unlocked in-game${hasSpend ? ` (${computeTreeSpent(allTrees.find(t => t.Name === tree.Name)!, destinyChoices[tree.Name] ?? {})} AP spent)` : ''}`}
+                  >
+                    {tree.Name}
+                    {hasSpend && <span className={styles.unlockedSpend}> ✓</span>}
+                  </button>
+                )
+              })}
+              {allTrees.length === 0 && (
+                <div className={styles.statusMsg}>No destiny trees found.</div>
+              )}
+              {allTrees.length > 0 && (
+                <div className={styles.unlockedActions}>
+                  <button
+                    className={styles.unlockedActionBtn}
+                    onClick={() => allTrees.forEach(t => {
+                      if (!unlockedDestinyTrees.includes(t.Name))
+                        dispatch({ type: 'TOGGLE_UNLOCKED_DESTINY', name: t.Name })
+                    })}
+                  >Unlock All</button>
+                  <button
+                    className={styles.unlockedActionBtn}
+                    onClick={() => allTrees.forEach(t => {
+                      if (unlockedDestinyTrees.includes(t.Name))
+                        dispatch({ type: 'TOGGLE_UNLOCKED_DESTINY', name: t.Name })
+                    })}
+                  >Clear All</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── 2. Destiny slot selectors ─────────────────────────────────── */}
         <div className={styles.slotSection}>
-          <div className={styles.slotSectionTitle}>Select 3 Destinies</div>
+          <div className={styles.slotSectionTitle}>Select Active Destiny Trees</div>
           <div className={styles.slotRows}>
             {([0, 1, 2] as const).map(slot => {
               const currentName = selectedDestinyTrees[slot]
               const otherSelected = selectedDestinyTrees.filter((_, i) => i !== slot)
-              const options = allTrees.filter(t =>
-                unlockedDestinyTrees.length === 0 || unlockedDestinyTrees.includes(t.Name)
-              )
               return (
                 <div key={slot} className={styles.slotRow}>
                   <span className={styles.slotLabel}>Destiny {slot + 1}</span>
@@ -203,7 +231,7 @@ export default function EpicDestiniesPanel() {
                     onChange={e => handleSlotChange(slot, e.target.value)}
                   >
                     <option value="">— None —</option>
-                    {options.map(t => (
+                    {availableForSelect.map(t => (
                       <option
                         key={t.Name}
                         value={t.Name}
@@ -218,7 +246,7 @@ export default function EpicDestiniesPanel() {
                     <button
                       className={`${styles.activeBtn} ${activeEpicDestiny === currentName ? styles.activeBtnOn : ''}`}
                       onClick={() => toggleActive(currentName)}
-                      title={activeEpicDestiny === currentName ? 'Active destiny — click to clear' : 'Set as active destiny'}
+                      title={activeEpicDestiny === currentName ? 'Active destiny — click to deactivate' : 'Set as active destiny'}
                     >
                       {activeEpicDestiny === currentName ? '⚡ Active' : 'Set Active'}
                     </button>
@@ -227,14 +255,12 @@ export default function EpicDestiniesPanel() {
               )
             })}
           </div>
-          {selectedSlots.length > 0 && (
-            <button className={styles.claimBtn} onClick={handleClaimCores} title="Train all Core (free) enhancements in your selected destiny trees">
-              Claim Core Enhancements
-            </button>
-          )}
+          <button className={styles.claimBtn} onClick={handleClaimCores} title="Train all Core enhancements (free) across all destiny trees">
+            Claim Core Enhancements
+          </button>
         </div>
 
-        {/* ── 2. Tabs + Tree Grid ───────────────────────────────────────── */}
+        {/* ── 3. Tabs + Tree Grid ───────────────────────────────────────── */}
         {selectedSlots.length > 0 && (
           <>
             <div className={styles.tabs}>
@@ -292,107 +318,6 @@ export default function EpicDestiniesPanel() {
             )}
           </>
         )}
-
-        {/* ── 3. Fate Points & Twists ───────────────────────────────────── */}
-        <div className={styles.twistSection}>
-          <div className={styles.twistHeader}>
-            <span className={styles.twistTitle}>Twists of Fate</span>
-            <span className={spentFatePoints > totalFatePoints ? styles.fateOver : styles.fateCount}>
-              Fate Points: {totalFatePoints - spentFatePoints} / {totalFatePoints}
-            </span>
-          </div>
-          <div className={styles.twistNote}>
-            Pick abilities from unlocked destiny trees. Unlock destinies below to enable twists.
-          </div>
-          {Array.from({ length: MAX_TWISTS }, (_, i) => {
-            const isLast = i === MAX_TWISTS - 1
-            const currentValue = twistChoices[i] ?? ''
-            const currentEntry = twistableItems.find(e => e.item.Name === currentValue || e.item.InternalName === currentValue)
-            return (
-              <div key={i} className={`${styles.twistRow} ${isLast ? styles.twistRowCompletionist : ''}`}>
-                <span className={styles.twistLabel}>Twist {i + 1}{isLast ? ' ★' : ''}</span>
-                <select
-                  className={styles.twistSelect}
-                  value={currentValue}
-                  onChange={e => dispatch({ type: 'SET_TWIST_CHOICE', slot: i, value: e.target.value })}
-                >
-                  <option value="">— None —</option>
-                  {twistableItems.map(({ treeName, item }) => (
-                    <option key={`${treeName}|${item.Name}`} value={item.Name}>
-                      [{treeName.split(' ').map(w => w[0]).join('')}] {item.Name}
-                    </option>
-                  ))}
-                </select>
-                {currentEntry && (
-                  <span className={styles.twistTree}>{currentEntry.treeName}</span>
-                )}
-                {currentValue && (
-                  <button
-                    className={styles.twistClear}
-                    onClick={() => dispatch({ type: 'SET_TWIST_CHOICE', slot: i, value: '' })}
-                    title="Clear this twist"
-                  >✕</button>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        {/* ── 4. Unlocked Destinies ─────────────────────────────────────── */}
-        <div className={styles.unlockedSection}>
-          <button
-            className={styles.unlockedToggle}
-            onClick={() => setUnlockedOpen(v => !v)}
-          >
-            <span className={styles.unlockedToggleIcon}>{unlockedOpen ? '▾' : '▸'}</span>
-            Unlocked Destinies
-            <span className={styles.unlockedCount}>
-              {unlockedDestinyTrees.length} / {allTrees.length} unlocked
-            </span>
-          </button>
-          {unlockedOpen && (
-            <div className={styles.unlockedGrid}>
-              {allTrees.map(tree => {
-                const isUnlocked = unlockedDestinyTrees.includes(tree.Name)
-                return (
-                  <label
-                    key={tree.Name}
-                    className={`${styles.unlockedItem} ${isUnlocked ? styles.unlockedItemOn : ''}`}
-                    title={`Mark ${tree.Name} as unlocked in-game`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isUnlocked}
-                      onChange={() => dispatch({ type: 'TOGGLE_UNLOCKED_DESTINY', name: tree.Name })}
-                    />
-                    {tree.Name}
-                  </label>
-                )
-              })}
-              {allTrees.length === 0 && (
-                <div className={styles.statusMsg}>No destiny trees found.</div>
-              )}
-              {allTrees.length > 0 && (
-                <div className={styles.unlockedActions}>
-                  <button
-                    className={styles.unlockedActionBtn}
-                    onClick={() => allTrees.forEach(t => {
-                      if (!unlockedDestinyTrees.includes(t.Name))
-                        dispatch({ type: 'TOGGLE_UNLOCKED_DESTINY', name: t.Name })
-                    })}
-                  >Unlock All</button>
-                  <button
-                    className={styles.unlockedActionBtn}
-                    onClick={() => allTrees.forEach(t => {
-                      if (unlockedDestinyTrees.includes(t.Name))
-                        dispatch({ type: 'TOGGLE_UNLOCKED_DESTINY', name: t.Name })
-                    })}
-                  >Clear All</button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
       </div>
     </div>
