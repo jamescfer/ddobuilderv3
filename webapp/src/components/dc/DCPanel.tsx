@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { Ability, AbilityScores, DDOClass } from '../../types/ddo'
+import type {
+  Ability, DDOClass, Race, Feat, EnhancementTree, Item,
+  Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff,
+} from '../../types/ddo'
 import { SPELL_SCHOOLS } from '../../lib/gamedata'
+import { useBuildStats } from '../../hooks/useBuildStats'
+import type { BuildStats } from '../../hooks/useBuildStats'
 import styles from './DCPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -11,36 +16,48 @@ import styles from './DCPanel.module.css'
 
 type SpellSchool = typeof SPELL_SCHOOLS[number]
 
-/** Full casters — spell level cap = floor((classLevel + 1) / 2) */
-const FULL_CASTERS = new Set([
-  'Cleric', 'Wizard', 'Sorcerer', 'Druid', 'Favored Soul', 'Artificer',
-])
-
-/** Half casters — spell level cap = min(4, floor(classLevel / 3) + 1) */
-const HALF_CASTERS = new Set(['Bard', 'Paladin', 'Ranger'])
-
-// Warlock / Alchemist / Dragon Lord — treat as full casters for DC display
-const EXTRA_CASTERS = new Set(['Warlock', 'Alchemist', 'Dragon Lord'])
-
-function spellLevelCap(className: string, classLevel: number): number {
-  if (FULL_CASTERS.has(className) || EXTRA_CASTERS.has(className)) {
-    return Math.floor((classLevel + 1) / 2)
+/**
+ * V2-style spell level cap: count how many non-zero columns the class has at
+ * the given class level. Falls back to formulas when the data isn't loaded.
+ */
+function spellLevelCap(cls: DDOClass | null | undefined, classLevel: number): number {
+  if (!cls) return 0
+  const lvlIdx = Math.min(Math.max(classLevel, 0), 20)
+  const row = (cls as unknown as Record<string, unknown>)[`Level${lvlIdx}`]
+  if (typeof row === 'string') {
+    const slots = row.trim().split(/\s+/).map(Number)
+    let cap = 0
+    for (let i = 0; i < slots.length; i++) if (slots[i] > 0) cap = i + 1
+    if (cap > 0) return cap
   }
-  if (HALF_CASTERS.has(className)) {
-    return Math.min(4, Math.floor(classLevel / 3) + 1)
-  }
+  // Fallback formulas if XML didn't expose LevelN rows
+  const FULL = new Set(['Cleric', 'Wizard', 'Sorcerer', 'Druid', 'FavoredSoul', 'Favored Soul', 'Warlock', 'Alchemist'])
+  const HALF = new Set(['Bard', 'Paladin', 'Ranger', 'Artificer'])
+  const name = cls.Name
+  if (FULL.has(name)) return Math.max(0, Math.floor((classLevel + 1) / 2))
+  if (HALF.has(name)) return Math.min(4, Math.max(0, Math.floor(classLevel / 3) + 1))
   return 0
+}
+
+/** Pick the best casting stat from a single ability or array (highest mod). */
+function pickCastingStat(
+  cs: Ability | Ability[] | undefined,
+  abilTotals: Record<Ability, number>,
+): Ability {
+  if (!cs) return 'Wisdom'
+  const list = Array.isArray(cs) ? cs : [cs]
+  if (list.length === 0) return 'Wisdom'
+  return list.reduce((best, ab) =>
+    (abilTotals[ab] ?? -Infinity) > (abilTotals[best] ?? -Infinity) ? ab : best,
+  )
 }
 
 function abilityModifier(score: number): number {
   return Math.floor((score - 10) / 2)
 }
 
-/** Compute total Spell Focus bonus (+1 per tier: Spell Focus, Greater Spell Focus) for a school */
-function spellFocusBonus(
-  school: SpellSchool,
-  featChoices: Record<string, string>,
-): number {
+/** Spell Focus / Greater Spell Focus from chosen feats (legacy fallback). */
+function spellFocusBonus(school: SpellSchool, featChoices: Record<string, string>): number {
   let bonus = 0
   const values = Object.values(featChoices)
   if (values.includes(`Spell Focus: ${school}`)) bonus += 1
@@ -55,16 +72,61 @@ function spellFocusBonus(
 export default function DCPanel() {
   const { build } = useCharacter()
   const [activeTab, setActiveTab] = useState<string | null>(null)
-  const [allClasses, setAllClasses] = useState<DDOClass[]>([])
+
+  // Static data
+  const [allClasses,         setAllClasses]         = useState<DDOClass[]>([])
+  const [allRaces,           setAllRaces]           = useState<Race[]>([])
+  const [allFeats,           setAllFeats]           = useState<Feat[]>([])
+  const [allTrees,           setAllTrees]           = useState<EnhancementTree[]>([])
+  const [allSelfBuffs,       setAllSelfBuffs]       = useState<OptionalBuff[]>([])
+  const [allAugments,        setAllAugments]        = useState<Augment[]>([])
+  const [allSetBonuses,      setAllSetBonuses]      = useState<SetBonus[]>([])
+  const [allFiligreeBonuses, setAllFiligreeBonuses] = useState<FiligreeSetBonus[]>([])
+  const [allFiligrees,       setAllFiligrees]       = useState<Filigree[]>([])
+  const [gearItems,          setGearItems]          = useState<Record<string, Item>>({})
 
   useEffect(() => {
     api.classes().then(setAllClasses)
+    api.races().then(setAllRaces)
+    api.feats().then(setAllFeats)
+    api.enhancements().then(setAllTrees)
+    api.selfbuffs().then(setAllSelfBuffs)
+    api.augments().then(setAllAugments)
+    api.setbonuses().then(setAllSetBonuses)
+    api.filigreeSetBonuses().then(setAllFiligreeBonuses)
+    api.filigree().then(setAllFiligrees)
   }, [])
 
-  // Filter to classes that can cast spells
+  useEffect(() => {
+    const slots = Object.entries(build.gear).filter(([, name]) => name)
+    if (slots.length === 0) { setGearItems({}); return }
+    let cancelled = false
+    Promise.all(
+      slots.map(([slot, name]) =>
+        api.item(name).then(item => item ? [slot, item] as [string, Item] : null)
+      )
+    ).then(results => {
+      if (cancelled) return
+      const map: Record<string, Item> = {}
+      for (const r of results) { if (r) map[r[0]] = r[1] }
+      setGearItems(map)
+    })
+    return () => { cancelled = true }
+  }, [build.gear])
+
+  const statsInput = useMemo(() => ({
+    allClasses, allRaces, allFeats, allTrees, gearItems,
+    allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+  }), [allClasses, allRaces, allFeats, allTrees, gearItems,
+      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees])
+
+  const stats = useBuildStats(statsInput)
+
+  // Filter to classes that can actually cast spells
   const spellcastingClasses = build.classes.filter(bc => {
     if (!bc.name || bc.levels === 0) return false
-    return spellLevelCap(bc.name, bc.levels) > 0
+    const cls = allClasses.find(c => c.Name === bc.name)
+    return spellLevelCap(cls, bc.levels) > 0
   })
 
   const tabNames = spellcastingClasses.map(bc => bc.name)
@@ -102,12 +164,12 @@ export default function DCPanel() {
           </div>
         )}
 
-        {activeClass && (
+        {activeClass && activeClassDef && (
           <DCTable
-            className={activeClass.name}
+            cls={activeClassDef}
             classLevel={activeClass.levels}
-            castingStat={activeClassDef?.CastingStat ?? 'Wisdom'}
-            build={build}
+            stats={stats}
+            featChoices={build.featChoices}
           />
         )}
       </div>
@@ -120,29 +182,36 @@ export default function DCPanel() {
 // ---------------------------------------------------------------------------
 
 interface DCTableProps {
-  className: string
+  cls: DDOClass
   classLevel: number
-  castingStat: Ability
-  build: {
-    baseAbilities: AbilityScores
-    featChoices: Record<string, string>
-  }
+  stats: BuildStats
+  featChoices: Record<string, string>
 }
 
-function DCTable({ className, classLevel, castingStat, build }: DCTableProps) {
-  const cap = spellLevelCap(className, classLevel)
+function DCTable({ cls, classLevel, stats, featChoices }: DCTableProps) {
+  const cap = spellLevelCap(cls, classLevel)
   const spellLevels = Array.from({ length: cap }, (_, i) => i + 1)
 
-  const ability = castingStat
-  const abilityScore = (build.baseAbilities as unknown as Record<string, number>)[ability] ?? 10
+  // Resolve every ability total via the bonus engine
+  const ABS: Ability[] = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']
+  const abilTotals = ABS.reduce<Record<Ability, number>>((acc, ab) => {
+    acc[ab] = stats.total(`ability.${ab}`)
+    return acc
+  }, {} as Record<Ability, number>)
+
+  const ability = pickCastingStat(cls.CastingStat, abilTotals)
+  const abilityScore = abilTotals[ability] || 10
   const abilityMod = abilityModifier(abilityScore)
 
-  // Pre-compute spell focus bonuses per school
+  // General DC bonuses (apply to every school)
+  const generalDC = stats.total('dc.All') + stats.total('dc.Spell')
+
+  // Per-school bonuses: feat focus + parsed effect bonuses
   const focusBonuses = new Map<SpellSchool, number>(
-    SPELL_SCHOOLS.map(s => [s, spellFocusBonus(s, build.featChoices)])
+    SPELL_SCHOOLS.map(s => [s, spellFocusBonus(s, featChoices) + stats.total(`dc.${s}`)])
   )
 
-  const hasFocus = Array.from(focusBonuses.values()).some(v => v > 0)
+  const hasFocus = Array.from(focusBonuses.values()).some(v => v > 0) || generalDC !== 0
 
   return (
     <div className={styles.tableWrapper}>
@@ -157,7 +226,7 @@ function DCTable({ className, classLevel, castingStat, build }: DCTableProps) {
 
       {hasFocus && (
         <div className={styles.focusNote}>
-          Highlighted cells include Spell Focus bonus.
+          Highlighted cells include school + general DC bonuses.
         </div>
       )}
 
@@ -173,7 +242,7 @@ function DCTable({ className, classLevel, castingStat, build }: DCTableProps) {
           </thead>
           <tbody>
             {SPELL_SCHOOLS.map(school => {
-              const bonus = focusBonuses.get(school) ?? 0
+              const bonus = (focusBonuses.get(school) ?? 0) + generalDC
               return (
                 <tr key={school} className={styles.row}>
                   <td className={styles.tdSchool}>

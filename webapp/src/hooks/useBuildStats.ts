@@ -92,6 +92,19 @@ function abMod(score: number): number {
   return Math.floor((score - 10) / 2)
 }
 
+/** V2 Life::TomeAtLevel — caps tome value by character level. */
+function tomeCapAtLevel(level: number): number {
+  if (level <= 2) return 2
+  if (level <= 6) return 3
+  if (level <= 10) return 4
+  if (level <= 14) return 5
+  if (level <= 18) return 6
+  if (level <= 21) return 7
+  return 999
+}
+
+const MAX_BAB = 25
+
 // ---------------------------------------------------------------------------
 // Save / BAB / SP helpers
 // ---------------------------------------------------------------------------
@@ -102,20 +115,35 @@ function saveBase(saveType: unknown, levels: number): number {
   return Math.floor(levels / 3)
 }
 
+/** V2 BAB: per-class fraction is truncated, then summed across classes. */
 function classBAB(cls: DDOClass, levels: number): number {
   const arr = String(cls.BAB ?? '').trim().split(/\s+/).map(Number).filter(n => !isNaN(n))
-  if (arr.length > levels) return arr[levels]
-  if (arr.length > 0) return arr[arr.length - 1]
-  return Math.floor(levels * 0.75)
+  let raw = 0
+  if (arr.length > levels) raw = arr[levels]
+  else if (arr.length > 0) raw = arr[arr.length - 1]
+  return Math.trunc(raw)
 }
 
-function computeSpellPoints(formula: unknown, levels: number): number {
-  if (formula == null) return 0
-  const s = String(formula).trim()
-  const m = s.match(/(\d+)\s*\+\s*(\d+)\s*\*/)
-  if (m) return parseInt(m[1]) + parseInt(m[2]) * levels
-  const p = parseInt(s)
-  return isNaN(p) ? 0 : p * levels
+/** V2 SpellPointsPerLevel is a 21-entry table indexed by class levels (0..20). */
+function spellPointsAtLevel(perLevel: unknown, levels: number): number {
+  if (perLevel == null) return 0
+  const arr = String(perLevel).trim().split(/\s+/).map(Number).filter(n => !isNaN(n))
+  if (arr.length === 0) return 0
+  const idx = Math.min(Math.max(levels, 0), arr.length - 1)
+  return arr[idx] | 0
+}
+
+/** Pick the highest-value casting stat for multi-stat classes (e.g. Favored Soul). */
+function pickCastingStat(
+  cs: string | string[] | undefined,
+  abilModMap: Record<string, number>,
+): string | null {
+  if (!cs) return null
+  const list = Array.isArray(cs) ? cs : [cs]
+  if (list.length === 0) return null
+  return list.reduce((best, ab) =>
+    (abilModMap[ab] ?? -Infinity) > (abilModMap[best] ?? -Infinity) ? ab : best,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -179,7 +207,8 @@ function accumulateClass(
 ): void {
   const label = `${cls.Name} (${levels} lv)`
 
-  add(map, 'bab', { value: classBAB(cls, levels), type: 'Base', source: label })
+  // V2: per-class BAB is truncated, then summed — must NOT use the EXCLUSIVE 'Base' type
+  add(map, 'bab', { value: classBAB(cls, levels), type: 'Stacking', source: label })
   add(map, 'save.Fort',   { value: saveBase(cls.Fortitude, levels), type: 'Base', source: label })
   add(map, 'save.Reflex', { value: saveBase(cls.Reflex,    levels), type: 'Base', source: label })
   add(map, 'save.Will',   { value: saveBase(cls.Will,      levels), type: 'Base', source: label })
@@ -187,7 +216,8 @@ function accumulateClass(
   const hpPerLv = (cls.HitPoints ?? 6) + conMod
   add(map, 'hp', { value: levels * hpPerLv, type: 'Base', source: `${label} (d${cls.HitPoints ?? 6}+CON)` })
 
-  const sp = computeSpellPoints(cls.SpellPointsPerLevel, levels)
+  // V2: SpellPointsPerLevel is a 21-entry table indexed by class level
+  const sp = spellPointsAtLevel(cls.SpellPointsPerLevel, levels)
   if (sp > 0) add(map, 'spellPoints', { value: sp, type: 'Base', source: label })
 
   const spp = Math.max(1, cls.SkillPoints ?? 2)
@@ -195,9 +225,10 @@ function accumulateClass(
   if (skillPts > 0) add(map, 'skillPoints', { value: skillPts, type: 'Base', source: label })
 }
 
-function accumulateFeat(map: StatMap, feat: Feat, rank: number, source: string): void {
+function accumulateFeat(map: StatMap, feat: Feat, rank: number, source: string, totalLevel = 0): void {
   for (const eff of toArray(feat.Effect)) {
-    addParsed(map, parseEffect(eff, rank, source, 0, 0))
+    // For AType=TotalLevel / ClassLevel etc. effects in feats, pass totalLevel as the level arg
+    addParsed(map, parseEffect(eff, rank, source, totalLevel, 0))
   }
 }
 
@@ -404,13 +435,20 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
 
     // ── Ability base scores ───────────────────────────────────────────────
     const ABILITIES = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'] as const
+    const tomeCap = tomeCapAtLevel(Math.max(1, build.totalLevel))
     for (const ab of ABILITIES) {
       const base = build.baseAbilities[ab]
       if (base) add(map, `ability.${ab}`, { value: base, type: 'Base', source: 'Point buy' })
-      const tome = build.abilityTomes[ab] ?? 0
-      if (tome) add(map, `ability.${ab}`, { value: tome, type: 'Tome', source: 'Ability tome' })
+      // V2: tomes are Inherent type (capped by character level)
+      const rawTome = build.abilityTomes[ab] ?? 0
+      const tome = Math.min(rawTome, tomeCap)
+      if (tome) add(map, `ability.${ab}`, {
+        value: tome, type: 'Inherent',
+        source: rawTome > tome ? `Ability tome (+${rawTome}, capped at +${tome})` : 'Ability tome',
+      })
+      // V2: level-up bonuses are 'Level Up' type
       const lvlUps = Object.values(build.abilityLevelUps).filter(v => v === ab).length
-      if (lvlUps) add(map, `ability.${ab}`, { value: lvlUps, type: 'Level-up', source: 'Level-up bonuses' })
+      if (lvlUps) add(map, `ability.${ab}`, { value: lvlUps, type: 'Level Up', source: 'Level-up bonuses' })
     }
 
     // ── Race ─────────────────────────────────────────────────────────────
@@ -419,7 +457,7 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       accumulateRace(map, race)
       for (const featName of toArray(race.GrantedFeat)) {
         const feat = allFeats.find(f => f.Name === featName)
-        if (feat) accumulateFeat(map, feat, 1, `${build.race}: ${featName}`)
+        if (feat) accumulateFeat(map, feat, 1, `${build.race}: ${featName}`, build.totalLevel)
       }
     }
 
@@ -445,7 +483,7 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
         )
         for (const featName of names) {
           const feat = allFeats.find(f => f.Name === featName)
-          if (feat) accumulateFeat(map, feat, 1, `${bc.name}: ${featName}`)
+          if (feat) accumulateFeat(map, feat, 1, `${bc.name}: ${featName}`, build.totalLevel)
         }
       }
     }
@@ -454,14 +492,14 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     for (const [slotKey, featName] of Object.entries(build.featChoices)) {
       if (!featName) continue
       const feat = allFeats.find(f => f.Name === featName)
-      if (feat) accumulateFeat(map, feat, 1, `Feat: ${featName} (${slotKey})`)
+      if (feat) accumulateFeat(map, feat, 1, `Feat: ${featName} (${slotKey})`, build.totalLevel)
     }
 
     // ── Past lives ────────────────────────────────────────────────────────
     for (const [source, count] of Object.entries(build.pastLives)) {
       if (!count) continue
       const feat = allFeats.find(f => f.Name === source || f.Name === `Past Life: ${source}`)
-      if (feat) accumulateFeat(map, feat, count, `Past life: ${source} ×${count}`)
+      if (feat) accumulateFeat(map, feat, count, `Past life: ${source} ×${count}`, build.totalLevel)
     }
 
     // ── Heroic enhancements ───────────────────────────────────────────────
@@ -529,6 +567,26 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     if (conModFull !== 0) add(map, 'save.Fort',   { value: conModFull, type: 'Ability mod', source: 'Constitution' })
     if (dexMod !== 0)     add(map, 'save.Reflex', { value: dexMod,     type: 'Ability mod', source: 'Dexterity' })
     if (wisMod !== 0)     add(map, 'save.Will',   { value: wisMod,     type: 'Ability mod', source: 'Wisdom' })
+
+    // V2 Divine Grace: Paladin (auto at level 2) and Sacred Fist add CHA mod to all saves,
+    // capped at 2 + 3*levels of the relevant class.
+    {
+      const palLevels = build.classes.filter(c => c.name === 'Paladin').reduce((s, c) => s + c.levels, 0)
+      const sfLevels  = build.classes.filter(c => c.name === 'Sacred Fist').reduce((s, c) => s + c.levels, 0)
+      if (chaMod > 0 && (palLevels >= 2 || sfLevels >= 2)) {
+        const cap = Math.max(
+          palLevels >= 2 ? 2 + 3 * palLevels : 0,
+          sfLevels  >= 2 ? 2 + 3 * sfLevels  : 0,
+        )
+        const bonus = Math.min(chaMod, cap)
+        if (bonus > 0) {
+          const src = `Divine Grace (Charisma, capped @ ${cap})`
+          add(map, 'save.Fort',   { value: bonus, type: 'Divine', source: src })
+          add(map, 'save.Reflex', { value: bonus, type: 'Divine', source: src })
+          add(map, 'save.Will',   { value: bonus, type: 'Divine', source: src })
+        }
+      }
+    }
 
     // Melee (weapon attack modifier checked — could be DEX for finesse weapons)
     const weaponInfo = extractWeaponInfo(gearItems)
@@ -602,11 +660,54 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
           source: `${ability} mod`,
         })
       }
-      const ranks = build.skillRanks?.[skill] ?? 0
-      if (ranks > 0) {
-        add(map, `skill.${skill}`, { value: ranks, type: 'Ranks', source: 'Skill ranks' })
-        if (classSkillSet.has(skill)) {
-          add(map, `skill.${skill}`, { value: 1, type: 'Class', source: 'Class skill bonus' })
+      // V2 stores trained levels; rank = trained for class skill, trained/2 for cross-class.
+      // V2 has NO flat +1 class-skill bonus — that was a V3 mis-implementation.
+      const trained = build.skillRanks?.[skill] ?? 0
+      if (trained > 0) {
+        const ranksValue = classSkillSet.has(skill) ? trained : trained / 2
+        add(map, `skill.${skill}`, { value: ranksValue, type: 'Ranks', source: 'Skill ranks' })
+      }
+    }
+
+    // V2 SpellPoints: per-casting-class bonus = (classLevels + 9) * BaseStatToBonus(castingStat).
+    // Class::ClassCastingStat picks the highest-mod stat for multi-stat classes (FavoredSoul).
+    for (const bc of build.classes) {
+      if (!bc.name || bc.levels <= 0) continue
+      const cls = allClasses.find(c => c.Name === bc.name)
+      if (!cls) continue
+      if (spellPointsAtLevel(cls.SpellPointsPerLevel, bc.levels) <= 0) continue
+      const stat = pickCastingStat(cls.CastingStat as string | string[] | undefined, abilModMap)
+      if (!stat) continue
+      const mod = abilModMap[stat] ?? 0
+      const bonus = (bc.levels + 9) * mod
+      if (bonus !== 0) {
+        add(map, 'spellPoints', {
+          value: bonus,
+          type: 'Ability mod',
+          source: `${bc.name} (${stat}) bonus SP`,
+        })
+      }
+    }
+
+    // V2 Favored Soul / Sorcerer SP multiplier = 1 + (FvS+Sorc levels) / min(buildLevel, 20).
+    // Pure FvS/Sorc 20 → 2x SP; multiclass → partial multiplier.
+    {
+      const fvsLv  = build.classes.filter(c => c.name === 'Favored Soul').reduce((s, c) => s + c.levels, 0)
+      const sorcLv = build.classes.filter(c => c.name === 'Sorcerer').reduce((s, c) => s + c.levels, 0)
+      const total = fvsLv + sorcLv
+      if (total > 0) {
+        const lvCap = Math.min(build.totalLevel, 20)
+        if (lvCap > 0) {
+          const factor = total / lvCap
+          const baseSP = resolveBonus(map.get('spellPoints') ?? []).total
+          const bonus = Math.round(baseSP * factor)
+          if (bonus !== 0) {
+            add(map, 'spellPoints', {
+              value: bonus,
+              type: 'Multiplier',
+              source: `Favored Soul/Sorcerer SP multiplier (×${(1 + factor).toFixed(2)})`,
+            })
+          }
         }
       }
     }

@@ -147,11 +147,20 @@ function resolveValue(
       return null
 
     case 'Simple':
-      return getAmountAtRank(effect.Amount, 1)
+      // V2: m_Amount[0] * m_stacks
+      return getAmountAtRank(effect.Amount, 1) * Math.max(1, rank)
 
-    case 'ClassLevel': {
+    case 'ClassLevel':
+    case 'BaseClassLevel':
+    case 'ClassCasterLevel': {
       const base = getAmountAtRank(effect.Amount, 1)
       return base * classLevels
+    }
+
+    case 'TotalLevel': {
+      // V2: m_Amount[totalLevel-1] * m_stacks (40-entry array indexed by char level)
+      const idx = Math.max(1, classLevels)
+      return getAmountAtRank(effect.Amount, idx)
     }
 
     case 'APCount': {
@@ -236,6 +245,11 @@ export function parseEffect(
       const results: ParsedBonus[] = []
       for (const item of items) {
         switch (item) {
+          case 'All':
+            results.push(make('save.Fort'))
+            results.push(make('save.Reflex'))
+            results.push(make('save.Will'))
+            break
           case 'Fortitude':
             results.push(make('save.Fort'))
             break
@@ -249,12 +263,14 @@ export function parseEffect(
           case 'Disease':
           case 'Spell':
           case 'Traps':
+          case 'Magic':
           case 'Fear':
           case 'Enchantment':
+          case 'Illusion':
+          case 'Curse':
             results.push(make(`save.sub.${item}`))
             break
           default:
-            // Unknown save sub-type — skip
             break
         }
       }
@@ -289,9 +305,18 @@ export function parseEffect(
     case 'ShieldBonus':
       return [make('ac', 'Shield')]
 
+    case 'Deflection':
+      return [make('ac', 'Deflection')]
+
     case 'DodgeBonus':
     case 'Dodge':
       return [make('dodge', 'Dodge')]
+
+    case 'DodgeCap':
+      return [make('dodgeCap')]
+
+    case 'MaxDexBonus':
+      return [make('mdb')]
 
     case 'PRR':
       return [make('prr')]
@@ -301,6 +326,53 @@ export function parseEffect(
 
     case 'MRRCap':
       return [make('mrrCap')]
+
+    case 'BAB':
+      return [make('bab')]
+
+    case 'EnergyResistance':
+      if (items.length > 0) {
+        return items.flatMap(elem =>
+          elem === 'All'
+            ? ['Acid','Cold','Electric','Fire','Sonic','Force','Light','Negative','Positive','Poison','Repair','Untyped']
+                .map(e => make(`resist.${e}`))
+            : [make(`resist.${elem}`)],
+        )
+      }
+      return []
+
+    case 'EnergyAbsorbance':
+    case 'EnergyAbsorption':
+      if (items.length > 0) {
+        return items.flatMap(elem =>
+          elem === 'All'
+            ? ['Acid','Cold','Electric','Fire','Sonic','Force','Light','Negative','Positive','Poison','Repair','Untyped']
+                .map(e => make(`absorb.${e}`, 'Absorption'))
+            : [make(`absorb.${elem}`, 'Absorption')],
+        )
+      }
+      return []
+
+    case 'DR':
+      if (items.length > 0) return [make(`dr.${items[0]}`)]
+      return [make('dr.Untyped')]
+
+    case 'CasterLevel':
+    case 'EpicCasterLevel':
+      if (items.length > 0) return items.map(item => make(`cl.${item}`))
+      return [make('cl.All')]
+
+    case 'MaxCasterLevel':
+      if (items.length > 0) return items.map(item => make(`maxCl.${item}`))
+      return [make('maxCl.All')]
+
+    case 'CasterLevelSchool':
+      if (items.length > 0) return items.map(item => make(`clSchool.${item}`))
+      return []
+
+    case 'CasterLevelEnergy':
+      if (items.length > 0) return items.map(item => make(`clEnergy.${normalizeSpellElement(item)}`))
+      return []
 
     case 'Fortification':
       return [make('fortification')]
@@ -495,7 +567,27 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
       if (items.length === 0) {
         return [make('save.Fort'), make('save.Reflex'), make('save.Will')]
       }
-      return items.map(item => make(`save.sub.${item}`))
+      const results: ParsedBonus[] = []
+      for (const item of items) {
+        switch (item) {
+          case 'All':
+            results.push(make('save.Fort'), make('save.Reflex'), make('save.Will'))
+            break
+          case 'Fortitude':
+            results.push(make('save.Fort')); break
+          case 'Reflex':
+            results.push(make('save.Reflex')); break
+          case 'Will':
+            results.push(make('save.Will')); break
+          case 'Poison': case 'Disease': case 'Spell': case 'Traps':
+          case 'Magic': case 'Fear': case 'Enchantment':
+          case 'Illusion': case 'Curse':
+            results.push(make(`save.sub.${item}`)); break
+          default:
+            break
+        }
+      }
+      return results
     }
 
     // -----------------------------------------------------------------------
@@ -527,6 +619,51 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
     case 'MRRCap':
       return [make('mrrCap')]
 
+    case 'BAB':
+      return [make('bab')]
+
+    case 'MaxDexBonus':
+      return [make('mdb')]
+
+    case 'DodgeCap':
+      return [make('dodgeCap')]
+
+    case 'EnergyResistance':
+      if (items.length > 0) {
+        return items.flatMap(elem =>
+          elem === 'All'
+            ? ['Acid','Cold','Electric','Fire','Sonic','Force','Light','Negative','Positive','Poison','Repair','Untyped']
+                .map(e => make(`resist.${e}`))
+            : [make(`resist.${elem}`)],
+        )
+      }
+      return []
+
+    case 'EnergyAbsorbance':
+    case 'EnergyAbsorption':
+      if (items.length > 0) {
+        return items.flatMap(elem =>
+          elem === 'All'
+            ? ['Acid','Cold','Electric','Fire','Sonic','Force','Light','Negative','Positive','Poison','Repair','Untyped']
+                .map(e => make(`absorb.${e}`, 'Absorption'))
+            : [make(`absorb.${elem}`, 'Absorption')],
+        )
+      }
+      return []
+
+    case 'DR':
+      if (items.length > 0) return [make(`dr.${items[0]}`)]
+      return [make('dr.Untyped')]
+
+    case 'CasterLevel':
+    case 'EpicCasterLevel':
+      if (items.length > 0) return items.map(item => make(`cl.${item}`))
+      return [make('cl.All')]
+
+    case 'MaxCasterLevel':
+      if (items.length > 0) return items.map(item => make(`maxCl.${item}`))
+      return [make('maxCl.All')]
+
     case 'Fortification':
       return [make('fortification')]
 
@@ -535,6 +672,11 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
 
     case 'SpellResistance':
       return [make('spellResistance')]
+
+    case 'SpellFocus':
+    case 'SpellDC':
+      if (items.length > 0) return items.map(item => make(`dc.${item}`))
+      return [make('dc.All')]
 
     // -----------------------------------------------------------------------
     // Skills — by group type
