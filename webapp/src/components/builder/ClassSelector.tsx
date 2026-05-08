@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { DDOClass } from '../../types/ddo'
+import { HEROIC_MAX_LEVEL, EPIC_MAX_LEVELS, LEGENDARY_MAX_LEVELS } from '../../lib/gamedata'
 import styles from './ClassSelector.module.css'
 
-const HEROIC_LEVELS = 20
-const EPIC_MAX = 10     // levels 21–30
-const LEGENDARY_MAX = 4 // levels 31–34
+const HEROIC_LEVELS = HEROIC_MAX_LEVEL
+const EPIC_MAX = EPIC_MAX_LEVELS
+const LEGENDARY_MAX = LEGENDARY_MAX_LEVELS
 const CLASS_COLORS = ['#c88a2a', '#6ab0de', '#8acd6a']
 
 function classIndex(name: string, assigned: string[]): number {

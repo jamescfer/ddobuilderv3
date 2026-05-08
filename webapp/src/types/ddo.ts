@@ -51,6 +51,15 @@ export interface Effect {
 // ---------------------------------------------------------------------------
 // Race
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// FeatSlot (used by both Race and Class)
+// ---------------------------------------------------------------------------
+export interface FeatSlot {
+  Level: number
+  FeatType: string
+  FeatUpdateList?: string | string[]
+}
+
 export interface Race {
   Name: string
   ShortName?: string
@@ -68,17 +77,13 @@ export interface Race {
   NotHeroic?: boolean
   NoPastLife?: boolean
   IsIconic?: boolean
+  FeatSlot?: FeatSlot[]
   Feat?: unknown[]
 }
 
 // ---------------------------------------------------------------------------
 // Class
 // ---------------------------------------------------------------------------
-export interface FeatSlot {
-  Level: number
-  FeatType: string
-  FeatUpdateList?: string | string[]
-}
 
 export interface AutomaticFeat {
   Level?: number
@@ -99,6 +104,7 @@ export interface DDOClass {
   Will?: SaveType
   SpellPointsPerLevel?: string
   BAB?: string
+  CastingStat?: Ability
   FeatSlot?: FeatSlot[]
   AutomaticFeats?: AutomaticFeat[]
   NotHeroic?: boolean

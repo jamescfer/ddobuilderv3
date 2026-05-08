@@ -1,39 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { Ability, AbilityScores } from '../../types/ddo'
+import type { Ability, AbilityScores, DDOClass } from '../../types/ddo'
+import { SPELL_SCHOOLS } from '../../lib/gamedata'
 import styles from './DCPanel.module.css'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const SPELL_SCHOOLS = [
-  'Abjuration',
-  'Conjuration',
-  'Divination',
-  'Enchantment',
-  'Evocation',
-  'Illusion',
-  'Necromancy',
-  'Transmutation',
-] as const
 type SpellSchool = typeof SPELL_SCHOOLS[number]
-
-/** Casting ability by class name */
-const CASTING_ABILITY: Record<string, Ability> = {
-  Wizard: 'Intelligence',
-  Bard: 'Intelligence',
-  Artificer: 'Intelligence',
-  Alchemist: 'Intelligence',
-  Sorcerer: 'Charisma',
-  'Favored Soul': 'Charisma',
-  Warlock: 'Charisma',
-  'Dragon Lord': 'Charisma',
-  Cleric: 'Wisdom',
-  Druid: 'Wisdom',
-  Ranger: 'Wisdom',
-  Paladin: 'Wisdom',
-}
 
 /** Full casters — spell level cap = floor((classLevel + 1) / 2) */
 const FULL_CASTERS = new Set([
@@ -60,10 +36,6 @@ function abilityModifier(score: number): number {
   return Math.floor((score - 10) / 2)
 }
 
-function castingAbility(className: string): Ability {
-  return CASTING_ABILITY[className] ?? 'Wisdom'
-}
-
 /** Compute total Spell Focus bonus (+1 per tier: Spell Focus, Greater Spell Focus) for a school */
 function spellFocusBonus(
   school: SpellSchool,
@@ -83,6 +55,11 @@ function spellFocusBonus(
 export default function DCPanel() {
   const { build } = useCharacter()
   const [activeTab, setActiveTab] = useState<string | null>(null)
+  const [allClasses, setAllClasses] = useState<DDOClass[]>([])
+
+  useEffect(() => {
+    api.classes().then(setAllClasses)
+  }, [])
 
   // Filter to classes that can cast spells
   const spellcastingClasses = build.classes.filter(bc => {
@@ -94,6 +71,7 @@ export default function DCPanel() {
   const resolvedTab = tabNames.includes(activeTab ?? '') ? activeTab! : (tabNames[0] ?? null)
 
   const activeClass = spellcastingClasses.find(bc => bc.name === resolvedTab) ?? null
+  const activeClassDef = allClasses.find(c => c.Name === activeClass?.name) ?? null
 
   if (spellcastingClasses.length === 0) {
     return (
@@ -128,6 +106,7 @@ export default function DCPanel() {
           <DCTable
             className={activeClass.name}
             classLevel={activeClass.levels}
+            castingStat={activeClassDef?.CastingStat ?? 'Wisdom'}
             build={build}
           />
         )}
@@ -143,17 +122,18 @@ export default function DCPanel() {
 interface DCTableProps {
   className: string
   classLevel: number
+  castingStat: Ability
   build: {
     baseAbilities: AbilityScores
     featChoices: Record<string, string>
   }
 }
 
-function DCTable({ className, classLevel, build }: DCTableProps) {
+function DCTable({ className, classLevel, castingStat, build }: DCTableProps) {
   const cap = spellLevelCap(className, classLevel)
   const spellLevels = Array.from({ length: cap }, (_, i) => i + 1)
 
-  const ability = castingAbility(className)
+  const ability = castingStat
   const abilityScore = (build.baseAbilities as unknown as Record<string, number>)[ability] ?? 10
   const abilityMod = abilityModifier(abilityScore)
 

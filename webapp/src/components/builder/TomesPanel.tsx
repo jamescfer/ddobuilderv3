@@ -1,31 +1,9 @@
 import { useCharacter } from '../../context/CharacterContext'
 import type { Ability } from '../../types/ddo'
+import { SKILL_NAMES } from '../../lib/gamedata'
 import styles from './TomesPanel.module.css'
 
 const ABILITIES: Ability[] = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']
-
-const SKILLS = [
-  'Balance',
-  'Bluff',
-  'Concentration',
-  'Diplomacy',
-  'Disable Device',
-  'Haggle',
-  'Heal',
-  'Hide',
-  'Intimidate',
-  'Jump',
-  'Listen',
-  'Move Silently',
-  'Open Lock',
-  'Perform',
-  'Repair',
-  'Search',
-  'Spot',
-  'Swim',
-  'Tumble',
-  'Use Magic Device',
-] as const
 
 export default function TomesPanel() {
   const { build, dispatch } = useCharacter()
@@ -62,7 +40,7 @@ export default function TomesPanel() {
         <section className={styles.section}>
           <h3 className={styles.sectionTitle}>Skill Tomes</h3>
           <div className={styles.skillGrid}>
-            {SKILLS.map(skill => (
+            {SKILL_NAMES.map(skill => (
               <div key={skill} className={styles.skillRow}>
                 <span className={styles.skillLabel}>{skill}</span>
                 <select
