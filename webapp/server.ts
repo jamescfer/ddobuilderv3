@@ -91,10 +91,32 @@ function loadClasses() {
 }
 
 function loadFeats() {
+  const out: unknown[] = []
+  // Standard feats
   try {
     const parsed = readXml(path.join(DATA_DIR, 'Feats.xml')) as { Feats?: { Feat?: unknown[] } }
-    return (parsed?.Feats?.Feat ?? []) as unknown[]
-  } catch { return [] }
+    const feats = parsed?.Feats?.Feat ?? []
+    out.push(...(Array.isArray(feats) ? feats : [feats]))
+  } catch { /* no Feats.xml */ }
+  // Class-defined feats (Epic Destiny feats live in Epic.class.xml / Legendary.class.xml etc.)
+  const classDir = path.join(DATA_DIR, 'Classes')
+  try {
+    const classFiles = fs.readdirSync(classDir).filter(f => f.endsWith('.class.xml'))
+    for (const f of classFiles) {
+      try {
+        const parsed = readXml(path.join(classDir, f)) as { Classes?: { Class?: unknown } }
+        const classes = parsed?.Classes?.Class
+        const classList = Array.isArray(classes) ? classes : classes ? [classes] : []
+        for (const cls of classList) {
+          const classFeats = (cls as Record<string, unknown>)?.Feat
+          if (!classFeats) continue
+          const list = Array.isArray(classFeats) ? classFeats : [classFeats]
+          out.push(...list)
+        }
+      } catch { /* skip bad file */ }
+    }
+  } catch { /* no Classes dir */ }
+  return out
 }
 
 function loadEnhancementTrees() {

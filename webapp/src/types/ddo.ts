@@ -105,6 +105,7 @@ export interface DDOClass {
   SpellPointsPerLevel?: string
   BAB?: string
   CastingStat?: Ability
+  BaseClass?: string
   FeatSlot?: FeatSlot[]
   AutomaticFeats?: AutomaticFeat[]
   NotHeroic?: boolean
