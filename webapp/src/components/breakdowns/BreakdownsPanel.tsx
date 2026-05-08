@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, Race, Feat, EnhancementTree, Item } from '../../types/ddo'
+import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff } from '../../types/ddo'
 import { useBuildStats } from '../../hooks/useBuildStats'
 import type { ResolvedBonus } from '../../lib/bonus'
 import styles from './BreakdownsPanel.module.css'
@@ -230,11 +230,16 @@ function SpellPowerRow({ name, spKey, stats, onTip }: {
 
 export default function BreakdownsPanel() {
   const { build } = useCharacter()
-  const [allClasses, setAllClasses] = useState<DDOClass[]>([])
-  const [allRaces,   setAllRaces]   = useState<Race[]>([])
-  const [allFeats,   setAllFeats]   = useState<Feat[]>([])
-  const [allTrees,   setAllTrees]   = useState<EnhancementTree[]>([])
-  const [gearItems,  setGearItems]  = useState<Record<string, Item>>({})
+  const [allClasses,        setAllClasses]        = useState<DDOClass[]>([])
+  const [allRaces,          setAllRaces]          = useState<Race[]>([])
+  const [allFeats,          setAllFeats]          = useState<Feat[]>([])
+  const [allTrees,          setAllTrees]          = useState<EnhancementTree[]>([])
+  const [allSelfBuffs,      setAllSelfBuffs]      = useState<OptionalBuff[]>([])
+  const [allAugments,       setAllAugments]       = useState<Augment[]>([])
+  const [allSetBonuses,     setAllSetBonuses]     = useState<SetBonus[]>([])
+  const [allFiligreeBonuses,setAllFiligreeBonuses]= useState<FiligreeSetBonus[]>([])
+  const [allFiligrees,      setAllFiligrees]      = useState<Filigree[]>([])
+  const [gearItems,         setGearItems]         = useState<Record<string, Item>>({})
   const [tip, setTip] = useState<TipState | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -244,6 +249,11 @@ export default function BreakdownsPanel() {
     api.races().then(setAllRaces)
     api.feats().then(setAllFeats)
     api.enhancements().then(setAllTrees)
+    api.selfbuffs().then(setAllSelfBuffs)
+    api.augments().then(setAllAugments)
+    api.setbonuses().then(setAllSetBonuses)
+    api.filigreeSetBonuses().then(setAllFiligreeBonuses)
+    api.filigree().then(setAllFiligrees)
   }, [])
 
   // Resolve gear items whenever equipped slots change
@@ -268,8 +278,12 @@ export default function BreakdownsPanel() {
 
   // ── Build stats ──────────────────────────────────────────────────────────
   const statsInput = useMemo(
-    () => ({ allClasses, allRaces, allFeats, allTrees, gearItems }),
-    [allClasses, allRaces, allFeats, allTrees, gearItems],
+    () => ({
+      allClasses, allRaces, allFeats, allTrees, gearItems,
+      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+    }),
+    [allClasses, allRaces, allFeats, allTrees, gearItems,
+     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees],
   )
   const stats = useBuildStats(statsInput)
 
@@ -343,13 +357,22 @@ export default function BreakdownsPanel() {
   const meleeToHitTotal  = babTotal + stats.total('melee.toHit')
   const rangedToHitTotal = babTotal + stats.total('ranged.toHit')
 
+  const weapon = stats.weapon
+  const baseThreatRange = weapon?.critThreatRange ?? 1
+  const baseCritMult    = weapon?.critMultiplier ?? 2
+  const threatDisplay   = baseThreatRange > 1 ? `${21 - baseThreatRange}–20` : '20'
+  const weaponDiceDisplay = weapon ? `${weapon.diceNum}d${weapon.diceSides}` : '—'
+
   const meleeStats: StatRowData[] = [
     statRow('Melee Power',    'melee.power',        sign),
     fixedRow('To-Hit Bonus',  meleeToHitTotal, sign(meleeToHitTotal),
       [...stats.resolve('bab').bonuses, ...stats.resolve('melee.toHit').bonuses]),
     statRow('Damage Bonus',   'melee.damage',       sign),
-    fixedRow('Threat Range',  20, '20',  [{ value: 20, type: 'Base', source: 'Base', active: true }]),
-    fixedRow('Crit Multiplier', 2, '×2', [{ value: 2,  type: 'Base', source: 'Base', active: true }]),
+    fixedRow('W Dice',        0, weaponDiceDisplay, [], !weapon),
+    fixedRow('Threat Range',  baseThreatRange, threatDisplay,
+      [{ value: baseThreatRange, type: 'Base', source: weapon?.name ?? 'Unarmed', active: true }]),
+    fixedRow('Crit Multiplier', baseCritMult, `×${baseCritMult}`,
+      [{ value: baseCritMult, type: 'Base', source: weapon?.name ?? 'Unarmed', active: true }]),
     statRow('Doublestrike',   'melee.doublestrike', pct),
     statRow('Sneak Atk Dice', 'melee.sneakDice'),
     statRow('Strikethrough',  'melee.strikethrough', pct),

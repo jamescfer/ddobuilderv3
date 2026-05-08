@@ -178,6 +178,11 @@ export interface ItemAugment {
   }
 }
 
+export interface BaseDice {
+  Number: number
+  Sides: number
+}
+
 export interface Item {
   Name: string
   Icon?: string
@@ -190,6 +195,23 @@ export interface Item {
   Buff?: ItemBuff | ItemBuff[]
   ItemAugment?: ItemAugment | ItemAugment[]
   SetBonus?: string | string[]
+  Requirements?: Requirements
+  // Weapon-specific
+  Weapon?: string
+  AttackModifier?: string | string[]
+  DRBypass?: string | string[]
+  WeaponDamage?: number
+  BaseDice?: BaseDice
+  CriticalMultiplier?: number
+  CriticalThreatRange?: number
+  // Armor-specific
+  Armor?: string
+  ArmorBonus?: number
+  MaximumDexterityBonus?: number
+  ArmorCheckPenalty?: number
+  ArcaneSpellFailure?: number
+  // Shield-specific
+  ShieldBonus?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -198,6 +220,7 @@ export interface Item {
 export interface SetBonusBuff {
   EquippedCount: number
   Description?: string
+  Effect?: Effect | Effect[]
 }
 
 export interface SetBonus {
@@ -226,6 +249,7 @@ export interface Augment {
   MinLevel?: number
   Type: string
   Icon?: string
+  Effect?: Effect | Effect[]
 }
 
 // ---------------------------------------------------------------------------
@@ -234,6 +258,7 @@ export interface Augment {
 export interface FiligreeSetBuff {
   EquippedCount: number
   Description?: string
+  Effect?: Effect | Effect[]
 }
 
 export interface FiligreeSetBonus {
@@ -247,6 +272,7 @@ export interface Filigree {
   Description?: string
   Icon?: string
   Menu?: string
+  Effect?: Effect | Effect[]
   /** the set bonus type name this filigree belongs to */
   SetBonus?: string
 }
