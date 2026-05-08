@@ -349,6 +349,7 @@ export default function BreakdownsPanel() {
     statRow('Dodge',          'dodge',          pct),
     statRow('Fortification',  'fortification',  pct),
     statRow('Concealment',    'concealment',    pct),
+    statRow('Displacement',   'displacement',   pct),
     fixedRow('Move Speed', stats.total('speed'), pct(stats.total('speed')), stats.resolve('speed').bonuses),
     statRow('Spell Resistance', 'spellResistance', String),
   ]
@@ -358,10 +359,16 @@ export default function BreakdownsPanel() {
   const rangedToHitTotal = babTotal + stats.total('ranged.toHit')
 
   const weapon = stats.weapon
-  const baseThreatRange = weapon?.critThreatRange ?? 1
-  const baseCritMult    = weapon?.critMultiplier ?? 2
-  const threatDisplay   = baseThreatRange > 1 ? `${21 - baseThreatRange}–20` : '20'
+  const baseThreatRange  = weapon?.critThreatRange ?? 1
+  const bonusThreatRange = stats.total('weapon.threatRange')
+  const totalThreatRange = baseThreatRange + bonusThreatRange
+  const baseCritMult     = weapon?.critMultiplier ?? 2
+  const threatDisplay    = totalThreatRange > 1 ? `${21 - totalThreatRange}–20` : '20'
   const weaponDiceDisplay = weapon ? `${weapon.diceNum}d${weapon.diceSides}` : '—'
+  const threatBonuses: ResolvedBonus[] = [
+    { value: baseThreatRange, type: 'Base', source: weapon?.name ?? 'Unarmed', active: true },
+    ...stats.resolve('weapon.threatRange').bonuses,
+  ]
 
   const meleeStats: StatRowData[] = [
     statRow('Melee Power',    'melee.power',        sign),
@@ -369,8 +376,7 @@ export default function BreakdownsPanel() {
       [...stats.resolve('bab').bonuses, ...stats.resolve('melee.toHit').bonuses]),
     statRow('Damage Bonus',   'melee.damage',       sign),
     fixedRow('W Dice',        0, weaponDiceDisplay, [], !weapon),
-    fixedRow('Threat Range',  baseThreatRange, threatDisplay,
-      [{ value: baseThreatRange, type: 'Base', source: weapon?.name ?? 'Unarmed', active: true }]),
+    fixedRow('Threat Range',  totalThreatRange, threatDisplay, threatBonuses),
     fixedRow('Crit Multiplier', baseCritMult, `×${baseCritMult}`,
       [{ value: baseCritMult, type: 'Base', source: weapon?.name ?? 'Unarmed', active: true }]),
     statRow('Doublestrike',   'melee.doublestrike', pct),
@@ -403,6 +409,8 @@ export default function BreakdownsPanel() {
     fixedRow('BAB',        babTotal,        sign(babTotal),        stats.resolve('bab').bonuses),
     fixedRow('Initiative', initiativeTotal, sign(initiativeTotal), stats.resolve('initiative').bonuses),
     fixedRow('Skill Pts',  skillPointsTotal, String(skillPointsTotal), stats.resolve('skillPoints').bonuses),
+    statRow('Off-hand Atk', 'offhand.attack', pct),
+    statRow('Helpless Dmg', 'helpless',        pct),
   ]
 
   const skillStats: StatRowData[] = ALL_SKILLS.map(({ name }) => {
