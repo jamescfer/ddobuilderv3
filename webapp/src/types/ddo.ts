@@ -67,6 +67,7 @@ export interface Race {
   StartingWorld?: string
   BuildPoints?: unknown
   IconicClass?: string
+  SkillPoints?: number
   Strength?: number
   Dexterity?: number
   Constitution?: number

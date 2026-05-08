@@ -4,7 +4,135 @@
 // entries for specific stat keys. Stat keys are flat dot-separated strings
 // (e.g. "ability.Strength", "save.Fort", "skill.Heal", "sp.Fire", …).
 
-import type { Effect, ItemBuff } from '../types/ddo'
+import type { Effect, ItemBuff, Requirements, Requirement } from '../types/ddo'
+
+// ---------------------------------------------------------------------------
+// EffectContext: evaluated build state used to gate effects
+// ---------------------------------------------------------------------------
+
+export interface EffectContext {
+  race: string
+  alignment: string
+  classLevels: Record<string, number>       // exact class → levels
+  baseClassLevels: Record<string, number>   // base class (incl. derived) → total levels
+  totalLevel: number
+  feats: Set<string>                        // trained feats (player + auto + race)
+  enhancements: Set<string>                 // trained enhancement item names
+  abilityTotals: Record<string, number>     // ability → score (base+race+levelup)
+  stances: Set<string>                      // active stances (Cloth Armor, Tower Shield, …)
+  bab: number
+  weaponTypes: Set<string>                  // currently equipped weapon types
+}
+
+// ---------------------------------------------------------------------------
+// Requirements evaluator
+// ---------------------------------------------------------------------------
+
+function reqList(r: Requirement | Requirement[] | undefined): Requirement[] {
+  if (!r) return []
+  return Array.isArray(r) ? r : [r]
+}
+
+function items(req: Requirement): string[] {
+  if (!req.Item) return []
+  return Array.isArray(req.Item) ? req.Item : [req.Item]
+}
+
+/** Checks a single Requirement against a build context. */
+function checkRequirement(req: Requirement, ctx: EffectContext): boolean {
+  const its = items(req)
+  const v = req.Value ?? 0
+  switch (req.Type) {
+    case 'Stance':
+      return its.length === 0 || its.some(i => ctx.stances.has(i))
+    case 'Race':
+      return its.some(i => ctx.race === i)
+    case 'NotConstruct':
+      return !(ctx.race === 'Warforged' || ctx.race === 'Bladeforged')
+    case 'RaceConstruct':
+      return ctx.race === 'Warforged' || ctx.race === 'Bladeforged'
+    case 'Class':
+      return its.some(i => (ctx.classLevels[i] ?? 0) > 0)
+    case 'BaseClass':
+      return its.some(i => (ctx.baseClassLevels[i] ?? 0) > 0)
+    case 'ClassMinLevel':
+      return its.some(i => (ctx.classLevels[i] ?? 0) >= v)
+    case 'ClassAtLevel':
+      return its.some(i => (ctx.classLevels[i] ?? 0) === v)
+    case 'BaseClassMinLevel':
+      return its.some(i => (ctx.baseClassLevels[i] ?? 0) >= v)
+    case 'BaseClassAtLevel':
+      return its.some(i => (ctx.baseClassLevels[i] ?? 0) === v)
+    case 'Level':
+    case 'SpecificLevel':
+      return ctx.totalLevel >= v
+    case 'Feat':
+    case 'FeatAnySource':
+      return its.some(i => ctx.feats.has(i))
+    case 'Enhancement':
+      return its.some(i => ctx.enhancements.has(i))
+    case 'Ability':
+      return its.some(i => (ctx.abilityTotals[i] ?? 0) >= v)
+    case 'AbilityGreaterCondition':
+      // Item[0] > Item[1]
+      if (its.length < 2) return false
+      return (ctx.abilityTotals[its[0]] ?? 0) > (ctx.abilityTotals[its[1]] ?? 0)
+    case 'BAB':
+      return ctx.bab >= v
+    case 'Alignment':
+      return its.some(i => ctx.alignment === i)
+    case 'AlignmentType': {
+      // Lawful/Chaotic/Good/Evil/Neutral type-axis match
+      if (its.length === 0) return true
+      const a = ctx.alignment
+      return its.some(i => a.includes(i))
+    }
+    case 'WeaponTypesEquipped':
+      return its.some(i => ctx.weaponTypes.has(i))
+    case 'Skill':
+      // Skill ranks ≥ value — V3 tracks skill totals via build stats not in
+      // ctx; conservative pass to avoid false negatives.
+      return true
+    case 'GroupMember':
+    case 'GroupMember2':
+    case 'StartingWorld':
+    case 'EnemyType':
+    case 'ItemTypeInSlot':
+    case 'ItemSlot':
+    case 'MaterialType':
+    case 'Exclusive':
+      // Not gated client-side; always pass.
+      return true
+    default:
+      // Unknown requirement → conservative pass
+      return true
+  }
+}
+
+/** V2 Requirements::Met — top-level Requirements are AND'd; OneOf is OR; NoneOf is NOR. */
+export function requirementsMet(reqs: Requirements | undefined, ctx: EffectContext): boolean {
+  if (!reqs) return true
+
+  for (const r of reqList(reqs.Requirement)) {
+    if (!checkRequirement(r, ctx)) return false
+  }
+  const oneOfGroups = reqs.RequiresOneOf
+    ? (Array.isArray(reqs.RequiresOneOf) ? reqs.RequiresOneOf : [reqs.RequiresOneOf])
+    : []
+  for (const g of oneOfGroups) {
+    const list = reqList(g.Requirement)
+    if (list.length === 0) continue
+    if (!list.some(r => checkRequirement(r, ctx))) return false
+  }
+  const noneOfGroups = reqs.RequiresNoneOf
+    ? (Array.isArray(reqs.RequiresNoneOf) ? reqs.RequiresNoneOf : [reqs.RequiresNoneOf])
+    : []
+  for (const g of noneOfGroups) {
+    const list = reqList(g.Requirement)
+    if (list.some(r => checkRequirement(r, ctx))) return false
+  }
+  return true
+}
 
 // ---------------------------------------------------------------------------
 // Re-export (useful for callers)
@@ -194,9 +322,16 @@ export function parseEffect(
   source: string,
   classLevels = 0,
   treeTotalAP = 0,
+  ctx?: EffectContext,
 ): ParsedBonus[] {
-  // Skip stance-gated effects
-  if (hasStanceRequirement(effect)) return []
+  // V2 Effect::IsActive → Requirements::Met. Gate the effect entirely if any
+  // top-level requirement, OneOf group, or NoneOf group fails.
+  // When no ctx is supplied, fall back to the legacy stance-only check.
+  if (ctx) {
+    if (!requirementsMet(effect.Requirements, ctx)) return []
+  } else {
+    if (hasStanceRequirement(effect)) return []
+  }
 
   const value = resolveValue(effect, rank, classLevels, treeTotalAP)
   if (value === null) return []
