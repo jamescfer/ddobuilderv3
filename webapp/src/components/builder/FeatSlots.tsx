@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { BuildClass, CharacterBuild, DDOClass, Feat, Requirement, RequiresOneOf } from '../../types/ddo'
+import type { BuildClass, CharacterBuild, DDOClass, Feat, Race, Requirement, RequiresOneOf } from '../../types/ddo'
 import DdoIcon from '../DdoIcon'
 import styles from './FeatSlots.module.css'
 
@@ -13,15 +13,14 @@ interface SlotEntry {
   featUpdateList?: string[]   // whitelist from class XML FeatUpdateList
 }
 
-const EPIC_FEAT_LEVELS = [21, 24, 27, 30]
-const LEGENDARY_FEAT_LEVELS = [31, 32, 33, 34]
-
 // Fallback group-based filter (used when FeatUpdateList is absent)
 const FEAT_TYPE_TO_GROUPS: Record<string, string[]> = {
   'Heroic':                              ['Standard'],
   'Epic Feat':                           ['Epic Feat'],
   'Legendary Feat':                      ['Epic Feat'],
   'Epic Destiny Feat':                   ['Epic Feat'],
+  'Dark Gift Upgrade':                   ['Dark Gift Upgrade', 'Standard'],
+  'Alter Dark Gift':                     ['Alter Dark Gift', 'Standard'],
   'Fighter Bonus Feat':                  ['Standard', 'Martial'],
   'Artificer Bonus Feat':               ['Standard'],
   'Alchemist Bonus Feat':               ['Standard'],
@@ -43,17 +42,43 @@ function toArray<T>(v: T | T[] | undefined): T[] {
   return Array.isArray(v) ? v : [v]
 }
 
-function buildSlots(classes: { name: string; levels: number }[], allClasses: DDOClass[], totalLevel: number): SlotEntry[] {
+function buildSlots(
+  classes: { name: string; levels: number }[],
+  allClasses: DDOClass[],
+  allRaces: Race[],
+  currentRace: string,
+  epicLevels: number,
+  legendaryLevels: number,
+): SlotEntry[] {
   const slots: SlotEntry[] = []
+
+  // 1. Race feat slots (e.g. Human Bonus Feat at char level 1)
+  const race = allRaces.find(r => r.Name === currentRace)
+  toArray(race?.FeatSlot).forEach((fs, idx) => {
+    const featUpdateList = fs.FeatUpdateList
+      ? toArray(fs.FeatUpdateList).filter(Boolean)
+      : undefined
+    slots.push({
+      key: `race-${fs.Level}-${fs.FeatType}-${idx}`,
+      level: fs.Level,
+      featType: fs.FeatType,
+      className: currentRace,
+      featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
+    })
+  })
+
+  // 2. Universal standard feats (heroic levels 1-20 only)
   const universalLevels = [1, 3, 6, 9, 12, 15, 18]
   universalLevels.forEach(lvl => {
     slots.push({ key: `heroic-${lvl}`, level: lvl, featType: 'Heroic', className: 'Universal' })
   })
+
+  // 3. Class-specific heroic feat slots
   for (const bc of classes) {
     if (!bc.name || bc.levels === 0) continue
     const cls = allClasses.find(c => c.Name === bc.name)
     if (!cls?.FeatSlot) continue
-    cls.FeatSlot.forEach((fs, idx) => {
+    toArray(cls.FeatSlot).forEach((fs, idx) => {
       if (fs.Level <= bc.levels) {
         const featUpdateList = fs.FeatUpdateList
           ? toArray(fs.FeatUpdateList).filter(Boolean)
@@ -68,16 +93,45 @@ function buildSlots(classes: { name: string; levels: number }[], allClasses: DDO
       }
     })
   }
-  EPIC_FEAT_LEVELS.forEach(lvl => {
-    if (totalLevel >= lvl) {
-      slots.push({ key: `epic-${lvl}`, level: lvl, featType: 'Epic Feat', className: 'Epic' })
-    }
-  })
-  LEGENDARY_FEAT_LEVELS.forEach(lvl => {
-    if (totalLevel >= lvl) {
-      slots.push({ key: `legendary-${lvl}`, level: lvl, featType: 'Legendary Feat', className: 'Legendary' })
-    }
-  })
+
+  // 4. Epic feat slots — read from Epic.class.xml; epic class level N → character level 20+N
+  if (epicLevels > 0) {
+    const epicClass = allClasses.find(c => c.Name === 'Epic')
+    toArray(epicClass?.FeatSlot).forEach((fs, idx) => {
+      if (fs.Level <= epicLevels) {
+        const featUpdateList = fs.FeatUpdateList
+          ? toArray(fs.FeatUpdateList).filter(Boolean)
+          : undefined
+        slots.push({
+          key: `epic-${fs.Level}-${fs.FeatType}-${idx}`,
+          level: 20 + fs.Level,
+          featType: fs.FeatType,
+          className: 'Epic',
+          featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
+        })
+      }
+    })
+  }
+
+  // 5. Legendary feat slots — read from Legendary.class.xml; legendary class level N → character level 30+N
+  if (legendaryLevels > 0) {
+    const legendaryClass = allClasses.find(c => c.Name === 'Legendary')
+    toArray(legendaryClass?.FeatSlot).forEach((fs, idx) => {
+      if (fs.Level <= legendaryLevels) {
+        const featUpdateList = fs.FeatUpdateList
+          ? toArray(fs.FeatUpdateList).filter(Boolean)
+          : undefined
+        slots.push({
+          key: `legendary-${fs.Level}-${fs.FeatType}-${idx}`,
+          level: 30 + fs.Level,
+          featType: fs.FeatType,
+          className: 'Legendary',
+          featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
+        })
+      }
+    })
+  }
+
   slots.sort((a, b) => a.level - b.level || a.className.localeCompare(b.className))
   return slots
 }
@@ -340,16 +394,24 @@ function IconPicker({ options, current, onSelect, onClose }: IconPickerProps) {
 export default function FeatSlots() {
   const { build, dispatch } = useCharacter()
   const [allClasses, setAllClasses] = useState<DDOClass[]>([])
+  const [allRaces, setAllRaces] = useState<Race[]>([])
   const [feats, setFeats] = useState<Feat[]>([])
   const [openSlotKey, setOpenSlotKey] = useState<string | null>(null)
 
   useEffect(() => {
     api.classes().then(setAllClasses)
+    api.races().then(setAllRaces)
     api.feats().then(setFeats)
   }, [])
 
-  const fullLevel = build.totalLevel + (build.epicLevels ?? 0) + (build.legendaryLevels ?? 0)
-  const slots = buildSlots(build.classes, allClasses, fullLevel)
+  const slots = buildSlots(
+    build.classes,
+    allClasses,
+    allRaces,
+    build.race,
+    build.epicLevels ?? 0,
+    build.legendaryLevels ?? 0,
+  )
 
   const openSlot = openSlotKey ? slots.find(s => s.key === openSlotKey) : null
   const pickerOptions = openSlot
