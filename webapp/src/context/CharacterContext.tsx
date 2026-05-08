@@ -24,6 +24,11 @@ type Action =
   | { type: 'SET_ARTIFACT_FILIGREE'; slotIndex: number; name: string }
   | { type: 'SET_ARTIFACT_FILIGREE_RARE'; slotIndex: number; rare: boolean }
   | { type: 'SET_DESTINY_CHOICE'; treeName: string; itemName: string; rank: number }
+  | { type: 'RESET_DESTINY_TREE'; treeName: string }
+  | { type: 'SET_ACTIVE_DESTINY'; name: string }
+  | { type: 'SET_SELECTED_DESTINY'; slot: 0 | 1 | 2; name: string }
+  | { type: 'TOGGLE_UNLOCKED_DESTINY'; name: string }
+  | { type: 'SET_TWIST_CHOICE'; slot: number; value: string }
   | { type: 'SET_REAPER_CHOICE'; treeName: string; itemName: string; rank: number }
   | { type: 'SET_ABILITY_TOME'; ability: Ability; bonus: number }
   | { type: 'SET_SKILL_TOME'; skill: string; bonus: number }
@@ -69,6 +74,15 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     artifactFiligreeSlots: migrateFiligreeSlots((raw as unknown as { artifactFiligreeSlots?: unknown }).artifactFiligreeSlots, 10),
     destinyChoices: raw.destinyChoices ?? {},
     reaperChoices: raw.reaperChoices ?? {},
+    activeEpicDestiny: raw.activeEpicDestiny ?? '',
+    selectedDestinyTrees: raw.selectedDestinyTrees ?? ['', '', ''],
+    unlockedDestinyTrees: raw.unlockedDestinyTrees ?? [],
+    twistChoices: (() => {
+      const t = (raw as unknown as { twistChoices?: unknown }).twistChoices
+      const arr = Array.isArray(t) ? t.filter(v => typeof v === 'string') : []
+      while (arr.length < 5) arr.push('')
+      return arr.slice(0, 5)
+    })(),
     abilityTomes: raw.abilityTomes ?? {},
     skillTomes: raw.skillTomes ?? {},
     activeBuffs: raw.activeBuffs ?? [],
@@ -159,6 +173,31 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
     case 'SET_DESTINY_CHOICE': {
       const treeChoices = { ...(state.destinyChoices[action.treeName] ?? {}), [action.itemName]: action.rank }
       return { ...state, destinyChoices: { ...state.destinyChoices, [action.treeName]: treeChoices } }
+    }
+    case 'RESET_DESTINY_TREE': {
+      const destinyChoices = { ...state.destinyChoices }
+      delete destinyChoices[action.treeName]
+      return { ...state, destinyChoices }
+    }
+    case 'SET_ACTIVE_DESTINY':
+      return { ...state, activeEpicDestiny: action.name }
+    case 'SET_SELECTED_DESTINY': {
+      const selectedDestinyTrees = [...state.selectedDestinyTrees] as CharacterBuild['selectedDestinyTrees']
+      selectedDestinyTrees[action.slot] = action.name
+      // If the replaced tree was the active destiny, clear the active selection
+      const activeEpicDestiny = selectedDestinyTrees.includes(state.activeEpicDestiny) ? state.activeEpicDestiny : ''
+      return { ...state, selectedDestinyTrees, activeEpicDestiny }
+    }
+    case 'TOGGLE_UNLOCKED_DESTINY': {
+      const unlockedDestinyTrees = state.unlockedDestinyTrees.includes(action.name)
+        ? state.unlockedDestinyTrees.filter(n => n !== action.name)
+        : [...state.unlockedDestinyTrees, action.name]
+      return { ...state, unlockedDestinyTrees }
+    }
+    case 'SET_TWIST_CHOICE': {
+      const twistChoices = [...(state.twistChoices ?? ['', '', '', '', ''])]
+      twistChoices[action.slot] = action.value
+      return { ...state, twistChoices }
     }
     case 'SET_REAPER_CHOICE': {
       const treeChoices = { ...(state.reaperChoices[action.treeName] ?? {}), [action.itemName]: action.rank }
