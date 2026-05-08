@@ -165,16 +165,17 @@ function TreePicker({ allTrees, selected, build, onToggle, onClose }: TreePicker
 // ---------------------------------------------------------------------------
 
 export default function EnhancementTreePanel() {
-  const { build } = useCharacter()
+  const { build, dispatch } = useCharacter()
 
   const [allTrees, setAllTrees] = useState<EnhancementTree[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  const [pinned, setPinned] = useState<string[]>([])
-  const [enhChoices, setEnhChoices] = useState<Record<string, TreeChoices>>({})
-  const [enhSelections, setEnhSelections] = useState<Record<string, TreeSelections>>({})
   const [pickerOpen, setPickerOpen] = useState(false)
+
+  // Enhancement state lives in the build (so Analysis can read it)
+  const pinned = build.enhancementPinned
+  const enhChoices = build.enhancementChoices
+  const enhSelections = build.enhancementSelections
 
   useEffect(() => {
     setLoading(true)
@@ -205,14 +206,15 @@ export default function EnhancementTreePanel() {
 
   // Auto-pin racial tree when build changes
   useEffect(() => {
-    setPinned(prev => {
-      let next = prev.filter(name => availableTrees.some(t => t.Name === name))
-      const racial = availableTrees.find(t => t.IsRacialTree)
-      if (racial && !next.includes(racial.Name)) {
-        next = [racial.Name, ...next].slice(0, MAX_VISIBLE)
-      }
-      return next
-    })
+    let next = pinned.filter(name => availableTrees.some(t => t.Name === name))
+    const racial = availableTrees.find(t => t.IsRacialTree)
+    if (racial && !next.includes(racial.Name)) {
+      next = [racial.Name, ...next].slice(0, MAX_VISIBLE)
+    }
+    if (next.join(',') !== pinned.join(',')) {
+      dispatch({ type: 'SET_ENH_PINNED', pinned: next })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableTrees])
 
   const totalSpent = useMemo(() =>
@@ -220,28 +222,27 @@ export default function EnhancementTreePanel() {
     [enhTrees, enhChoices])
 
   function handleChoicesChange(treeName: string, updated: TreeChoices) {
-    setEnhChoices(prev => ({ ...prev, [treeName]: updated }))
+    dispatch({ type: 'SET_ENH_CHOICES', treeName, choices: updated })
   }
 
   function handleSelectionsChange(treeName: string, updated: TreeSelections) {
-    setEnhSelections(prev => ({ ...prev, [treeName]: updated }))
+    dispatch({ type: 'SET_ENH_SELECTIONS', treeName, selections: updated })
   }
 
   function handleReset(treeName: string) {
-    setEnhChoices(prev => ({ ...prev, [treeName]: {} }))
-    setEnhSelections(prev => ({ ...prev, [treeName]: {} }))
+    dispatch({ type: 'RESET_ENH_TREE', treeName })
   }
 
   function toggleTree(name: string) {
-    setPinned(prev => {
-      if (prev.includes(name)) return prev.filter(n => n !== name)
-      if (prev.length >= MAX_VISIBLE) return prev
-      return [...prev, name]
-    })
+    if (pinned.includes(name)) {
+      dispatch({ type: 'SET_ENH_PINNED', pinned: pinned.filter(n => n !== name) })
+    } else if (pinned.length < MAX_VISIBLE) {
+      dispatch({ type: 'SET_ENH_PINNED', pinned: [...pinned, name] })
+    }
   }
 
   function removeTree(name: string) {
-    setPinned(prev => prev.filter(n => n !== name))
+    dispatch({ type: 'SET_ENH_PINNED', pinned: pinned.filter(n => n !== name) })
   }
 
   const visibleTrees = pinned

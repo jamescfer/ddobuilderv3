@@ -366,10 +366,10 @@ export default function FeatSlots() {
                 <div key={slot.key} className={styles.slot}>
                   <span className={styles.slotLevel}>Lv {slot.level}</span>
                   <span className={styles.slotType} title={slot.featType}>
-                    {slot.featType.replace(' Feat', '').slice(0, 12)}
+                    {slot.featType.replace(' Feat', '')}
                   </span>
                   {slot.className !== 'Universal' && slot.className !== 'Epic' && (
-                    <span className={styles.slotClass}>{slot.className.slice(0, 8)}</span>
+                    <span className={styles.slotClass}>{slot.className}</span>
                   )}
                   <button
                     className={`${styles.featPickerBtn} ${chosen ? styles.featPickerBtnChosen : ''}`}

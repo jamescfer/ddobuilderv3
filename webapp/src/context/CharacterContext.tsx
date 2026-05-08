@@ -28,6 +28,10 @@ type Action =
   | { type: 'TOGGLE_QUEST'; questName: string }
   | { type: 'SET_NOTES'; notes: string }
   | { type: 'SET_SENTIENT_GEM'; gem: string }
+  | { type: 'SET_ENH_CHOICES'; treeName: string; choices: Record<string, number> }
+  | { type: 'SET_ENH_SELECTIONS'; treeName: string; selections: Record<string, string> }
+  | { type: 'SET_ENH_PINNED'; pinned: string[] }
+  | { type: 'RESET_ENH_TREE'; treeName: string }
   | { type: 'SAVE_GEAR_SET'; setName: string }
   | { type: 'LOAD_GEAR_SET'; setName: string }
   | { type: 'DELETE_GEAR_SET'; setName: string }
@@ -38,6 +42,9 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
   return {
     ...raw,
     epicLevels: raw.epicLevels ?? 10,
+    enhancementChoices: raw.enhancementChoices ?? {},
+    enhancementSelections: raw.enhancementSelections ?? {},
+    enhancementPinned: raw.enhancementPinned ?? [],
     legendaryLevels: raw.legendaryLevels ?? 4,
     skillRanks: raw.skillRanks ?? {},
     gear: raw.gear ?? {},
@@ -142,6 +149,19 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       return { ...state, notes: action.notes }
     case 'SET_SENTIENT_GEM':
       return { ...state, sentientGem: action.gem }
+    case 'SET_ENH_CHOICES':
+      return { ...state, enhancementChoices: { ...state.enhancementChoices, [action.treeName]: action.choices } }
+    case 'SET_ENH_SELECTIONS':
+      return { ...state, enhancementSelections: { ...state.enhancementSelections, [action.treeName]: action.selections } }
+    case 'SET_ENH_PINNED':
+      return { ...state, enhancementPinned: action.pinned }
+    case 'RESET_ENH_TREE': {
+      const enhancementChoices = { ...state.enhancementChoices }
+      const enhancementSelections = { ...state.enhancementSelections }
+      delete enhancementChoices[action.treeName]
+      delete enhancementSelections[action.treeName]
+      return { ...state, enhancementChoices, enhancementSelections }
+    }
     case 'SAVE_GEAR_SET':
       return { ...state, namedGearSets: { ...state.namedGearSets, [action.setName]: { ...state.gear } }, activeGearSetName: action.setName }
     case 'LOAD_GEAR_SET': {

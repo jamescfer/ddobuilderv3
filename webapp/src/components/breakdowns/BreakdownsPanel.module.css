@@ -233,6 +233,12 @@
   padding: 6px 8px;
 }
 
+.tipRowSuppressed td {
+  opacity: 0.4;
+  text-decoration: line-through;
+  color: var(--color-text-muted) !important;
+}
+
 /* ── Spell Power table ───────────────────────────────────────────────── */
 .spNote {
   font-size: 9px;

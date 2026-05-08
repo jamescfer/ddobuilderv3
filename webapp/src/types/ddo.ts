@@ -1,7 +1,7 @@
 // Core DDO types matching the XML data structure
 
 export type Ability = 'Strength' | 'Dexterity' | 'Constitution' | 'Intelligence' | 'Wisdom' | 'Charisma'
-export type SaveType = 'Strong' | 'Weak'
+export type SaveType = 'Strong' | 'Weak' | 'Type1' | 'Type2'
 export type BonusType = 'Enhancement' | 'Competence' | 'Insight' | 'Morale' | 'Sacred' | 'Profane' | 'Luck' | 'Alchemical' | string
 
 export interface AbilityScores {
@@ -39,10 +39,12 @@ export interface Effect {
   Type: string
   Bonus?: string
   AType?: string
-  Amount?: number[] | string
+  Amount?: unknown           // number | string | { '#text': unknown } from XML
   Item?: string | string[]
   DisplayName?: string
   Requirements?: Requirements
+  StackSource?: string
+  ApplyAsItemEffect?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +178,11 @@ export interface ItemAugment {
   }
 }
 
+export interface BaseDice {
+  Number: number
+  Sides: number
+}
+
 export interface Item {
   Name: string
   Icon?: string
@@ -188,6 +195,23 @@ export interface Item {
   Buff?: ItemBuff | ItemBuff[]
   ItemAugment?: ItemAugment | ItemAugment[]
   SetBonus?: string | string[]
+  Requirements?: Requirements
+  // Weapon-specific
+  Weapon?: string
+  AttackModifier?: string | string[]
+  DRBypass?: string | string[]
+  WeaponDamage?: number
+  BaseDice?: BaseDice
+  CriticalMultiplier?: number
+  CriticalThreatRange?: number
+  // Armor-specific
+  Armor?: string
+  ArmorBonus?: number
+  MaximumDexterityBonus?: number
+  ArmorCheckPenalty?: number
+  ArcaneSpellFailure?: number
+  // Shield-specific
+  ShieldBonus?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +220,7 @@ export interface Item {
 export interface SetBonusBuff {
   EquippedCount: number
   Description?: string
+  Effect?: Effect | Effect[]
 }
 
 export interface SetBonus {
@@ -224,6 +249,7 @@ export interface Augment {
   MinLevel?: number
   Type: string
   Icon?: string
+  Effect?: Effect | Effect[]
 }
 
 // ---------------------------------------------------------------------------
@@ -232,6 +258,7 @@ export interface Augment {
 export interface FiligreeSetBuff {
   EquippedCount: number
   Description?: string
+  Effect?: Effect | Effect[]
 }
 
 export interface FiligreeSetBonus {
@@ -245,6 +272,7 @@ export interface Filigree {
   Description?: string
   Icon?: string
   Menu?: string
+  Effect?: Effect | Effect[]
   /** the set bonus type name this filigree belongs to */
   SetBonus?: string
 }
@@ -344,6 +372,12 @@ export interface CharacterBuild {
   /** setName → slot → itemName */
   namedGearSets: Record<string, Record<string, string>>
   activeGearSetName: string
+  /** heroic enhancement choices: treeName → itemName → rank */
+  enhancementChoices: Record<string, Record<string, number>>
+  /** heroic enhancement selector choices: treeName → itemName → selected option name */
+  enhancementSelections: Record<string, Record<string, string>>
+  /** ordered list of pinned heroic enhancement tree names */
+  enhancementPinned: string[]
 }
 
 function generateId(): string {
@@ -389,6 +423,9 @@ export function emptyBuild(): CharacterBuild {
     sentientGem: '',
     namedGearSets: {},
     activeGearSetName: '',
+    enhancementChoices: {},
+    enhancementSelections: {},
+    enhancementPinned: [],
   }
 }
 
