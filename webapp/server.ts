@@ -362,14 +362,15 @@ function runGit(args: string): Promise<string> {
 
 app.get('/api/update/check', async (_req, res) => {
   try {
-    await runGit('fetch origin')
-    const behind = await runGit('rev-list HEAD..origin/HEAD --count')
+    const branch = await runGit('rev-parse --abbrev-ref HEAD')
+    await runGit(`fetch origin ${branch}`)
+    const behind = await runGit(`rev-list HEAD..origin/${branch} --count`)
     const count = parseInt(behind, 10) || 0
     if (count === 0) {
       res.json({ upToDate: true, commits: [] })
       return
     }
-    const log = await runGit('log HEAD..origin/HEAD --oneline')
+    const log = await runGit(`log HEAD..origin/${branch} --oneline`)
     const commits = log.split('\n').filter(Boolean)
     res.json({ upToDate: false, commits })
   } catch (err) {
@@ -377,20 +378,24 @@ app.get('/api/update/check', async (_req, res) => {
   }
 })
 
-app.post('/api/update/apply', (_req, res) => {
+app.post('/api/update/apply', async (_req, res) => {
   res.json({ started: true })
-  // Pull, rebuild, restart
-  exec(
-    `git -C "${REPO_DIR}" pull origin HEAD && cd "${path.join(REPO_DIR, 'webapp')}" && npm run build`,
-    (err, _stdout, stderr) => {
-      if (err) {
-        console.error('Update failed:', stderr)
-      } else {
-        console.log('Update complete — restarting…')
-        setTimeout(() => process.exit(0), 500)
+  try {
+    const branch = await runGit('rev-parse --abbrev-ref HEAD')
+    exec(
+      `git -C "${REPO_DIR}" pull origin ${branch} && cd "${path.join(REPO_DIR, 'webapp')}" && npm run build`,
+      (err, _stdout, stderr) => {
+        if (err) {
+          console.error('Update failed:', stderr)
+        } else {
+          console.log('Update complete — restarting…')
+          setTimeout(() => process.exit(0), 500)
+        }
       }
-    }
-  )
+    )
+  } catch (err) {
+    console.error('Update apply failed:', err)
+  }
 })
 
 // ---------------------------------------------------------------------------
@@ -399,13 +404,14 @@ app.post('/api/update/apply', (_req, res) => {
 function scheduleAutoUpdate() {
   setInterval(async () => {
     try {
-      await runGit('fetch origin')
-      const behind = await runGit('rev-list HEAD..origin/HEAD --count')
+      const branch = await runGit('rev-parse --abbrev-ref HEAD')
+      await runGit(`fetch origin ${branch}`)
+      const behind = await runGit(`rev-list HEAD..origin/${branch} --count`)
       const count = parseInt(behind, 10) || 0
       if (count > 0) {
         console.log(`[auto-update] ${count} commit(s) behind — pulling and rebuilding…`)
         exec(
-          `git -C "${REPO_DIR}" pull origin HEAD && cd "${path.join(REPO_DIR, 'webapp')}" && npm run build`,
+          `git -C "${REPO_DIR}" pull origin ${branch} && cd "${path.join(REPO_DIR, 'webapp')}" && npm run build`,
           (err, _stdout, stderr) => {
             if (err) console.error('[auto-update] failed:', stderr)
             else { console.log('[auto-update] done — restarting…'); setTimeout(() => process.exit(0), 500) }
