@@ -12,6 +12,114 @@
   font-style: normal;
 }
 
+/* ── Destiny slot selectors ──────────────────────────────────────────── */
+.slotSection {
+  padding: 10px 12px 8px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.slotSectionTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+
+.slotRows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.slotRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slotLabel {
+  width: 66px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+
+.slotSelect {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+
+.slotSelect:hover {
+  border-color: var(--color-border-light);
+}
+
+.slotSelect:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
+}
+
+.activeBtn {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  height: 24px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-panel);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+
+.activeBtn:hover {
+  border-color: var(--color-gold-dark);
+  color: var(--color-gold);
+  background: var(--color-bg-hover);
+}
+
+.activeBtnOn {
+  border-color: var(--color-gold-dark);
+  background: rgba(212, 175, 55, 0.15);
+  color: var(--color-gold);
+}
+
+.claimBtn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-panel);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.12s;
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.claimBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-gold-dark);
+}
+
 /* ── Tree selector tabs ──────────────────────────────────────────────── */
 .tabs {
   display: flex;
@@ -35,7 +143,8 @@
   font-size: 11px;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
-  max-width: 120px;
+  max-width: 160px;
+  min-width: 80px;
 }
 
 .tab:hover {
@@ -52,11 +161,15 @@
   z-index: 1;
 }
 
+.tabIsActive {
+  border-color: var(--color-gold-dark);
+}
+
 .tabName {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 108px;
+  max-width: 140px;
 }
 
 .tabAP {
@@ -91,7 +204,7 @@
   gap: 6px;
 }
 
-.treeBadge {
+.activeBadge {
   font-size: 10px;
   font-weight: 600;
   padding: 1px 5px;
@@ -152,22 +265,108 @@
   background: var(--color-bg-primary);
 }
 
-/* ── Fate Points section ─────────────────────────────────────────────── */
-.fatePoints {
-  padding: 12px 16px;
+/* ── Unlocked Destinies ──────────────────────────────────────────────── */
+.unlockedSection {
   border-top: 1px solid var(--color-border);
+}
+
+.unlockedToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
   background: var(--color-bg-secondary);
-}
-
-.fatePointsTitle {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--color-text-primary);
-  margin-bottom: 4px;
-}
-
-.fatePointsNote {
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
   font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+
+.unlockedToggle:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.unlockedToggleIcon {
+  font-size: 10px;
   color: var(--color-text-muted);
-  font-style: italic;
+}
+
+.unlockedCount {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.unlockedGrid {
+  padding: 8px 12px;
+  background: var(--color-bg-primary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.unlockedItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.12s;
+  user-select: none;
+  text-align: left;
+}
+
+.unlockedItem:hover {
+  border-color: var(--color-border-light);
+  color: var(--color-text-primary);
+}
+
+.unlockedItemOn {
+  border-color: var(--color-gold-dark);
+  background: rgba(212, 175, 55, 0.12);
+  color: var(--color-gold);
+}
+
+.unlockedSpend {
+  font-size: 10px;
+  color: var(--color-green, #4caf50);
+  font-weight: 700;
+}
+
+.unlockedActions {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.unlockedActionBtn {
+  padding: 3px 10px;
+  font-size: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-panel);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.unlockedActionBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-light);
 }

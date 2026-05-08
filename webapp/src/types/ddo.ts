@@ -367,6 +367,14 @@ export interface CharacterBuild {
   destinyChoices: Record<string, Record<string, number>>
   /** reaper enhancement choices: treeName → itemName → ranks */
   reaperChoices: Record<string, Record<string, number>>
+  /** which of the 3 selected destiny trees is the active (primary) destiny */
+  activeEpicDestiny: string
+  /** the 3 chosen destiny tree names (empty string = slot unused) */
+  selectedDestinyTrees: [string, string, string]
+  /** destiny tree names the character has unlocked in-game */
+  unlockedDestinyTrees: string[]
+  /** twists of fate: enhancement internal names from unlocked destiny trees (5 slots) */
+  twistChoices: string[]
   /** ability → tome bonus (+1 to +7) */
   abilityTomes: Partial<Record<Ability, number>>
   /** skill name → tome bonus (+0 to +7) */
@@ -425,6 +433,10 @@ export function emptyBuild(): CharacterBuild {
     artifactFiligreeSlots: Array.from({ length: 10 }, () => ({ name: '', rare: false })),
     destinyChoices: {},
     reaperChoices: {},
+    activeEpicDestiny: '',
+    selectedDestinyTrees: ['', '', ''],
+    unlockedDestinyTrees: [],
+    twistChoices: ['', '', '', '', ''],
     abilityTomes: {},
     skillTomes: {},
     activeBuffs: [],
