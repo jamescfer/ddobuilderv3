@@ -7,9 +7,16 @@ import EffectSlider from '../common/EffectSlider'
 import styles from './StancesPanel.module.css'
 
 export default function StancesPanel() {
-  const { build } = useCharacter()
+  const { build, dispatch } = useCharacter()
   const [stances, setStances] = useState<Stance[]>([])
   const [loading, setLoading] = useState(true)
+
+  function toggleStance(s: Stance) {
+    const incompatible = Array.isArray(s.IncompatibleStance)
+      ? s.IncompatibleStance
+      : (s.IncompatibleStance ? [s.IncompatibleStance] : undefined)
+    dispatch({ type: 'TOGGLE_STANCE', stanceName: s.Name, incompatible })
+  }
 
   // Slider sources
   const [allSelfBuffs, setAllSelfBuffs] = useState<OptionalBuff[]>([])
@@ -87,15 +94,20 @@ export default function StancesPanel() {
                       <div className={styles.groupTitle}>{grp}</div>
                     )}
                     <div className={styles.stanceList}>
-                      {list.map(s => (
-                        <div
-                          key={s.Name}
-                          className={styles.stance}
-                          title={s.Description ?? s.Name}
-                        >
-                          {s.Name}
-                        </div>
-                      ))}
+                      {list.map(s => {
+                        const isOn = build.activeBuffs.includes(s.Name)
+                        return (
+                          <button
+                            key={s.Name}
+                            className={`${styles.stance} ${isOn ? styles.stanceOn : ''}`}
+                            title={s.Description ?? s.Name}
+                            onClick={() => toggleStance(s)}
+                            type="button"
+                          >
+                            {isOn ? '✓ ' : ''}{s.Name}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 ))}

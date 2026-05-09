@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { CharacterBuild, Ability, FiligreeSlot } from '../types/ddo'
+import type { CharacterBuild, Ability, FiligreeSlot, QuestDifficulty } from '../types/ddo'
 import { emptyBuild, migrateSentientGem } from '../types/ddo'
 
 type Action =
@@ -33,6 +33,7 @@ type Action =
   | { type: 'SET_ABILITY_TOME'; ability: Ability; bonus: number }
   | { type: 'SET_SKILL_TOME'; skill: string; bonus: number }
   | { type: 'TOGGLE_BUFF'; buffName: string }
+  | { type: 'TOGGLE_STANCE'; stanceName: string; incompatible?: string[] }
   | { type: 'TOGGLE_QUEST'; questName: string }
   | { type: 'SET_NOTES'; notes: string }
   | { type: 'SET_SENTIENT_GEM_NAME'; name: string }
@@ -55,6 +56,16 @@ type Action =
   | { type: 'CLEAR_SPELL_METAMAGICS'; className: string }
   | { type: 'SET_CLICKIE_CHARGES'; key: string; remaining: number }
   | { type: 'RESET_ALL_CLICKIES' }
+  // Audit-fix V2 parity actions
+  | { type: 'SET_GUILD_LEVEL'; level: number }
+  | { type: 'TOGGLE_APPLY_GUILD_BUFFS' }
+  | { type: 'SET_QUEST_DIFFICULTY'; questName: string; difficulty: QuestDifficulty | null }
+  | { type: 'SET_SLA_CHARGES'; name: string; charges: number }
+  | { type: 'RESET_ALL_SLA_CHARGES' }
+  | { type: 'SET_ALTERNATE_FEAT'; slotKey: string; featName: string }
+  | { type: 'CLEAR_ALTERNATE_FEAT'; slotKey: string }
+  | { type: 'SET_ATTACK_CHAIN'; chainName: string; attacks: string[] }
+  | { type: 'DELETE_ATTACK_CHAIN'; chainName: string }
 
 function migrateFiligreeSlots(raw: unknown, count: number): FiligreeSlot[] {
   const arr: FiligreeSlot[] = []
@@ -105,6 +116,12 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     trainedSpells: (raw as unknown as { trainedSpells?: Record<string, Record<number, string[]>> }).trainedSpells ?? {},
     spellMetamagics: (raw as unknown as { spellMetamagics?: Record<string, Record<string, string[]>> }).spellMetamagics ?? {},
     clickieCharges: (raw as unknown as { clickieCharges?: Record<string, number> }).clickieCharges ?? {},
+    guildLevel: (raw as unknown as { guildLevel?: number }).guildLevel ?? 0,
+    applyGuildBuffs: (raw as unknown as { applyGuildBuffs?: boolean }).applyGuildBuffs ?? false,
+    questDifficulty: (raw as unknown as { questDifficulty?: Record<string, QuestDifficulty> }).questDifficulty ?? {},
+    slaCharges: (raw as unknown as { slaCharges?: Record<string, number> }).slaCharges ?? {},
+    alternateFeats: (raw as unknown as { alternateFeats?: Record<string, string> }).alternateFeats ?? {},
+    attackChains: (raw as unknown as { attackChains?: Record<string, string[]> }).attackChains ?? {},
   }
 }
 
@@ -227,6 +244,26 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
         : [...state.activeBuffs, action.buffName]
       return { ...state, activeBuffs: active }
     }
+    case 'TOGGLE_STANCE': {
+      const isOn = state.activeBuffs.includes(action.stanceName)
+      let active: string[]
+      if (isOn) {
+        active = state.activeBuffs.filter(b => b !== action.stanceName)
+      } else {
+        // Turning a stance on auto-disables every incompatible stance
+        // (V2 ActiveStances::AddActiveStance behavior).
+        const banned = new Set([action.stanceName, ...(action.incompatible ?? [])])
+        active = [
+          ...state.activeBuffs.filter(b => !banned.has(b) || b === action.stanceName),
+          action.stanceName,
+        ].filter((b, i, a) => a.indexOf(b) === i) // dedupe
+        active = active.filter(b => !(action.incompatible ?? []).includes(b))
+        active.push(action.stanceName)
+        // dedupe again
+        active = active.filter((b, i, a) => a.indexOf(b) === i)
+      }
+      return { ...state, activeBuffs: active }
+    }
     case 'TOGGLE_QUEST':
       return { ...state, completedQuests: { ...state.completedQuests, [action.questName]: !state.completedQuests[action.questName] } }
     case 'SET_NOTES':
@@ -290,6 +327,38 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       return { ...state, clickieCharges: { ...state.clickieCharges, [action.key]: action.remaining } }
     case 'RESET_ALL_CLICKIES':
       return { ...state, clickieCharges: {} }
+    case 'SET_GUILD_LEVEL':
+      return { ...state, guildLevel: Math.max(0, Math.min(200, action.level)) }
+    case 'TOGGLE_APPLY_GUILD_BUFFS':
+      return { ...state, applyGuildBuffs: !state.applyGuildBuffs }
+    case 'SET_QUEST_DIFFICULTY': {
+      const next = { ...state.questDifficulty }
+      if (action.difficulty == null) delete next[action.questName]
+      else next[action.questName] = action.difficulty
+      // Keep boolean record in sync for back-compat consumers.
+      const completedQuests = { ...state.completedQuests }
+      if (action.difficulty == null) delete completedQuests[action.questName]
+      else completedQuests[action.questName] = true
+      return { ...state, questDifficulty: next, completedQuests }
+    }
+    case 'SET_SLA_CHARGES':
+      return { ...state, slaCharges: { ...state.slaCharges, [action.name]: action.charges } }
+    case 'RESET_ALL_SLA_CHARGES':
+      return { ...state, slaCharges: {} }
+    case 'SET_ALTERNATE_FEAT':
+      return { ...state, alternateFeats: { ...state.alternateFeats, [action.slotKey]: action.featName } }
+    case 'CLEAR_ALTERNATE_FEAT': {
+      const next = { ...state.alternateFeats }
+      delete next[action.slotKey]
+      return { ...state, alternateFeats: next }
+    }
+    case 'SET_ATTACK_CHAIN':
+      return { ...state, attackChains: { ...state.attackChains, [action.chainName]: action.attacks } }
+    case 'DELETE_ATTACK_CHAIN': {
+      const next = { ...state.attackChains }
+      delete next[action.chainName]
+      return { ...state, attackChains: next }
+    }
     case 'SET_ENH_CHOICES':
       return { ...state, enhancementChoices: { ...state.enhancementChoices, [action.treeName]: action.choices } }
     case 'SET_ENH_SELECTIONS':

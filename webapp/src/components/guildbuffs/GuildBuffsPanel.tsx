@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../../api'
+import { useCharacter } from '../../context/CharacterContext'
 import type { GuildBuff } from '../../types/ddo'
 import styles from './GuildBuffsPanel.module.css'
 
 export default function GuildBuffsPanel() {
-  const [guildLevel, setGuildLevel] = useState(0)
+  const { build, dispatch } = useCharacter()
+  const guildLevel = build.guildLevel
+  const setGuildLevel = (level: number) => dispatch({ type: 'SET_GUILD_LEVEL', level })
   const [buffs, setBuffs] = useState<GuildBuff[]>([])
 
   useEffect(() => {
@@ -20,11 +23,21 @@ export default function GuildBuffsPanel() {
         Guild Buffs
         {guildLevel > 0 && (
           <span className={styles.activeCount}>
-            {unlockedBuffs.length} buffs active
+            {unlockedBuffs.length} buffs available
           </span>
         )}
       </div>
       <div className="panel-body">
+        <div className={styles.levelControl}>
+          <label>
+            <input
+              type="checkbox"
+              checked={build.applyGuildBuffs}
+              onChange={() => dispatch({ type: 'TOGGLE_APPLY_GUILD_BUFFS' })}
+            />{' '}
+            Apply guild buffs to stats
+          </label>
+        </div>
         <div className={styles.levelControl}>
           <label className={styles.levelLabel} htmlFor="guild-level-input">
             Guild Level: <strong>{guildLevel}</strong>

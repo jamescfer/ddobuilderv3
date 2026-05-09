@@ -73,3 +73,15 @@
 .stanceAuto:hover {
   background: rgba(200, 136, 42, 0.15);
 }
+
+.stanceOn {
+  background: var(--color-gold, #c8882a);
+  color: #000;
+  border-color: var(--color-gold, #c8882a);
+}
+
+button.stance {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+}
