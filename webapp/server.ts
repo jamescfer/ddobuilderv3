@@ -3,9 +3,13 @@ import cors from 'cors'
 import path from 'path'
 import fs from 'fs'
 import { exec } from 'child_process'
-import { glob } from 'glob'
-import { XMLParser } from 'fast-xml-parser'
 import dotenv from 'dotenv'
+import {
+  loadRaces, loadClasses, loadFeats, loadEnhancementTrees, loadSpells,
+  loadWeaponGroups, loadStances, loadItems, loadAugments, loadSetBonuses,
+  loadGuildBuffs, loadFiligreeSets, loadFiligreeBonuses, loadSelfAndPartyBuffs,
+  loadPatrons, loadQuests, loadSentientGems,
+} from './src/server/dataLoaders'
 
 dotenv.config()
 
@@ -17,34 +21,8 @@ app.use(cors())
 app.use(express.json())
 
 // ---------------------------------------------------------------------------
-// XML parser config
-// ---------------------------------------------------------------------------
-const parser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: '',
-  textNodeName: '#text',
-  allowBooleanAttributes: true,
-  parseAttributeValue: true,
-  parseTagValue: true,
-  trimValues: true,
-  isArray: (name) => [
-    'Race', 'Class', 'Feat', 'Effect', 'Requirement', 'RequiresOneOf',
-    'RequiresNoneOf', 'Group', 'Item', 'EnhancementTree', 'EnhancementTreeItem',
-    'EnhancementSelection', 'Selector', 'FeatSlot', 'AutomaticFeats',
-    'ClassSkill', 'Alignment', 'Augment', 'Buff', 'ItemAugment',
-    'SetBonus', 'Gem', 'Stance', 'Spell', 'Patron', 'Quest', 'GuildBuff',
-    'GrantedFeat', 'ClassFeat', 'RacialFeat', 'WeaponGroup', 'Weapon',
-    'OptionalBuff', 'Filigree', 'SpellDC', 'SpellDamage',
-  ].includes(name),
-})
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function readXml(filePath: string): unknown {
-  const xml = fs.readFileSync(filePath, 'utf-8')
-  return parser.parse(xml)
-}
 
 function parseAmount(raw: unknown): number[] {
   if (raw == null) return []
@@ -66,188 +44,26 @@ function cached<T>(key: string, loader: () => T): T {
 }
 
 // ---------------------------------------------------------------------------
-// Data loaders
+// Data loader thunks (each closes over DATA_DIR so the shared module remains
+// stateless and pure functions of dataDir).
 // ---------------------------------------------------------------------------
-function loadRaces() {
-  const dir = path.join(DATA_DIR, 'Races')
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.race.xml'))
-  return files.flatMap(f => {
-    try {
-      const parsed = readXml(path.join(dir, f)) as { Races?: { Race?: unknown[] } }
-      return (parsed?.Races?.Race ?? []) as unknown[]
-    } catch { return [] }
-  })
-}
-
-function loadClasses() {
-  const dir = path.join(DATA_DIR, 'Classes')
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.class.xml'))
-  return files.flatMap(f => {
-    try {
-      const parsed = readXml(path.join(dir, f)) as { Classes?: { Class?: unknown[] } }
-      return (parsed?.Classes?.Class ?? []) as unknown[]
-    } catch { return [] }
-  })
-}
-
-function loadFeats() {
-  const out: unknown[] = []
-  // Standard feats
-  try {
-    const parsed = readXml(path.join(DATA_DIR, 'Feats.xml')) as { Feats?: { Feat?: unknown[] } }
-    const feats = parsed?.Feats?.Feat ?? []
-    out.push(...(Array.isArray(feats) ? feats : [feats]))
-  } catch { /* no Feats.xml */ }
-  // Class-defined feats (Epic Destiny feats live in Epic.class.xml / Legendary.class.xml etc.)
-  const classDir = path.join(DATA_DIR, 'Classes')
-  try {
-    const classFiles = fs.readdirSync(classDir).filter(f => f.endsWith('.class.xml'))
-    for (const f of classFiles) {
-      try {
-        const parsed = readXml(path.join(classDir, f)) as { Classes?: { Class?: unknown } }
-        const classes = parsed?.Classes?.Class
-        const classList = Array.isArray(classes) ? classes : classes ? [classes] : []
-        for (const cls of classList) {
-          const classFeats = (cls as Record<string, unknown>)?.Feat
-          if (!classFeats) continue
-          const list = Array.isArray(classFeats) ? classFeats : [classFeats]
-          out.push(...list)
-        }
-      } catch { /* skip bad file */ }
-    }
-  } catch { /* no Classes dir */ }
-  return out
-}
-
-function loadEnhancementTrees() {
-  const dir = path.join(DATA_DIR, 'EnhancementTrees')
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.tree.xml'))
-  return files.flatMap(f => {
-    try {
-      const parsed = readXml(path.join(dir, f)) as { Enhancements?: { EnhancementTree?: unknown[] } }
-      const trees = (parsed?.Enhancements?.EnhancementTree ?? []) as Record<string, unknown>[]
-      // fast-xml-parser represents self-closing empty tags like <IsReaperTree/> as ""
-      // Normalize these to explicit booleans so client-side filtering is unambiguous
-      return trees.map(tree => ({
-        ...tree,
-        IsReaperTree: 'IsReaperTree' in tree ? true : undefined,
-        IsEpicDestiny: 'IsEpicDestiny' in tree ? true : undefined,
-        IsRacialTree: 'IsRacialTree' in tree ? true : undefined,
-      }))
-    } catch { return [] }
-  })
-}
-
-function loadSpells() {
-  try {
-    const parsed = readXml(path.join(DATA_DIR, 'Spells.xml')) as { Spells?: { Spell?: unknown[] } }
-    return (parsed?.Spells?.Spell ?? []) as unknown[]
-  } catch { return [] }
-}
-
-function loadWeaponGroups() {
-  try {
-    const parsed = readXml(path.join(DATA_DIR, 'WeaponGroupings.xml')) as {
-      WeaponGroupings?: { WeaponGroup?: unknown[] }
-    }
-    return (parsed?.WeaponGroupings?.WeaponGroup ?? []) as unknown[]
-  } catch { return [] }
-}
-
-function loadStances() {
-  try {
-    const parsed = readXml(path.join(DATA_DIR, 'Stances.xml')) as { Stances?: { Stance?: unknown[] } }
-    return (parsed?.Stances?.Stance ?? []) as unknown[]
-  } catch { return [] }
-}
-
-function loadItems() {
-  const dir = path.join(DATA_DIR, 'Items')
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.item'))
-  return files.flatMap(f => {
-    try {
-      const parsed = readXml(path.join(dir, f)) as { Items?: { Item?: unknown[] } }
-      const items = parsed?.Items?.Item
-      if (!items) return []
-      return (Array.isArray(items) ? items : [items]) as unknown[]
-    } catch { return [] }
-  })
-}
-
-function loadAugments() {
-  const dir = path.join(DATA_DIR, 'Augments')
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.augments.xml'))
-  return files.flatMap(f => {
-    try {
-      const parsed = readXml(path.join(dir, f)) as { Augments?: { Augment?: unknown[] } }
-      return (parsed?.Augments?.Augment ?? []) as unknown[]
-    } catch { return [] }
-  })
-}
-
-function loadSetBonuses() {
-  try {
-    const parsed = readXml(path.join(DATA_DIR, 'SetBonuses.xml')) as { SetBonuses?: { SetBonus?: unknown[] } }
-    return (parsed?.SetBonuses?.SetBonus ?? []) as unknown[]
-  } catch { return [] }
-}
-
-function loadGuildBuffs() {
-  try {
-    const parsed = readXml(path.join(DATA_DIR, 'GuildBuffs.xml')) as { GuildBuffs?: { GuildBuff?: unknown[] } }
-    return (parsed?.GuildBuffs?.GuildBuff ?? []) as unknown[]
-  } catch { return [] }
-}
-
-function loadFiligreeSets() {
-  const dir = path.join(DATA_DIR, 'FiligreeSets')
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.Filigree.xml'))
-  return files.flatMap(f => {
-    try {
-      const parsed = readXml(path.join(dir, f)) as { Filigrees?: { Filigree?: unknown[] } }
-      return (parsed?.Filigrees?.Filigree ?? []) as unknown[]
-    } catch { return [] }
-  })
-}
-
-function loadFiligreeBonuses() {
-  const dir = path.join(DATA_DIR, 'FiligreeSets')
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.Filigree.xml'))
-  return files.flatMap(f => {
-    try {
-      const parsed = readXml(path.join(dir, f)) as { Filigrees?: { SetBonus?: unknown[] } }
-      return (parsed?.Filigrees?.SetBonus ?? []) as unknown[]
-    } catch { return [] }
-  })
-}
-
-function loadSelfAndPartyBuffs() {
-  try {
-    const parsed = readXml(path.join(DATA_DIR, 'SelfAndPartyBuffs.xml')) as { SelfAndPartyBuffs?: { OptionalBuff?: unknown[] } }
-    return (parsed?.SelfAndPartyBuffs?.OptionalBuff ?? []) as unknown[]
-  } catch { return [] }
-}
-
-function loadPatrons() {
-  try {
-    const parsed = readXml(path.join(DATA_DIR, 'Patrons.xml')) as { Patrons?: { Patron?: unknown[] } }
-    return (parsed?.Patrons?.Patron ?? []) as unknown[]
-  } catch { return [] }
-}
-
-function loadQuests() {
-  try {
-    const parsed = readXml(path.join(DATA_DIR, 'Quests.xml')) as { Quests?: { Quest?: unknown[] } }
-    return (parsed?.Quests?.Quest ?? []) as unknown[]
-  } catch { return [] }
-}
-
-function loadSentientGems() {
-  try {
-    const parsed = readXml(path.join(DATA_DIR, 'Sentient.gems.xml')) as { SentientGems?: { Gem?: unknown[] } }
-    return (parsed?.SentientGems?.Gem ?? []) as unknown[]
-  } catch { return [] }
-}
+const races = () => loadRaces(DATA_DIR)
+const classes = () => loadClasses(DATA_DIR)
+const feats = () => loadFeats(DATA_DIR)
+const enhancementTrees = () => loadEnhancementTrees(DATA_DIR)
+const spells = () => loadSpells(DATA_DIR)
+const weaponGroups = () => loadWeaponGroups(DATA_DIR)
+const stances = () => loadStances(DATA_DIR)
+const items = () => loadItems(DATA_DIR)
+const augments = () => loadAugments(DATA_DIR)
+const setBonusesData = () => loadSetBonuses(DATA_DIR)
+const guildBuffs = () => loadGuildBuffs(DATA_DIR)
+const filigreeSets = () => loadFiligreeSets(DATA_DIR)
+const filigreeBonuses = () => loadFiligreeBonuses(DATA_DIR)
+const selfAndPartyBuffs = () => loadSelfAndPartyBuffs(DATA_DIR)
+const patrons = () => loadPatrons(DATA_DIR)
+const quests = () => loadQuests(DATA_DIR)
+const sentientGems = () => loadSentientGems(DATA_DIR)
 
 // ---------------------------------------------------------------------------
 // Routes
@@ -265,17 +81,17 @@ app.get('/api/version', (_req, res) => {
 })
 
 app.get('/api/races', (_req, res) => {
-  res.json(cached('races', loadRaces))
+  res.json(cached('races', races))
 })
 
 app.get('/api/classes', (_req, res) => {
-  res.json(cached('classes', loadClasses))
+  res.json(cached('classes', classes))
 })
 
 app.get('/api/feats', (_req, res) => {
-  const feats = cached('feats', loadFeats) as Array<Record<string, unknown>>
+  const allFeats = cached('feats', feats) as unknown as Array<Record<string, unknown>>
   const { group, acquire } = _req.query
-  let result = feats
+  let result = allFeats
   if (group) result = result.filter(f => {
     const g = f['Group']
     return Array.isArray(g) ? g.includes(group) : g === group
@@ -285,25 +101,25 @@ app.get('/api/feats', (_req, res) => {
 })
 
 app.get('/api/enhancements', (_req, res) => {
-  res.json(cached('enhancements', loadEnhancementTrees))
+  res.json(cached('enhancements', enhancementTrees))
 })
 
 app.get('/api/spells', (_req, res) => {
-  res.json(cached('spells', loadSpells))
+  res.json(cached('spells', spells))
 })
 
 app.get('/api/stances', (_req, res) => {
-  res.json(cached('stances', loadStances))
+  res.json(cached('stances', stances))
 })
 
 app.get('/api/weapongroups', (_req, res) => {
-  res.json(cached('weapongroups', loadWeaponGroups))
+  res.json(cached('weapongroups', weaponGroups))
 })
 
 app.get('/api/items', (_req, res) => {
-  const items = cached('items', loadItems) as Array<Record<string, unknown>>
+  const allItems = cached('items', items) as unknown as Array<Record<string, unknown>>
   const { slot, minLevel, maxLevel } = _req.query
-  let result = items
+  let result = allItems
   if (slot && typeof slot === 'string') result = result.filter(i => {
     const s = i['EquipmentSlot'] as Record<string, unknown> | undefined
     return s && slot in s
@@ -314,12 +130,12 @@ app.get('/api/items', (_req, res) => {
 })
 
 app.get('/api/augments', (_req, res) => {
-  const augments = cached('augments', loadAugments) as Array<Record<string, unknown>>
+  const allAugments = cached('augments', augments) as unknown as Array<Record<string, unknown>>
   const { type } = _req.query
   if (type) {
-    res.json(augments.filter(a => a['Type'] === type))
+    res.json(allAugments.filter(a => a['Type'] === type))
   } else {
-    res.json(augments)
+    res.json(allAugments)
   }
 })
 
@@ -329,13 +145,13 @@ app.get('/api/item', (_req, res) => {
     res.status(400).json({ error: 'name query parameter required' })
     return
   }
-  const items = cached('items', loadItems) as Array<Record<string, unknown>>
-  const found = items.find(i => i['Name'] === name)
+  const allItems = cached('items', items) as unknown as Array<Record<string, unknown>>
+  const found = allItems.find(i => i['Name'] === name)
   res.json(found ?? null)
 })
 
 app.get('/api/setbonuses', (_req, res) => {
-  res.json(cached('setbonuses', loadSetBonuses))
+  res.json(cached('setbonuses', setBonusesData))
 })
 
 app.get('/api/item-setbonuses', (req, res) => {
@@ -349,11 +165,11 @@ app.get('/api/item-setbonuses', (req, res) => {
     res.json([])
     return
   }
-  const items = cached('items', loadItems) as Array<Record<string, unknown>>
+  const allItems = cached('items', items) as unknown as Array<Record<string, unknown>>
   // Collect set bonus type counts from matching items
   const counts = new Map<string, number>()
   for (const name of nameList) {
-    const item = items.find(i => i['Name'] === name)
+    const item = allItems.find(i => i['Name'] === name)
     if (!item) continue
     const sb = item['SetBonus']
     if (!sb) continue
@@ -369,24 +185,24 @@ app.get('/api/item-setbonuses', (req, res) => {
 })
 
 app.get('/api/guildbuffs', (_req, res) => {
-  res.json(cached('guildbuffs', loadGuildBuffs))
+  res.json(cached('guildbuffs', guildBuffs))
 })
 
 app.get('/api/filigree', (_req, res) => {
-  res.json(cached('filigree', loadFiligreeSets))
+  res.json(cached('filigree', filigreeSets))
 })
 
 app.get('/api/filigree-bonuses', (_req, res) => {
-  res.json(cached('filigree-bonuses', loadFiligreeBonuses))
+  res.json(cached('filigree-bonuses', filigreeBonuses))
 })
 
 app.get('/api/selfbuffs', (_req, res) => {
-  res.json(cached('selfbuffs', loadSelfAndPartyBuffs))
+  res.json(cached('selfbuffs', selfAndPartyBuffs))
 })
 
-app.get('/api/patrons', (_req, res) => res.json(cached('patrons', loadPatrons)))
-app.get('/api/quests', (_req, res) => res.json(cached('quests', loadQuests)))
-app.get('/api/gems', (_req, res) => res.json(cached('gems', loadSentientGems)))
+app.get('/api/patrons', (_req, res) => res.json(cached('patrons', patrons)))
+app.get('/api/quests', (_req, res) => res.json(cached('quests', quests)))
+app.get('/api/gems', (_req, res) => res.json(cached('gems', sentientGems)))
 
 // ---------------------------------------------------------------------------
 // Auto-update routes
