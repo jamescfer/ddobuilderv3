@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, Race } from '../../types/ddo'
+import type { DDOClass, Race, Feat } from '../../types/ddo'
 import styles from './PastLivesPanel.module.css'
 
 const CLASS_PL_MAX = 3
 const RACIAL_PL_MAX = 3
 const ICONIC_PL_MAX = 1
+const EPIC_PL_MAX_DEFAULT = 3
 
 interface PLGroup {
   title: string
@@ -17,10 +18,12 @@ export default function PastLivesPanel() {
   const { build, dispatch } = useCharacter()
   const [allClasses, setAllClasses] = useState<DDOClass[]>([])
   const [allRaces, setAllRaces] = useState<Race[]>([])
+  const [epicFeats, setEpicFeats] = useState<Feat[]>([])
 
   useEffect(() => {
     api.classes().then(setAllClasses)
     api.races().then(setAllRaces)
+    api.feats({ acquire: 'EpicPastLife' }).then(setEpicFeats).catch(() => setEpicFeats([]))
   }, [])
 
   const heroicClasses = allClasses.filter(c => !c.NotHeroic)
@@ -41,6 +44,28 @@ export default function PastLivesPanel() {
       entries: iconicRaces.map(r => ({ name: r.Name, max: ICONIC_PL_MAX })),
     },
   ]
+
+  // V2 ForumExportDlg.cpp:431 emits "Epic Past Lives" via FeatAcquisition_EpicPastLife.
+  // Group by Sphere so the panel mirrors V2's SpecialFeatsPane layout.
+  if (epicFeats.length > 0) {
+    const bySphere = new Map<string, Feat[]>()
+    for (const f of epicFeats) {
+      const sph = f.Sphere || 'Other'
+      if (!bySphere.has(sph)) bySphere.set(sph, [])
+      bySphere.get(sph)!.push(f)
+    }
+    for (const sph of ['Arcane', 'Divine', 'Martial', 'Primal', 'Other']) {
+      const list = bySphere.get(sph)
+      if (!list) continue
+      groups.push({
+        title: `Epic Past Lives — ${sph} (max 3 each)`,
+        entries: list.map(f => ({
+          name: f.Name,
+          max: f.MaxTimesAcquire ?? EPIC_PL_MAX_DEFAULT,
+        })),
+      })
+    }
+  }
 
   const totalPLs = Object.values(build.pastLives).reduce((s, n) => s + n, 0)
 

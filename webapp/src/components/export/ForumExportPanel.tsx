@@ -5,7 +5,7 @@ import { useBuildStats } from '../../hooks/useBuildStats'
 import { DEFAULT_SECTIONS, emitForumExport, type SectionDef } from '../../lib/export/sections'
 import type {
   DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus,
-  FiligreeSetBonus, Filigree, OptionalBuff,
+  FiligreeSetBonus, Filigree, OptionalBuff, Stance,
 } from '../../types/ddo'
 import styles from './ForumExportPanel.module.css'
 
@@ -24,6 +24,8 @@ export default function ForumExportPanel() {
   const [allSetBonuses, setAllSetBonuses] = useState<SetBonus[]>([])
   const [allFiligreeBonuses, setAllFiligreeBonuses] = useState<FiligreeSetBonus[]>([])
   const [allFiligrees, setAllFiligrees] = useState<Filigree[]>([])
+  const [allStances, setAllStances] = useState<Stance[]>([])
+  const [epicPastLifeFeats, setEpicPastLifeFeats] = useState<Feat[]>([])
   const [gearItems, setGearItems] = useState<Record<string, Item>>({})
 
   useEffect(() => {
@@ -36,6 +38,8 @@ export default function ForumExportPanel() {
     api.setbonuses().then(setAllSetBonuses)
     api.filigreeSetBonuses().then(setAllFiligreeBonuses)
     api.filigree().then(setAllFiligrees)
+    api.stances().then(setAllStances).catch(() => setAllStances([]))
+    api.feats({ acquire: 'EpicPastLife' }).then(setEpicPastLifeFeats).catch(() => setEpicPastLifeFeats([]))
   }, [])
 
   useEffect(() => {
@@ -67,8 +71,11 @@ export default function ForumExportPanel() {
     [enabled],
   )
   const exportText = useMemo(
-    () => emitForumExport({ build, stats }, sections),
-    [build, stats, sections],
+    () => emitForumExport(
+      { build, stats, allClasses, allRaces, allStances, allSelfBuffs, epicPastLifeFeats },
+      sections,
+    ),
+    [build, stats, sections, allClasses, allRaces, allStances, allSelfBuffs, epicPastLifeFeats],
   )
 
   async function handleCopy() {

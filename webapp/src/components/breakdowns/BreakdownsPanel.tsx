@@ -506,6 +506,79 @@ export default function BreakdownsPanel() {
   const ebD8 = stats.resolve('eldritchBlast.d8')
   if (ebD8.total !== 0) eldritchStats.push(fixedRow('Eldritch Blast d8', ebD8.total, `${ebD8.total}d8`, ebD8.bonuses))
 
+  // V2 BreakdownsPane.cpp:2576 "Actions with Charges" — extras + LoH regen + dragonmark.
+  const classResourceStats: StatRowData[] = [
+    statRow('Action Boost (extra)',  'actionBoost.extra',     String),
+    statRow('Lay on Hands (extra)',  'lohExtra',              String),
+    statRow('Lay on Hands regen',    'lohRegen',              String),
+    statRow('Rage (extra)',          'rageExtra',             String),
+    statRow('Smite Evil (extra)',    'smiteExtra',            String),
+    statRow('Wild Empathy (extra)',  'wildEmpathyExtra',      String),
+    statRow('Remove Disease (extra)', 'removeDiseaseExtra',   String),
+    statRow('Dragonmark uses',       'dragonmark.uses',       String),
+  ]
+
+  // V2 BreakdownItemDestinyAps + RAP/UAP/FatePoint
+  const apPoolStats: StatRowData[] = [
+    statRow('Destiny APs (bonus)',  'destinyAP',   sign),
+    statRow('Reaper APs (bonus)',   'reaperAP',    sign),
+    statRow('Universal APs',        'universalAP', sign),
+    statRow('Fate Points',          'fatePoint',   sign),
+  ]
+
+  // V2 BreakdownsPane:2145 "Turn Undead"
+  const turnUndeadStats: StatRowData[] = [
+    statRow('Turn Undead',           'turnUndead',           sign),
+    statRow('Turn bonus',            'turnUndead.bonus',     sign),
+    statRow('Turn dice bonus',       'turnUndead.diceBonus', sign),
+    statRow('Turn level bonus',      'turnUndead.levelBonus', sign),
+    statRow('Turn max dice',         'turnUndead.maxDice',   sign),
+  ]
+
+  // V2 BreakdownsPane:1559 "Ki Breakdowns"
+  const kiStats: StatRowData[] = [
+    statRow('Maximum Ki',  'ki.max',      sign),
+    statRow('Ki on hit',   'ki.hit',      sign),
+    statRow('Ki on crit',  'ki.critical', sign),
+    statRow('Ki passive',  'ki.passive',  sign),
+  ]
+
+  // V2 BreakdownsPane:1890 "Song Breakdowns" — V3 routes most song.* into their
+  // primary stat keys tagged 'Music', so only count/duration are unique here.
+  function fmtDuration(secs: number): string {
+    if (secs <= 0) return '+0'
+    const s = secs % 60
+    const m = Math.floor(secs / 60) % 60
+    const h = Math.floor(secs / 3600)
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+    if (m > 0) return `${m}:${String(s).padStart(2,'0')}`
+    return `${s}s`
+  }
+  const songCountTotal = stats.total('song.count')
+  const songDurationTotal = stats.total('song.duration')
+  const songStats: StatRowData[] = [
+    fixedRow('Song count',    songCountTotal,    sign(songCountTotal),    stats.resolve('song.count').bonuses,    songCountTotal === 0),
+    fixedRow('Song duration', songDurationTotal, fmtDuration(songDurationTotal), stats.resolve('song.duration').bonuses, songDurationTotal === 0),
+  ]
+
+  // V2 niche flags / mechanics — surface so they're visible when set.
+  function flagDisplay(n: number): string { return n > 0 ? '✓' : '–' }
+  const specialEffectStats: StatRowData[] = [
+    statRow('True Seeing',           'trueSeeing',           flagDisplay),
+    statRow('Tumble while charging', 'tumbleCharge',         flagDisplay),
+    statRow('Unconscious range',     'unconsciousRange',     sign),
+    statRow('Secondary shield bash', 'secondaryShieldBash',  flagDisplay),
+    statRow('Point-blank shot rng',  'pointBlankShotRange',  sign),
+    statRow('Wild Surge chance',     'wildsurgeChance',      pct),
+    statRow('Imbue dice',            'imbueDice',            sign),
+    statRow('Negative levels',       'negativeLevel',        sign),
+    statRow('Rune arm charge rate',  'runeArm.chargeRate',   sign),
+    statRow('Rune arm stable charge', 'runeArm.stableCharge', sign),
+    statRow('Implement in hands',    'implementInHands.Any', flagDisplay),
+    statRow('Implement bonus',       'implementBonus',       sign),
+    statRow('BAB override',          'babOverride',          n => n > 0 ? String(n) : '—'),
+  ]
+
   const skillStats: StatRowData[] = SKILLS.map(({ name }) => {
     const resolved = stats.resolve(`skill.${name}`)
     return {
@@ -635,6 +708,30 @@ export default function BreakdownsPanel() {
                 {hirelingStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
               </Section>
             )}
+
+            <Section title="Class Resources" defaultOpen={false}>
+              {classResourceStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+            </Section>
+
+            <Section title="Action Points" defaultOpen={false}>
+              {apPoolStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+            </Section>
+
+            <Section title="Turn Undead" defaultOpen={false}>
+              {turnUndeadStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+            </Section>
+
+            <Section title="Ki" defaultOpen={false}>
+              {kiStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+            </Section>
+
+            <Section title="Songs" defaultOpen={false}>
+              {songStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+            </Section>
+
+            <Section title="Special Effects" defaultOpen={false}>
+              {specialEffectStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+            </Section>
 
             <Section title="Skills" defaultOpen={false}>
               {skillStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}

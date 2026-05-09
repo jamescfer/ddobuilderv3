@@ -558,6 +558,7 @@ export function parseEffect(
       return [make('dodge', 'Dodge')]
 
     case 'DodgeCap':
+    case 'DodgeCapBonus':
       return [make('dodgeCap')]
 
     case 'MaxDexBonus':
@@ -700,6 +701,7 @@ export function parseEffect(
       return [make('spellPenetration')]
 
     case 'SpellPenetration':
+    case 'SpellPenetrationBonus':
     case 'SpellResistancePenetration':
       return [make('spellPenetration')]
 
@@ -1417,6 +1419,7 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
       return [make('mdb')]
 
     case 'DodgeCap':
+    case 'DodgeCapBonus':
       return [make('dodgeCap')]
 
     case 'EnergyResistance':
@@ -1544,6 +1547,7 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
       return [make('spellPenetration')]
 
     case 'SpellPenetration':
+    case 'SpellPenetrationBonus':
       return [make('spellPenetration')]
 
     // -----------------------------------------------------------------------
