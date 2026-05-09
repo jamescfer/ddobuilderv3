@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, Buff, GuildBuff, WeaponGroup, Patron, Quest } from '../../types/ddo'
+import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, Buff, GuildBuff, WeaponGroup, Patron, Quest, Spell } from '../../types/ddo'
 import { useBuildStats, computePatronFavorTotals, favorRankForTotal } from '../../hooks/useBuildStats'
 import type { ResolvedBonus } from '../../lib/bonus'
 import { SKILLS, SCHOOL_DCS, SPELL_POWER_TYPES, SPELL_POWER_LABELS } from '../../lib/gamedata'
@@ -218,6 +218,7 @@ export default function BreakdownsPanel() {
   const [tip, setTip] = useState<TipState | null>(null)
   const [allPatrons,        setAllPatrons]        = useState<Patron[]>([])
   const [allQuests,         setAllQuests]         = useState<Quest[]>([])
+  const [allSpells,         setAllSpells]         = useState<Spell[]>([])
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Load static data once
@@ -236,6 +237,7 @@ export default function BreakdownsPanel() {
     api.weaponGroups().then(setAllWeaponGroups)
     api.patrons().then(setAllPatrons)
     api.quests().then(setAllQuests)
+    api.spells().then(setAllSpells)
   }, [])
 
   // Resolve gear items whenever equipped slots change
@@ -763,6 +765,91 @@ export default function BreakdownsPanel() {
     }
   }
 
+  // V2 BreakdownItemWeapon family — per-equipped-weapon detail. We don't yet
+  // split the weapon.* stat aggregates into mainhand/offhand stats (a deeper
+  // refactor); instead we show each equipped weapon's intrinsic data alongside
+  // the global weapon.* aggregate so the build's per-hand picture is clear.
+  function gearLookup(...keys: string[]): { item: Item; slot: string } | null {
+    for (const k of keys) {
+      const it = gearItems[k]
+      if (it) return { item: it, slot: k }
+    }
+    return null
+  }
+  function buildWeaponRows(slotLabel: string, hit: { item: Item; slot: string } | null): StatRowData[] {
+    if (!hit?.item.Weapon) return []
+    const item = hit.item
+    const rows: StatRowData[] = []
+    rows.push({
+      label: 'Weapon',
+      total: 0,
+      display: `${item.Name} (${item.Weapon})`,
+      bonuses: [{ value: 0, type: 'Equipped', source: `${slotLabel}: ${item.Name}`, active: true }],
+    })
+    if (item.BaseDice) {
+      const dmgMult = item.WeaponDamage ?? 1
+      const display = dmgMult !== 1
+        ? `${item.BaseDice.Number}d${item.BaseDice.Sides} ×${dmgMult}`
+        : `${item.BaseDice.Number}d${item.BaseDice.Sides}`
+      rows.push({
+        label: 'Base Damage',
+        total: 0,
+        display,
+        bonuses: [{ value: 0, type: 'Base', source: `${item.Name} dice`, active: true }],
+      })
+    }
+    if (item.CriticalMultiplier != null) {
+      const bonus = stats.total('weapon.critMult')
+      const total = item.CriticalMultiplier + bonus
+      rows.push({
+        label: 'Crit Multiplier',
+        total,
+        display: `×${total}`,
+        bonuses: [
+          { value: item.CriticalMultiplier, type: 'Base', source: `${item.Name}`, active: true },
+          ...stats.resolve('weapon.critMult').bonuses,
+        ],
+      })
+    }
+    if (item.CriticalThreatRange != null) {
+      const bonus = stats.total('weapon.threatRange')
+      const total = item.CriticalThreatRange + bonus
+      const display = total > 1 ? `${21 - total}–20` : '20'
+      rows.push({
+        label: 'Threat Range',
+        total,
+        display,
+        bonuses: [
+          { value: item.CriticalThreatRange, type: 'Base', source: `${item.Name}`, active: true },
+          ...stats.resolve('weapon.threatRange').bonuses,
+        ],
+      })
+    }
+    if (item.AttackModifier) {
+      const ams = Array.isArray(item.AttackModifier) ? item.AttackModifier : [item.AttackModifier]
+      rows.push({
+        label: 'Attack Mod',
+        total: 0,
+        display: ams.join(' / '),
+        bonuses: [{ value: 0, type: 'Base', source: `${item.Name}`, active: true }],
+      })
+    }
+    const drBypass = Array.isArray(item.DRBypass) ? item.DRBypass : (item.DRBypass ? [item.DRBypass] : [])
+    if (drBypass.length > 0) {
+      rows.push({
+        label: 'DR Bypass',
+        total: 0,
+        display: drBypass.join(', '),
+        bonuses: [{ value: 0, type: 'Base', source: `${item.Name}`, active: true }],
+      })
+    }
+    return rows
+  }
+  const mainHand = gearLookup('Weapon1', 'MainHand', 'Weapon')
+  const offHand  = gearLookup('Weapon2', 'OffHand')
+  const mainWeaponRows = buildWeaponRows('Main hand', mainHand)
+  const offWeaponRows  = buildWeaponRows('Off hand', offHand)
+
   // V2 on-hit dice damage (e.g. flaming weapon's +6d6 Fire). These are emitted
   // by the effect parser as 'weapon.diceDamage.<DamageType>' with the *average*
   // dice value (Number * (Sides + 1) / 2). We don't currently round-trip the
@@ -776,6 +863,154 @@ export default function BreakdownsPanel() {
       return fixedRow(`${dmg}: avg ${r.total}`, r.total, sign(r.total), r.bonuses)
     })
     .filter(s => s.total !== 0)
+
+  // ── V2 Spell Damage (BreakdownItemDice + Spell::SpellDamageText port) ────
+  // For each spell whose <SpellDamage> block has a SpellPower scaler matching
+  // one of the build's casting elements, compute expected hit / crit damage:
+  //
+  //   dice          = BaseDice.Number + BonusDice.Number * floor(CL / PerCasterLevels)
+  //                   (clamped at MaxCasterLevel if present)
+  //   base          = dice * ((Sides + 1) / 2 + Bonus)   // expected die roll
+  //   dpsBase       = base * (1 + spellPower / 100)
+  //   dpsWithCrit   = dpsBase * (1 + (critPct / 100) * (critMult - 1))
+  //
+  // Per-class CL isn't directly available without more wiring, so we use
+  // build.totalLevel as the effective CL (clamped to MaxCasterLevel). This
+  // is an approximation: a 10 Wizard / 10 Fighter shows CL 20 for Magic
+  // Missile rather than 10. Slice E can swap in per-class CL if/when the
+  // panel grows that capability.
+  function num(v: number | string | undefined, fallback = 0): number {
+    if (v == null) return fallback
+    if (typeof v === 'number') return v
+    const n = Number(v)
+    return Number.isFinite(n) ? n : fallback
+  }
+  type SpellDmgRow = {
+    spell: Spell
+    school: string
+    name: string
+    dpsBase: number
+    dpsCrit: number
+    diceText: string                  // e.g. "5d6+5 Fire"
+    spellPower: number
+    critPct: number
+    critMult: number
+    spBonuses: ResolvedBonus[]
+    critBonuses: ResolvedBonus[]
+    cl: number
+    damage: string
+    powerKey: string
+  }
+
+  const spellDamageRows: SpellDmgRow[] = []
+  {
+    const buildCL = build.totalLevel  // approximation; per-class CL not threaded in panel
+    for (const spell of allSpells) {
+      const damages = spell.SpellDamage == null
+        ? []
+        : Array.isArray(spell.SpellDamage) ? spell.SpellDamage : [spell.SpellDamage]
+      if (damages.length === 0) continue                                   // utility spell, skip
+
+      const maxCL = num(spell.MaxCasterLevel, Infinity)
+      const effCL = Math.min(maxCL, buildCL)
+
+      for (const dmg of damages) {
+        const rawPower = dmg.SpellPower
+        if (!rawPower) continue                                            // un-scaled (rare); skip
+        // V2 stat keys collapse 'Light' / 'Alignment' / 'Light/Alignment'
+        // into a single 'LightAlignment' bucket — match that here so the
+        // stats.total('sp.…') lookup hits the right slot.
+        const powerKey =
+          (rawPower === 'Light/Alignment' || rawPower === 'Light' || rawPower === 'Alignment')
+            ? 'LightAlignment'
+            : rawPower
+        const sd = dmg.SpellDice
+        if (!sd) continue
+        const base = sd.BaseDice
+        const bonus = sd.BonusDice
+        const perCL = Math.max(1, num(sd.PerCasterLevels, 1))
+
+        // BaseDice = flat dice (always rolled). BonusDice = scales with CL
+        // (1 instance per `perCL` caster levels).
+        const baseN = num(base?.Number, 0)
+        const baseS = num(base?.Sides, 0)
+        const baseB = num(base?.Bonus, 0)
+        const bonusN = num(bonus?.Number, 0)
+        const bonusS = num(bonus?.Sides, 0)
+        const bonusB = num(bonus?.Bonus, 0)
+
+        const stacks = Math.floor(effCL / perCL)
+        const baseAvg = baseN > 0 && baseS > 0
+          ? baseN * ((baseS + 1) / 2) + baseB
+          : 0
+        const bonusAvgPerStack = bonusN > 0 && bonusS > 0
+          ? bonusN * ((bonusS + 1) / 2) + bonusB
+          : 0
+        const totalAvg = baseAvg + bonusAvgPerStack * stacks
+        if (totalAvg <= 0) continue
+
+        const sp = stats.total(`sp.${powerKey}`) + stats.total('sp.Universal')
+        const critPct = Math.min(100, 5 + stats.total(`spCrit.${powerKey}`) + stats.total('spCrit.Universal'))
+        const critMult = 1.5
+
+        const dpsBase = totalAvg * (1 + sp / 100)
+        const dpsCrit = dpsBase * (1 + (critPct / 100) * (critMult - 1))
+
+        const parts: string[] = []
+        if (baseN > 0 && baseS > 0) {
+          parts.push(`${baseN}d${baseS}${baseB ? sign(baseB) : ''}`)
+        }
+        if (bonusN > 0 && bonusS > 0 && stacks > 0) {
+          const totalDice = bonusN * stacks
+          const totalFlatBonus = bonusB * stacks
+          parts.push(`${totalDice}d${bonusS}${totalFlatBonus ? sign(totalFlatBonus) : ''}`)
+        } else if (bonusN > 0 && bonusS > 0) {
+          parts.push(`${bonusN}d${bonusS}${bonusB ? sign(bonusB) : ''}/${perCL}CL`)
+        }
+        const diceText = `${parts.join(' + ') || '—'} ${dmg.Damage ?? ''}`.trim()
+
+        const spBonuses: ResolvedBonus[] = [
+          ...stats.resolve(`sp.${powerKey}`).bonuses,
+          ...stats.resolve('sp.Universal').bonuses,
+        ]
+        const critBonuses: ResolvedBonus[] = [
+          { value: 5, type: 'Base', source: 'Base spell crit (5%)', active: true },
+          ...stats.resolve(`spCrit.${powerKey}`).bonuses,
+          ...stats.resolve('spCrit.Universal').bonuses,
+        ]
+
+        spellDamageRows.push({
+          spell,
+          school: spell.School ?? 'Unknown',
+          name: spell.Name,
+          dpsBase,
+          dpsCrit,
+          diceText,
+          spellPower: sp,
+          critPct,
+          critMult,
+          spBonuses,
+          critBonuses,
+          cl: effCL,
+          damage: dmg.Damage ?? '',
+          powerKey,
+        })
+      }
+    }
+  }
+  // Group by school for display. We do NOT filter by "schools the build can
+  // cast"; surfacing every damage spell is more useful than guessing wrong,
+  // and the spell power column already grays out non-relevant entries.
+  const spellDamageBySchool = new Map<string, SpellDmgRow[]>()
+  for (const row of spellDamageRows) {
+    let arr = spellDamageBySchool.get(row.school)
+    if (!arr) { arr = []; spellDamageBySchool.set(row.school, arr) }
+    arr.push(row)
+  }
+  for (const arr of spellDamageBySchool.values()) {
+    arr.sort((a, b) => a.name.localeCompare(b.name))
+  }
+  const spellSchoolsSorted = [...spellDamageBySchool.keys()].sort()
 
   const skillStats: StatRowData[] = SKILLS.map(({ name }) => {
     const resolved = stats.resolve(`skill.${name}`)
@@ -998,9 +1233,60 @@ export default function BreakdownsPanel() {
               </Section>
             )}
 
+            {mainWeaponRows.length > 0 && (
+              <Section title="Main Hand Weapon" defaultOpen={false}>
+                {mainWeaponRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {offWeaponRows.length > 0 && (
+              <Section title="Off Hand Weapon" defaultOpen={false}>
+                {offWeaponRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
             {onHitDamageRows.length > 0 && (
               <Section title="On-Hit Damage" defaultOpen={false}>
                 {onHitDamageRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {spellDamageRows.length > 0 && (
+              <Section title="Spell Damage" defaultOpen={false}>
+                {spellSchoolsSorted.map(school => (
+                  <div key={school}>
+                    <div className={styles.spellSchoolHeader}>{school}</div>
+                    {spellDamageBySchool.get(school)!.map(row => {
+                      const display = `${Math.floor(row.dpsBase)} (${Math.floor(row.dpsCrit)} w/crit)`
+                      const tipBonuses: ResolvedBonus[] = [
+                        { value: row.cl, type: 'CL', source: `Effective caster level (cap ${row.spell.MaxCasterLevel != null ? num(row.spell.MaxCasterLevel, 0) : '—'})`, active: true },
+                        { value: 0, type: 'Dice', source: row.diceText, active: true },
+                        { value: row.spellPower, type: 'Spell Power', source: `${row.powerKey} + Universal`, active: true },
+                        ...row.spBonuses,
+                        { value: Number(row.critPct.toFixed(1)), type: 'Crit %', source: `${row.powerKey} crit chance`, active: true },
+                        ...row.critBonuses,
+                        { value: row.critMult, type: 'Crit ×', source: 'Base critical multiplier', active: true },
+                      ]
+                      return (
+                        <div
+                          key={`${row.name}|${row.powerKey}|${row.damage}`}
+                          className={`${styles.row} ${styles.spellDmgRow}`}
+                          onMouseEnter={e => {
+                            const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                            setTip({
+                              label: `${row.name}${row.damage ? ` (${row.damage})` : ''}`,
+                              display, bonuses: tipBonuses, x: r.right, y: r.top,
+                            })
+                          }}
+                          onMouseLeave={hideTip}
+                        >
+                          <span className={styles.label}>{row.name}{row.damage ? ` (${row.damage})` : ''}</span>
+                          <span className={`${styles.value} ${styles.spellDmgValue}`}>{display}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
               </Section>
             )}
 

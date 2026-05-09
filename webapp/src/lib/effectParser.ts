@@ -29,6 +29,10 @@ export interface EffectContext {
   sliderValues?: Record<string, number>     // slider name → current value
   weaponClassMain?: Set<string>             // main-hand weapon class memberships
   weaponClassOffhand?: Set<string>          // off-hand weapon class memberships
+  /** V2 WeaponDamageType (Slashing / Piercing / Bludgeoning / Ranged / Thrown)
+   * for the equipped main-hand weapon — drives WeaponXxxDamageType effect gating. */
+  weaponDamageTypeMain?: Set<string>
+  weaponDamageTypeOffhand?: Set<string>
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +285,22 @@ function weaponEffectMatches(items: string[], ctx?: EffectContext): boolean {
     for (const i of items) {
       if (ctx.weaponClassMain.has(i)) return true
     }
+  }
+  return false
+}
+
+/**
+ * V2 WeaponXxxDamageType gate — applies when the effect's Item list contains a
+ * damage type the equipped main-hand weapon actually deals (Slashing /
+ * Piercing / Bludgeoning / Ranged / Thrown). Permissive when ctx.
+ * weaponDamageTypeMain isn't populated.
+ */
+function weaponDamageTypeMatches(items: string[], ctx?: EffectContext): boolean {
+  if (items.length === 0) return true
+  if (items.includes('All')) return true
+  if (!ctx?.weaponDamageTypeMain) return true
+  for (const i of items) {
+    if (ctx.weaponDamageTypeMain.has(i)) return true
   }
   return false
 }
@@ -1343,16 +1363,27 @@ export function parseEffect(
         .filter(i => i !== 'All')
         .map(i => make(`weapon.damageAbilityCrit.${i}`))
 
-    // Damage-type variants (e.g. "+5 to all Slashing weapons") — V2 gates on
-    // the equipped weapon's damage-type list. v3 doesn't currently track
-    // per-weapon damage types, so these stay as no-ops until that data is
-    // wired through.
+    // V2 damage-type variants (e.g. "+5 to all Slashing weapons"). Gate on
+    // the equipped main-hand weapon's damage-type list (ctx.weaponDamageTypeMain
+    // populated from Item.DRBypass + weapon-class membership), then emit to
+    // the unified weapon.* / melee.* stats. Off-hand damage-type effects are
+    // not currently surfaced separately; the per-weapon mainhand/offhand split
+    // will revisit this.
     case 'WeaponAttackBonusDamageType':
+      if (!weaponDamageTypeMatches(items, ctx)) return []
+      return [make('melee.toHit')]
     case 'WeaponAttackBonusCriticalDamageType':
+      if (!weaponDamageTypeMatches(items, ctx)) return []
+      return [make('weapon.toHitCrit')]
     case 'WeaponDamageBonusDamageType':
+      if (!weaponDamageTypeMatches(items, ctx)) return []
+      return [make('melee.damage')]
     case 'WeaponDamageBonusCriticalDamageType':
+      if (!weaponDamageTypeMatches(items, ctx)) return []
+      return [make('weapon.damageCrit')]
     case 'WeaponKeenDamageType':
-      return []
+      if (!weaponDamageTypeMatches(items, ctx)) return []
+      return [make('weapon.keen')]
 
     // -----------------------------------------------------------------------
     // Control-flow / UI-only effects (no flat stat contribution)
@@ -2117,14 +2148,22 @@ export function parseItemBuff(buff: ItemBuff, source: string, ctx?: EffectContex
       if (!weaponEffectMatches(items, ctx)) return []
       return [make('weapon.damageCrit')]
 
-    // Damage-type variants — V2 gates on equipped-weapon damage types, which
-    // v3 doesn't track per-weapon yet.
+    // V2 damage-type variants — gate on equipped weapon's damage-type list.
     case 'WeaponAttackBonusDamageType':
+      if (!weaponDamageTypeMatches(items, ctx)) return []
+      return [make('melee.toHit')]
     case 'WeaponAttackBonusCriticalDamageType':
+      if (!weaponDamageTypeMatches(items, ctx)) return []
+      return [make('weapon.toHitCrit')]
     case 'WeaponDamageBonusDamageType':
+      if (!weaponDamageTypeMatches(items, ctx)) return []
+      return [make('melee.damage')]
     case 'WeaponDamageBonusCriticalDamageType':
+      if (!weaponDamageTypeMatches(items, ctx)) return []
+      return [make('weapon.damageCrit')]
     case 'WeaponKeenDamageType':
-      return []
+      if (!weaponDamageTypeMatches(items, ctx)) return []
+      return [make('weapon.keen')]
 
     // -----------------------------------------------------------------------
     // Control-flow / UI-only

@@ -755,6 +755,34 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     const ctxWeaponClassMain    = weaponClassesOf(['Weapon1', 'MainHand', 'Weapon'])
     const ctxWeaponClassOffhand = weaponClassesOf(['Weapon2', 'OffHand'])
 
+    // V2 WeaponDamageType: derive Slashing / Piercing / Bludgeoning from the
+    // weapon's DRBypass list (V2 stores these as DR-bypass tags), plus
+    // Ranged / Thrown from weapon-class membership. Used to gate
+    // WeaponXxxDamageType effects (e.g. "+5 attack vs all Slashing weapons").
+    const DR_TO_DAMAGE: Record<string, string> = {
+      Slash:    'Slashing',
+      Pierce:   'Piercing',
+      Bludgeon: 'Bludgeoning',
+    }
+    function damageTypesOf(slotKeys: string[], classes: Set<string>): Set<string> {
+      const out = new Set<string>()
+      for (const sk of slotKeys) {
+        const item = gearItems[sk]
+        if (!item?.Weapon) continue
+        for (const dr of toArray(item.DRBypass)) {
+          const mapped = DR_TO_DAMAGE[dr]
+          if (mapped) out.add(mapped)
+        }
+      }
+      if (classes.has('Bows') || classes.has('Crossbow') || classes.has('RepeatingCrossbow') || classes.has('Ranged')) {
+        out.add('Ranged')
+      }
+      if (classes.has('Thrown')) out.add('Thrown')
+      return out
+    }
+    const ctxWeaponDamageTypeMain    = damageTypesOf(['Weapon1', 'MainHand', 'Weapon'], ctxWeaponClassMain)
+    const ctxWeaponDamageTypeOffhand = damageTypesOf(['Weapon2', 'OffHand'], ctxWeaponClassOffhand)
+
     // V2 AType=FeatCount uses the number of times a feat has been trained.
     // Feat slots can repeat (e.g. Improved Critical for different weapon
     // groups). featChoices is a flat map of slotKey → featName, so we count
@@ -795,6 +823,8 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       setBonusCounts: ctxSetBonusCounts,
       weaponClassMain: ctxWeaponClassMain.size > 0 ? ctxWeaponClassMain : undefined,
       weaponClassOffhand: ctxWeaponClassOffhand.size > 0 ? ctxWeaponClassOffhand : undefined,
+      weaponDamageTypeMain: ctxWeaponDamageTypeMain.size > 0 ? ctxWeaponDamageTypeMain : undefined,
+      weaponDamageTypeOffhand: ctxWeaponDamageTypeOffhand.size > 0 ? ctxWeaponDamageTypeOffhand : undefined,
     }
 
     // ── Ability base scores ───────────────────────────────────────────────
@@ -1020,6 +1050,69 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
 
     // Ranged
     if (dexMod !== 0) add(map, 'ranged.toHit', { value: dexMod, type: 'Ability mod', source: 'Dexterity' })
+
+    // V2 BreakdownItemWeaponAttackBonus non-proficient penalty (-4 to attack
+    // when wielding a weapon you don't have proficiency for). V2 maintains a
+    // dynamic "Proficiency" weapon group built up from AddGroupWeapon effects
+    // on trained feats (player-chosen, race-granted, class auto-feats, past
+    // lives). We mirror that by walking ctx.feats and extracting their
+    // AddGroupWeapon Item="Proficiency" effects.
+    {
+      const proficientWeapons = new Set<string>()
+      for (const featName of ctx.feats) {
+        const feat = allFeats.find(f => f.Name === featName)
+        if (!feat) continue
+        for (const eff of toArray(feat.Effect)) {
+          if (eff.Type !== 'AddGroupWeapon') continue
+          const items = toArray(eff.Item)
+          if (items[0] !== 'Proficiency') continue
+          for (let i = 1; i < items.length; i++) proficientWeapons.add(items[i])
+        }
+      }
+      function isProficient(weaponName: string): boolean {
+        if (!weaponName) return true
+        if (proficientWeapons.has(weaponName)) return true
+        // V2 enum names drop spaces ("GreatAxe"); WeaponGroupings.xml uses spaces.
+        // Accept both directions.
+        const spaced = weaponName.replace(/([a-z])([A-Z])/g, '$1 $2')
+        if (proficientWeapons.has(spaced)) return true
+        const noSpace = weaponName.replace(/\s+/g, '')
+        if (proficientWeapons.has(noSpace)) return true
+        return false
+      }
+      function isRangedWeapon(weaponName: string): boolean {
+        const classes = wgIndex.get(weaponName) ?? wgIndex.get(weaponName.replace(/\s+/g, ''))
+        if (!classes) return false
+        return classes.has('Ranged') || classes.has('Bows') || classes.has('Crossbow') ||
+               classes.has('RepeatingCrossbow') || classes.has('Thrown')
+      }
+      for (const slotKey of ['Weapon1', 'MainHand', 'Weapon']) {
+        const item = gearItems[slotKey]
+        if (!item?.Weapon) continue
+        if (isProficient(item.Weapon)) break
+        const targetKey = isRangedWeapon(item.Weapon) ? 'ranged.toHit' : 'melee.toHit'
+        add(map, targetKey, {
+          value: -4,
+          type: 'Penalty',
+          source: `Non-proficient: ${item.Weapon}`,
+        })
+        break
+      }
+      // Off-hand contributes its own non-proficient penalty to melee.toHit
+      // (V2 evaluates each weapon separately; with the unified melee.toHit
+      // stat we add the penalty once per non-proficient hand).
+      for (const slotKey of ['Weapon2', 'OffHand']) {
+        const item = gearItems[slotKey]
+        if (!item?.Weapon) continue
+        if (isProficient(item.Weapon)) break
+        add(map, 'melee.toHit', {
+          value: -4,
+          type: 'Penalty',
+          source: `Non-proficient (off-hand): ${item.Weapon}`,
+        })
+        break
+      }
+    }
 
     // Initiative
     if (dexMod !== 0) add(map, 'initiative', { value: dexMod, type: 'Ability mod', source: 'Dexterity' })
