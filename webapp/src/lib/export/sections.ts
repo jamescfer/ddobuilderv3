@@ -4,8 +4,11 @@
 // Each section is a pure function returning string lines so the panel can pluck
 // any subset and re-order them.
 
-import type { CharacterBuild, Ability } from '../../types/ddo'
+import type {
+  CharacterBuild, Ability, DDOClass, Race, Stance, OptionalBuff, Feat,
+} from '../../types/ddo'
 import type { BuildStats } from '../../hooks/useBuildStats'
+import { buildAutomaticFeatGroups } from '../automaticFeats'
 
 const ABILITY_ABBREVS: Record<Ability, string> = {
   Strength: 'STR', Dexterity: 'DEX', Constitution: 'CON',
@@ -19,6 +22,15 @@ function abMod(score: number): number { return Math.floor((score - 10) / 2) }
 export interface SectionContext {
   build: CharacterBuild
   stats: BuildStats | null
+  /** Optional static catalogues — required for sections that derive data from
+   *  race/class/stance/feat tables (AutomaticFeats, SelfAndPartyBuffs,
+   *  PastLives split, …). */
+  allClasses?: DDOClass[]
+  allRaces?: Race[]
+  allStances?: Stance[]
+  allSelfBuffs?: OptionalBuff[]
+  /** Feats with Acquire === 'EpicPastLife'. */
+  epicPastLifeFeats?: Feat[]
 }
 
 export interface SectionDef {
@@ -46,11 +58,47 @@ const characterHeader: SectionDef = {
 const pastLives: SectionDef = {
   id: 'PastLives',
   label: 'Past lives',
-  emit: ({ build }) => {
+  // V2 ForumExportDlg.cpp:421-435 splits past lives by category before listing.
+  emit: ({ build, allClasses, allRaces, epicPastLifeFeats }) => {
     const entries = Object.entries(build.pastLives).filter(([, c]) => c > 0)
     if (entries.length === 0) return []
+
+    const heroicNames = new Set((allClasses ?? []).filter(c => !c.NotHeroic).map(c => c.Name))
+    const racialNames = new Set((allRaces ?? []).filter(r => !r.NotHeroic && !r.IsIconic).map(r => r.Name))
+    const iconicNames = new Set((allRaces ?? []).filter(r => !r.NotHeroic && r.IsIconic).map(r => r.Name))
+    const epicNames   = new Set((epicPastLifeFeats ?? []).map(f => f.Name))
+
+    const buckets: Record<string, Array<[string, number]>> = {
+      'Heroic Past Lives': [], 'Iconic Past Lives': [],
+      'Epic Past Lives': [],   'Racial Past Lives': [],
+      'Other Past Lives': [],
+    }
+    for (const e of entries) {
+      const [src] = e
+      if (heroicNames.has(src)) buckets['Heroic Past Lives'].push(e)
+      else if (iconicNames.has(src)) buckets['Iconic Past Lives'].push(e)
+      else if (epicNames.has(src))   buckets['Epic Past Lives'].push(e)
+      else if (racialNames.has(src)) buckets['Racial Past Lives'].push(e)
+      else                           buckets['Other Past Lives'].push(e)
+    }
+
     const out = ['[b]Past Lives[/b]:']
-    out.push('  ' + entries.sort(([a], [b]) => a.localeCompare(b)).map(([s, c]) => `${s} x${c}`).join(', '))
+    for (const label of Object.keys(buckets)) {
+      const bucket = buckets[label]
+      if (bucket.length === 0) continue
+      const list = bucket.sort(([a], [b]) => a.localeCompare(b))
+        .map(([s, c]) => `${s} x${c}`)
+        .join(', ')
+      out.push(`  ${label}: ${list}`)
+    }
+    // Pre-catalogue fallback: if no catalogues supplied (everything went into
+    // 'Other'), keep the legacy flat output instead of an unhelpful header.
+    if (out.length === 2 && buckets['Other Past Lives'].length === entries.length) {
+      return [
+        '[b]Past Lives[/b]:',
+        '  ' + entries.sort(([a], [b]) => a.localeCompare(b)).map(([s, c]) => `${s} x${c}`).join(', '),
+      ]
+    }
     return out
   },
 }
@@ -134,9 +182,52 @@ const skills: SectionDef = {
 const stances: SectionDef = {
   id: 'ActiveStances',
   label: 'Active stances',
-  emit: ({ build }) => {
+  emit: ({ build, allStances }) => {
     if (build.activeBuffs.length === 0) return []
-    return ['[b]Active Stances[/b]:', '  ' + build.activeBuffs.join(', ')]
+    // When stance catalogue is available, only emit names that are actually
+    // stances (the rest go to SelfAndPartyBuffs). Without it, fall back to
+    // emitting the full activeBuffs list to preserve prior behaviour.
+    const list = allStances && allStances.length > 0
+      ? build.activeBuffs.filter(n => allStances.some(s => s.Name === n))
+      : build.activeBuffs
+    if (list.length === 0) return []
+    return ['[b]Active Stances[/b]:', '  ' + list.join(', ')]
+  },
+}
+
+// V2 ForumExportDlg.cpp:1583-1610 (FES_SelfAndPartyBuffs) — lists toggled
+// optional/self buffs distinct from stances.
+const selfAndPartyBuffs: SectionDef = {
+  id: 'SelfAndPartyBuffs',
+  label: 'Self & party buffs',
+  emit: ({ build, allStances, allSelfBuffs }) => {
+    if (build.activeBuffs.length === 0) return []
+    let list = build.activeBuffs
+    if (allStances && allStances.length > 0) {
+      const stanceNames = new Set(allStances.map(s => s.Name))
+      list = list.filter(n => !stanceNames.has(n))
+    }
+    if (allSelfBuffs && allSelfBuffs.length > 0) {
+      const buffNames = new Set(allSelfBuffs.map(b => b.Name))
+      list = list.filter(n => buffNames.has(n))
+    }
+    if (list.length === 0) return []
+    return ['[b]Self & Party Buffs[/b]:', '  ' + list.join(', ')]
+  },
+}
+
+// V2 ForumExportDlg.cpp:1454-1530 (FES_AutomaticFeats) — auto-granted feats
+// from race + class auto-feat tables + completionist gates.
+const automaticFeats: SectionDef = {
+  id: 'AutomaticFeats',
+  label: 'Automatic feats',
+  emit: ({ build, allClasses, allRaces }) => {
+    if (!allClasses || !allRaces) return []
+    const groups = buildAutomaticFeatGroups(build, allClasses, allRaces)
+    if (groups.length === 0) return []
+    const out = ['[b]Automatic Feats[/b]:']
+    for (const g of groups) out.push(`  ${g.source}: ${g.feats.join(', ')}`)
+    return out
   },
 }
 
@@ -375,9 +466,11 @@ export const DEFAULT_SECTIONS: SectionDef[] = [
   energyResistances,
   featSelections,
   grantedFeats,
+  automaticFeats,
   consolidatedFeats,
   skills,
   stances,
+  selfAndPartyBuffs,
   enhancements,
   epicDestinies,
   reaperTrees,

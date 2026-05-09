@@ -123,6 +123,8 @@ export interface Feat {
   Icon?: string
   Group?: string | string[]
   Acquire?: string
+  /** V2 Feat::Sphere — used to categorise epic past lives (Arcane / Divine / Martial / Primal). */
+  Sphere?: string
   MaxTimesAcquire?: number
   Requirements?: Requirements
   Effect?: Effect | Effect[]
