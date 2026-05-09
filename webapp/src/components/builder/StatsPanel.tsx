@@ -30,9 +30,15 @@ function saveBonus(saveType: string | undefined, levels: number): number {
   return Math.floor(levels / 3)
 }
 
-function hpForClass(cls: DDOClass, levels: number, conMod: number): number {
+/**
+ * V2 BreakdownItemHitpoints.cpp:74-83 — class HP per level. Heroic classes
+ * use full HD; Epic and Legendary use half HD per level. CON bonus is
+ * applied separately (per-total-level, not per-class).
+ */
+function classHp(cls: DDOClass, levels: number): number {
   const hd = cls.HitPoints ?? 6
-  return levels * (hd + conMod)
+  if (cls.Name === 'Epic' || cls.Name === 'Legendary') return Math.floor(hd * levels / 2)
+  return hd * levels
 }
 
 export default function StatsPanel() {
@@ -61,6 +67,9 @@ export default function StatsPanel() {
   const levelClasses = getLevelClasses(build)
   const counts: Record<string, number> = {}
   for (const c of levelClasses) if (c) counts[c] = (counts[c] ?? 0) + 1
+  // Include Epic / Legendary tiers (V2 BreakdownItem* surfaces these).
+  if ((build.epicLevels ?? 0) > 0) counts['Epic'] = build.epicLevels
+  if ((build.legendaryLevels ?? 0) > 0) counts['Legendary'] = build.legendaryLevels
 
   for (const [name, levels] of Object.entries(counts)) {
     const cls = allClasses.find(c => c.Name === name)
@@ -69,8 +78,11 @@ export default function StatsPanel() {
     fort += saveBonus(cls.Fortitude, levels)
     ref += saveBonus(cls.Reflex, levels)
     will += saveBonus(cls.Will, levels)
-    hp += hpForClass(cls, levels, conMod)
+    hp += classHp(cls, levels)
   }
+  // V2 parity: CON-mod HP applied per total character level, not per class.
+  const totalCharLevel = build.totalLevel + (build.epicLevels ?? 0) + (build.legendaryLevels ?? 0)
+  hp += conMod * totalCharLevel
   // Skill points: per-character-level (V2 parity — first level is ×4)
   for (let i = 0; i < levelClasses.length && i < 20; i++) {
     const name = levelClasses[i]
