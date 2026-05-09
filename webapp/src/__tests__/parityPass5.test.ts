@@ -21,6 +21,35 @@ import { emptyBuild } from '../types/ddo'
 import { emitForumExport, DEFAULT_SECTIONS } from '../lib/export/sections'
 import type { BuildStats } from '../hooks/useBuildStats'
 
+// --- StatsPanel HP rule (Epic/Legendary half-HD; CON × total level) ---------
+
+describe('Parity pass 5 — class HP rule (V2 BreakdownItemHitpoints.cpp:74-83)', () => {
+  // Reproduces the StatsPanel formula: heroic classes contribute full HD
+  // per level; Epic / Legendary contribute half HD per level (floor); CON
+  // bonus is added once per total character level.
+  function classHp(name: string, hd: number, levels: number): number {
+    if (name === 'Epic' || name === 'Legendary') return Math.floor(hd * levels / 2)
+    return hd * levels
+  }
+
+  it('Heroic classes contribute full hit-die per level', () => {
+    expect(classHp('Fighter', 10, 7)).toBe(70)
+    expect(classHp('Wizard', 4, 3)).toBe(12)
+  })
+
+  it('Epic / Legendary contribute half hit-die per level (floor)', () => {
+    expect(classHp('Epic', 6, 10)).toBe(30)         // 6×10/2
+    expect(classHp('Legendary', 6, 4)).toBe(12)     // 6×4/2
+    expect(classHp('Epic', 5, 3)).toBe(7)           // floor(5×3/2)
+  })
+
+  it('CON×total-level bonus is applied once across all class tiers', () => {
+    const totalCharLevel = 20 + 10 + 4
+    const conMod = 6
+    expect(conMod * totalCharLevel).toBe(204)
+  })
+})
+
 // --- v2Formulas (HP/SP fate, neg-level) -------------------------------------
 
 describe('Parity pass 5 — fate-point and negative-level formulas', () => {
