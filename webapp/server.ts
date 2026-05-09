@@ -9,6 +9,7 @@ import {
   loadWeaponGroups, loadStances, loadItems, loadAugments, loadSetBonuses,
   loadGuildBuffs, loadFiligreeSets, loadFiligreeBonuses, loadSelfAndPartyBuffs,
   loadPatrons, loadQuests, loadSentientGems,
+  loadAttackRates, loadBonusTypes, loadChallenges, loadItemBuffs, loadItemClickies,
 } from './src/server/dataLoaders'
 
 dotenv.config()
@@ -64,6 +65,11 @@ const selfAndPartyBuffs = () => loadSelfAndPartyBuffs(DATA_DIR)
 const patrons = () => loadPatrons(DATA_DIR)
 const quests = () => loadQuests(DATA_DIR)
 const sentientGems = () => loadSentientGems(DATA_DIR)
+const attackRates = () => loadAttackRates(DATA_DIR)
+const bonusTypes = () => loadBonusTypes(DATA_DIR)
+const challenges = () => loadChallenges(DATA_DIR)
+const itemBuffs = () => loadItemBuffs(DATA_DIR)
+const itemClickies = () => loadItemClickies(DATA_DIR)
 
 // ---------------------------------------------------------------------------
 // Routes
@@ -203,6 +209,13 @@ app.get('/api/selfbuffs', (_req, res) => {
 app.get('/api/patrons', (_req, res) => res.json(cached('patrons', patrons)))
 app.get('/api/quests', (_req, res) => res.json(cached('quests', quests)))
 app.get('/api/gems', (_req, res) => res.json(cached('gems', sentientGems)))
+
+// V2-parity additions exposed to the client (each loaded lazily and cached)
+app.get('/api/attack-rates', (_req, res) => res.json(cached('attack-rates', attackRates)))
+app.get('/api/bonus-types', (_req, res) => res.json(cached('bonus-types', bonusTypes)))
+app.get('/api/challenges', (_req, res) => res.json(cached('challenges', challenges)))
+app.get('/api/item-buffs', (_req, res) => res.json(cached('item-buffs', itemBuffs)))
+app.get('/api/item-clickies', (_req, res) => res.json(cached('item-clickies', itemClickies)))
 
 // ---------------------------------------------------------------------------
 // Auto-update routes

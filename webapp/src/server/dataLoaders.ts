@@ -241,6 +241,82 @@ export function loadSentientGems(dataDir: string): SentientGem[] {
   } catch { return [] }
 }
 
+// ---------------------------------------------------------------------------
+// V2-parity additions: AttackRates, BonusTypes, Challenges, ItemBuffs,
+// ItemClickies. These were not loaded by V3 previously even though they
+// ship in the V2 DataFiles distribution.
+// ---------------------------------------------------------------------------
+
+/** V2 AttackRates.xml — attacks-per-minute tables keyed by combat style. */
+export interface AttackRate {
+  Style: string
+  Race?: string
+  AttacksPerMinute?: string
+}
+
+export function loadAttackRates(dataDir: string): AttackRate[] {
+  try {
+    const parsed = readXml(path.join(dataDir, 'AttackRates.xml')) as { AttackRates?: { Rate?: unknown[] } }
+    return (parsed?.AttackRates?.Rate ?? []) as AttackRate[]
+  } catch { return [] }
+}
+
+/** V2 BonusTypes.xml — stacking rules by bonus type name. */
+export interface BonusTypeSpec {
+  Name: string
+  Stacking?: 'Highest Only' | 'Stacking' | string
+}
+
+export function loadBonusTypes(dataDir: string): BonusTypeSpec[] {
+  try {
+    const parsed = readXml(path.join(dataDir, 'BonusTypes.xml')) as { BonusTypes?: { Bonus?: unknown[] } }
+    return (parsed?.BonusTypes?.Bonus ?? []) as BonusTypeSpec[]
+  } catch { return [] }
+}
+
+/** V2 Challenges.xml (added 2.0.0.79) — patron-affiliated challenges. */
+export interface Challenge {
+  Name: string
+  Patron?: string
+  AdventurePack?: string
+  LevelRange?: string | { '#text'?: string }
+  Favor?: number
+}
+
+export function loadChallenges(dataDir: string): Challenge[] {
+  try {
+    const parsed = readXml(path.join(dataDir, 'Challenges.xml')) as { Challenges?: { Challenge?: unknown[] } }
+    return (parsed?.Challenges?.Challenge ?? []) as Challenge[]
+  } catch { return [] }
+}
+
+/** V2 ItemBuffs.xml — item-buff display-text catalogue (Type → text). */
+export interface ItemBuffSpec {
+  Type: string
+  DisplayText?: string
+}
+
+export function loadItemBuffs(dataDir: string): ItemBuffSpec[] {
+  try {
+    const parsed = readXml(path.join(dataDir, 'ItemBuffs.xml')) as { Buffs?: { Buff?: unknown[] } }
+    return (parsed?.Buffs?.Buff ?? []) as ItemBuffSpec[]
+  } catch { return [] }
+}
+
+/** V2 ItemClickies.xml — clickie spell catalog (description + icon). */
+export interface ItemClickieSpec {
+  Name: string
+  Description?: string
+  Icon?: string
+}
+
+export function loadItemClickies(dataDir: string): ItemClickieSpec[] {
+  try {
+    const parsed = readXml(path.join(dataDir, 'ItemClickies.xml')) as { Spells?: { Spell?: unknown[] } }
+    return (parsed?.Spells?.Spell ?? []) as ItemClickieSpec[]
+  } catch { return [] }
+}
+
 /**
  * Convenience: load every catalogue. Returns the same shape the React
  * `BuildStatsInput` expects (minus `gearItems`, which depend on the
@@ -260,6 +336,11 @@ export interface LoadedCatalogues {
   allSpells: Spell[]
   allGuildBuffs: GuildBuff[]
   allItems: Item[]
+  allAttackRates: AttackRate[]
+  allBonusTypes: BonusTypeSpec[]
+  allChallenges: Challenge[]
+  allItemBuffs: ItemBuffSpec[]
+  allItemClickies: ItemClickieSpec[]
 }
 
 export function loadAllCatalogues(dataDir: string): LoadedCatalogues {
@@ -277,5 +358,10 @@ export function loadAllCatalogues(dataDir: string): LoadedCatalogues {
     allSpells: loadSpells(dataDir),
     allGuildBuffs: loadGuildBuffs(dataDir),
     allItems: loadItems(dataDir),
+    allAttackRates: loadAttackRates(dataDir),
+    allBonusTypes: loadBonusTypes(dataDir),
+    allChallenges: loadChallenges(dataDir),
+    allItemBuffs: loadItemBuffs(dataDir),
+    allItemClickies: loadItemClickies(dataDir),
   }
 }

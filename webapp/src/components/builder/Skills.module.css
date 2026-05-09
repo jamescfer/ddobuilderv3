@@ -164,3 +164,128 @@
   font-size: 11px;
   color: var(--color-text-muted);
 }
+
+/* ── View toggle ───────────────────────────────────────────────────── */
+
+.viewToggle {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0 12px;
+  padding: 4px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.viewToggleBtn {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.viewToggleBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.viewToggleBtnActive {
+  background: var(--color-bg-active);
+  border-color: var(--color-border);
+  color: var(--color-gold-light);
+}
+
+/* ── Per-level grid ────────────────────────────────────────────────── */
+
+.perLevelGrid {
+  display: grid;
+  grid-template-columns: 100px repeat(20, 1fr);
+  font-size: 11px;
+  border-collapse: collapse;
+}
+
+.perLevelHeader {
+  position: sticky;
+  top: 0;
+  background: var(--color-bg-primary);
+  padding: 4px 2px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--color-border);
+  z-index: 1;
+}
+
+.perLevelHeader:first-child {
+  text-align: left;
+  padding-left: 4px;
+}
+
+.perLevelRow {
+  display: contents;
+}
+
+.perLevelLabel {
+  padding: 3px 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.perLevelCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-left: 1px solid rgba(255,255,255,0.02);
+}
+
+.perLevelInput {
+  width: 100%;
+  height: 22px;
+  padding: 0;
+  font-size: 11px;
+  text-align: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.perLevelInput:focus {
+  outline: none;
+  border-color: var(--color-gold-light);
+  background: var(--color-bg-active);
+}
+
+.perLevelInput[data-zero='true'] {
+  color: var(--color-text-muted);
+}
+
+.perLevelCellLocked {
+  background: rgba(0,0,0,0.2);
+}
+
+.perLevelTotalCell {
+  text-align: center;
+  padding: 3px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-gold-light);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.perLevelOverflow {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--color-red);
+}
