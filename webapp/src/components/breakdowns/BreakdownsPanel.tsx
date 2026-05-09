@@ -205,6 +205,7 @@ export default function BreakdownsPanel() {
   const [allSetBonuses,     setAllSetBonuses]     = useState<SetBonus[]>([])
   const [allFiligreeBonuses,setAllFiligreeBonuses]= useState<FiligreeSetBonus[]>([])
   const [allFiligrees,      setAllFiligrees]      = useState<Filigree[]>([])
+  const [allWeaponGroups,   setAllWeaponGroups]   = useState<import('../../lib/weapons/groups').WeaponGroupSpec[]>([])
   const [gearItems,         setGearItems]         = useState<Record<string, Item>>({})
   const [tip, setTip] = useState<TipState | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -220,6 +221,7 @@ export default function BreakdownsPanel() {
     api.setbonuses().then(setAllSetBonuses)
     api.filigreeSetBonuses().then(setAllFiligreeBonuses)
     api.filigree().then(setAllFiligrees)
+    api.weaponGroups().then(setAllWeaponGroups).catch(() => setAllWeaponGroups([]))
   }, [])
 
   // Resolve gear items whenever equipped slots change
@@ -247,9 +249,11 @@ export default function BreakdownsPanel() {
     () => ({
       allClasses, allRaces, allFeats, allTrees, gearItems,
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+      allWeaponGroups,
     }),
     [allClasses, allRaces, allFeats, allTrees, gearItems,
-     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees],
+     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+     allWeaponGroups],
   )
   const stats = useBuildStats(statsInput)
 
@@ -330,9 +334,54 @@ export default function BreakdownsPanel() {
     statRow('Fortification',  'fortification',  pct),
     statRow('Concealment',    'concealment',    pct),
     statRow('Displacement',   'displacement',   pct),
+    statRow('Incorporeality',  'incorporeality', pct),
+    statRow('Regeneration',    'regeneration',   String),
+    statRow('Ghost Touch',     'ghostTouch',     String),
     fixedRow('Move Speed', stats.total('speed'), pct(stats.total('speed')), stats.resolve('speed').bonuses),
     statRow('Spell Resistance', 'spellResistance', String),
   ]
+
+  // Hireling stat rows (V2 parity Stream 4) — only show when there's data.
+  const hirelingStats: StatRowData[] = (() => {
+    const rows: StatRowData[] = []
+    const keys = [
+      ['Hit Points', 'hireling.hp'],
+      ['PRR', 'hireling.prr'],
+      ['MRR', 'hireling.mrr'],
+      ['Dodge', 'hireling.dodge'],
+      ['Fortification', 'hireling.fort'],
+      ['Concealment', 'hireling.concealment'],
+      ['Melee Power', 'hireling.melee.power'],
+      ['Ranged Power', 'hireling.ranged.power'],
+    ] as const
+    for (const [label, k] of keys) {
+      const r = stats.resolve(k)
+      if (r.total !== 0 || r.bonuses.length > 0) rows.push(fixedRow(label, r.total, String(r.total), r.bonuses))
+    }
+    // Per-ability hireling bonuses
+    for (const ab of ABILITIES) {
+      const r = stats.resolve(`hireling.ability.${ab}`)
+      if (r.total !== 0) rows.push(fixedRow(`${ab} (hireling)`, r.total, sign(r.total), r.bonuses, false))
+    }
+    // All-ability hireling bonus
+    const allAb = stats.resolve('hireling.ability.All')
+    if (allAb.total !== 0) rows.push(fixedRow('All abilities', allAb.total, sign(allAb.total), allAb.bonuses))
+    // Saves
+    for (const sv of ['Fort', 'Reflex', 'Will', 'All'] as const) {
+      const r = stats.resolve(`hireling.save.${sv}`)
+      if (r.total !== 0) rows.push(fixedRow(`Save ${sv}`, r.total, sign(r.total), r.bonuses))
+    }
+    // Spell power
+    const allSp = stats.resolve('hireling.sp.All')
+    if (allSp.total !== 0) rows.push(fixedRow('All spell power', allSp.total, sign(allSp.total), allSp.bonuses))
+    // Granted feats encoded in bonusType
+    const grantedRes = stats.resolve('hireling.grantedFeats')
+    if (grantedRes.bonuses.length > 0) {
+      const feats = grantedRes.bonuses.filter(b => b.active).map(b => b.type).join(', ')
+      rows.push(fixedRow('Granted feats', grantedRes.bonuses.length, feats, grantedRes.bonuses))
+    }
+    return rows
+  })()
 
   // Energy Resistance / Absorption / DR rows (one per element with non-zero value)
   const ENERGY_TYPES = ['Fire','Cold','Acid','Electric','Sonic','Force','Light','Negative','Positive','Poison','Repair'] as const
@@ -532,6 +581,12 @@ export default function BreakdownsPanel() {
             <Section title="Combat">
               {miscStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
             </Section>
+
+            {hirelingStats.length > 0 && (
+              <Section title="Hireling" defaultOpen={false}>
+                {hirelingStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
 
             <Section title="Skills" defaultOpen={false}>
               {skillStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}

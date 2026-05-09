@@ -11,16 +11,19 @@
 
 import { useMemo } from 'react'
 import { useCharacter } from '../context/CharacterContext'
+import type { CharacterBuild } from '../types/ddo'
 import { SKILLS } from '../lib/gamedata'
 import type {
   Race, DDOClass, Feat, EnhancementTree, EnhancementTreeItem, Item,
   Effect, EnhancementSelection, Augment, SetBonus, FiligreeSetBonus, Filigree,
-  OptionalBuff, FiligreeSlot,
+  OptionalBuff, FiligreeSlot, Spell,
 } from '../types/ddo'
 import { parseEffect, parseItemBuff } from '../lib/effectParser'
 import type { EffectContext } from '../lib/effectParser'
 import { resolveBonus, emptyResolvedStat } from '../lib/bonus'
 import type { RawBonus, ResolvedStat } from '../lib/bonus'
+import { deriveWeaponClasses } from '../lib/weapons/groups'
+import type { WeaponGroupSpec } from '../lib/weapons/groups'
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -64,6 +67,10 @@ export interface BuildStatsInput {
   allFiligreeBonuses: FiligreeSetBonus[]
   allFiligrees: Filigree[]
   gearItems: Record<string, Item>    // slot → resolved Item object
+  /** Static weapon-group catalogue (from /api/weapongroups). Optional. */
+  allWeaponGroups?: WeaponGroupSpec[]
+  /** All spell metadata (from /api/spells). Optional — used for trained-spell self-effects. */
+  allSpells?: Spell[]
 }
 
 // ---------------------------------------------------------------------------
@@ -433,6 +440,31 @@ function accumulateSelfBuffs(
   }
 }
 
+/**
+ * Trained-spell self-effects. V2 parity: spells with Effect entries (e.g.
+ * passive buffs cast on self) contribute their bonuses while trained.
+ * Stance-gated effects fire only when their gating stance is active.
+ */
+function accumulateTrainedSpells(
+  map: StatMap,
+  trainedSpells: Record<string, Record<number, string[]>> | undefined,
+  allSpells: Spell[],
+  ctx?: EffectContext,
+): void {
+  if (!trainedSpells) return
+  for (const [, byLevel] of Object.entries(trainedSpells)) {
+    for (const names of Object.values(byLevel)) {
+      for (const spellName of names) {
+        const spell = allSpells.find(s => s.Name === spellName)
+        if (!spell) continue
+        for (const eff of toArray(spell.Effect)) {
+          addParsed(map, parseEffect(eff, 1, `Spell: ${spell.Name}`, 0, 0, ctx))
+        }
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Weapon info extractor
 // ---------------------------------------------------------------------------
@@ -469,8 +501,9 @@ function extractArmorMaxDex(gearItems: Record<string, Item>): number | null {
 // Main hook
 // ---------------------------------------------------------------------------
 
-export function useBuildStats(input: BuildStatsInput): BuildStats {
-  const { build } = useCharacter()
+export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterBuild): BuildStats {
+  const ctx = useCharacter()
+  const build = buildOverride ?? ctx.build
 
   const statMap = useMemo<StatMap>(() => {
     const map: StatMap = new Map()
@@ -478,6 +511,7 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     const {
       allClasses, allRaces, allFeats, allTrees, gearItems,
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+      allWeaponGroups, allSpells,
     } = input
 
     // ──────────────────────────────────────────────────────────────────────
@@ -548,8 +582,24 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     }
     ctxBAB = Math.min(MAX_BAB, ctxBAB)
     const ctxWeaponTypes = new Set<string>()
-    for (const item of Object.values(gearItems)) {
-      if (item.Weapon) ctxWeaponTypes.add(item.Weapon)
+    let mainWeaponType = ''
+    let offWeaponType = ''
+    for (const [slot, item] of Object.entries(gearItems)) {
+      if (item.Weapon) {
+        ctxWeaponTypes.add(item.Weapon)
+        if (slot === 'Weapon1' || slot === 'MainHand' || slot === 'Weapon') {
+          mainWeaponType ||= item.Weapon
+        }
+        if (slot === 'Weapon2' || slot === 'OffHand') {
+          offWeaponType ||= item.Weapon
+        }
+      }
+    }
+    const groups = allWeaponGroups ?? []
+    const ctxWeaponClassMain = deriveWeaponClasses(mainWeaponType, groups)
+    const ctxWeaponClassOff = deriveWeaponClasses(offWeaponType, groups)
+    const ctxSliderValues: Record<string, number> = {
+      ...((build as { sliderValues?: Record<string, number> }).sliderValues ?? {}),
     }
     const ctx: EffectContext = {
       race: build.race,
@@ -563,6 +613,9 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       stances: ctxStances,
       bab: ctxBAB,
       weaponTypes: ctxWeaponTypes,
+      sliderValues: ctxSliderValues,
+      weaponClassMain: ctxWeaponClassMain,
+      weaponClassOffhand: ctxWeaponClassOff,
     }
 
     // ── Ability base scores ───────────────────────────────────────────────
@@ -663,7 +716,15 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     accumulateGear(map, gearItems)
 
     // ── Augments ─────────────────────────────────────────────────────────
-    accumulateAugments(map, build.augmentChoices, allAugments, ctx)
+    // Include sentient-gem augments alongside regular slot augments (Stream 3).
+    const allAugmentChoices = { ...build.augmentChoices } as Record<string, string>
+    if (build.sentientGem.majorAugment) {
+      allAugmentChoices['SentientMajor'] = build.sentientGem.majorAugment
+    }
+    if (build.sentientGem.minorAugment) {
+      allAugmentChoices['SentientMinor'] = build.sentientGem.minorAugment
+    }
+    accumulateAugments(map, allAugmentChoices, allAugments, ctx)
 
     // ── Gear set bonuses ──────────────────────────────────────────────────
     accumulateSetBonuses(map, gearItems, allSetBonuses, ctx)
@@ -673,6 +734,11 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
 
     // ── Self / party buffs ────────────────────────────────────────────────
     accumulateSelfBuffs(map, build.activeBuffs, allSelfBuffs, ctx)
+
+    // ── Trained-spell self-effects (V2 parity) ────────────────────────────
+    if (allSpells && allSpells.length > 0) {
+      accumulateTrainedSpells(map, build.trainedSpells, allSpells, ctx)
+    }
 
     // ── Skill tomes ───────────────────────────────────────────────────────
     for (const [skill, bonus] of Object.entries(build.skillTomes ?? {})) {

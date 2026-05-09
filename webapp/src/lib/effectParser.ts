@@ -620,10 +620,14 @@ export function parseEffect(
       return []
 
     case 'Fortification':
+    case 'FortificationBase':
       return [make('fortification')]
 
     case 'Concealment':
       return [make('concealment')]
+
+    case 'Incorporeality':
+      return [make('incorporeality')]
 
     case 'MoveSpeed':
     case 'MovementSpeed':
@@ -1017,9 +1021,6 @@ export function parseEffect(
     case 'WildsurgeChance':
       return [make('wildsurgeChance')]
 
-    case 'Incorporeality':
-      return [make('incorporeality')]
-
     case 'ImbueDice':
       return [make('imbueDice')]
 
@@ -1141,21 +1142,42 @@ export function parseEffect(
       return []
 
     // -----------------------------------------------------------------------
-    // Hireling stats (modeled separately; not applied to the player build)
+    // Hireling stats (Stream 4 — surfaced under their own Breakdowns section).
     // -----------------------------------------------------------------------
     case 'HirelingAbilityBonus':
+      return items.length > 0
+        ? items.map(it => make(`hireling.ability.${it}`))
+        : [make('hireling.ability.All')]
     case 'HirelingConcealment':
+      return [make('hireling.concealment')]
     case 'HirelingHitpoints':
+      return [make('hireling.hp')]
     case 'HirelingFortification':
+      return [make('hireling.fort')]
     case 'HirelingPRR':
+      return [make('hireling.prr')]
     case 'HirelingMRR':
+      return [make('hireling.mrr')]
     case 'HirelingDodge':
+      return [make('hireling.dodge')]
     case 'HirelingMeleePower':
+      return [make('hireling.melee.power')]
     case 'HirelingRangedPower':
+      return [make('hireling.ranged.power')]
     case 'HirelingSpellPower':
+      return items.length > 0
+        ? items.map(it => make(`hireling.sp.${it}`))
+        : [make('hireling.sp.All')]
     case 'HirelingSaveBonus':
+      return items.length > 0
+        ? items.map(it => make(`hireling.save.${it}`))
+        : [make('hireling.save.All')]
     case 'HirelingGrantFeat':
-      return []
+      // Encode the granted feat name in bonusType so the Hireling section can
+      // surface a list of granted feats without polluting the resolver math.
+      return items.length > 0
+        ? items.map(it => ({ statKey: 'hireling.grantedFeats', value: 1, bonusType: it, source }))
+        : []
 
     // -----------------------------------------------------------------------
     // Weapon-specific effects (modeled by the weapon breakdown engine, not
@@ -1200,17 +1222,29 @@ export function parseEffect(
       return []
 
     // -----------------------------------------------------------------------
+    // Niche surfaced stats (V2 parity): regen, guard, ghost touch, etc.
+    // -----------------------------------------------------------------------
+    case 'Regeneration':
+      return [make('regeneration')]
+
+    case 'Guard':
+      return [make(items.length > 0 ? `guard.${items[0]}` : 'guard')]
+
+    case 'GhostTouch':
+      return [make('ghostTouch')]
+
+    case 'ImplementInYourHands':
+      return items.length > 0
+        ? items.map(item => make(`implementInHands.${item}`))
+        : [make('implementInHands.Any')]
+
+    case 'SpellPowerReplacement':
+      return items.length > 0
+        ? items.map(item => make(`spellPowerReplacement.${normalizeSpellElement(item)}`))
+        : []
+
+    // -----------------------------------------------------------------------
     // Control-flow / UI-only effects (no flat stat contribution)
-    //   GrantFeat / GrantSpell / SpellListAddition / SpellLikeAbility — change
-    //     the available feats/spells, handled by feat/spell aggregation.
-    //   AddGroupWeapon / MergeGroups — modify weapon-group memberships.
-    //   ExclusionGroup / ExcludeFeatSelection — gate selectors.
-    //   CreateSlider — declares a slider; SliderValue effects consume it.
-    //   EnhancementTree / DestinyTree — declare tree availability.
-    //   ItemClickie / SLACharge — declares clickies / SLAs.
-    //   SpellPowerReplacement / ImplementInYourHands — caster-level overrides.
-    //   Regeneration / RustSusceptability — situational; not currently surfaced.
-    //   NotModeled / Unknown — explicitly inert.
     // -----------------------------------------------------------------------
     case 'AddGroupWeapon':
     case 'MergeGroups':
@@ -1225,9 +1259,6 @@ export function parseEffect(
     case 'DestinyTree':
     case 'ItemClickie':
     case 'SLACharge':
-    case 'SpellPowerReplacement':
-    case 'ImplementInYourHands':
-    case 'Regeneration':
     case 'RustSusceptability':
     case 'NotModeled':
     case 'Unknown':
@@ -1849,21 +1880,40 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
     case 'RuneArmStableCharge':    return [make('runeArm.stableCharge')]
 
     // -----------------------------------------------------------------------
-    // Hireling stats — modeled separately from the player build.
+    // Hireling stats (Stream 4 — surfaced under their own Breakdowns section).
     // -----------------------------------------------------------------------
     case 'HirelingAbilityBonus':
+      return items.length > 0
+        ? items.map(it => make(`hireling.ability.${it}`))
+        : [make('hireling.ability.All')]
     case 'HirelingConcealment':
+      return [make('hireling.concealment')]
     case 'HirelingHitpoints':
+      return [make('hireling.hp')]
     case 'HirelingFortification':
+      return [make('hireling.fort')]
     case 'HirelingPRR':
+      return [make('hireling.prr')]
     case 'HirelingMRR':
+      return [make('hireling.mrr')]
     case 'HirelingDodge':
+      return [make('hireling.dodge')]
     case 'HirelingMeleePower':
+      return [make('hireling.melee.power')]
     case 'HirelingRangedPower':
+      return [make('hireling.ranged.power')]
     case 'HirelingSpellPower':
+      return items.length > 0
+        ? items.map(it => make(`hireling.sp.${it}`))
+        : [make('hireling.sp.All')]
     case 'HirelingSaveBonus':
+      return items.length > 0
+        ? items.map(it => make(`hireling.save.${it}`))
+        : [make('hireling.save.All')]
     case 'HirelingGrantFeat':
-      return []
+      return items.length > 0
+        ? items.map(it => ({ statKey: 'hireling.grantedFeats', value: 1, bonusType: it, source }))
+        : []
 
     // -----------------------------------------------------------------------
     // Weapon-specific (modeled by the weapon breakdown engine)
@@ -1910,6 +1960,28 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
       return []
 
     // -----------------------------------------------------------------------
+    // Niche surfaced stats (V2 parity): regen, guard, ghost touch, etc.
+    // -----------------------------------------------------------------------
+    case 'Regeneration':
+      return [make('regeneration')]
+
+    case 'Guard':
+      return [make(items.length > 0 ? `guard.${items[0]}` : 'guard')]
+
+    case 'GhostTouch':
+      return [make('ghostTouch')]
+
+    case 'ImplementInYourHands':
+      return items.length > 0
+        ? items.map(item => make(`implementInHands.${item}`))
+        : [make('implementInHands.Any')]
+
+    case 'SpellPowerReplacement':
+      return items.length > 0
+        ? items.map(item => make(`spellPowerReplacement.${normalizeSpellElement(item)}`))
+        : []
+
+    // -----------------------------------------------------------------------
     // Control-flow / UI-only
     // -----------------------------------------------------------------------
     case 'AddGroupWeapon':
@@ -1925,9 +1997,6 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
     case 'DestinyTree':
     case 'ItemClickie':
     case 'SLACharge':
-    case 'SpellPowerReplacement':
-    case 'ImplementInYourHands':
-    case 'Regeneration':
     case 'RustSusceptability':
     case 'NotModeled':
     case 'Unknown':

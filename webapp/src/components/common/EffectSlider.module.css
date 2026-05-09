@@ -1,0 +1,28 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.label {
+  flex: 0 0 14rem;
+  font-size: 0.85rem;
+  color: var(--color-text, #ddd);
+}
+
+.range {
+  flex: 1;
+  min-width: 6rem;
+}
+
+.value {
+  flex: 0 0 2.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text, #ddd);
+}
+
+.disabled {
+  opacity: 0.5;
+}

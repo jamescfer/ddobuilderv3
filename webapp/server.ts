@@ -33,8 +33,8 @@ const parser = new XMLParser({
     'EnhancementSelection', 'Selector', 'FeatSlot', 'AutomaticFeats',
     'ClassSkill', 'Alignment', 'Augment', 'Buff', 'ItemAugment',
     'SetBonus', 'Gem', 'Stance', 'Spell', 'Patron', 'Quest', 'GuildBuff',
-    'GrantedFeat', 'ClassFeat', 'RacialFeat', 'WeaponGroup', 'OptionalBuff',
-    'Filigree',
+    'GrantedFeat', 'ClassFeat', 'RacialFeat', 'WeaponGroup', 'Weapon',
+    'OptionalBuff', 'Filigree', 'SpellDC', 'SpellDamage',
   ].includes(name),
 })
 
@@ -142,6 +142,15 @@ function loadSpells() {
   try {
     const parsed = readXml(path.join(DATA_DIR, 'Spells.xml')) as { Spells?: { Spell?: unknown[] } }
     return (parsed?.Spells?.Spell ?? []) as unknown[]
+  } catch { return [] }
+}
+
+function loadWeaponGroups() {
+  try {
+    const parsed = readXml(path.join(DATA_DIR, 'WeaponGroupings.xml')) as {
+      WeaponGroupings?: { WeaponGroup?: unknown[] }
+    }
+    return (parsed?.WeaponGroupings?.WeaponGroup ?? []) as unknown[]
   } catch { return [] }
 }
 
@@ -277,6 +286,10 @@ app.get('/api/spells', (_req, res) => {
 
 app.get('/api/stances', (_req, res) => {
   res.json(cached('stances', loadStances))
+})
+
+app.get('/api/weapongroups', (_req, res) => {
+  res.json(cached('weapongroups', loadWeaponGroups))
 })
 
 app.get('/api/items', (_req, res) => {

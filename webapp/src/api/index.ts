@@ -1,4 +1,5 @@
-import type { Race, DDOClass, Feat, EnhancementTree, Item, Augment, SetBonus, Stance, GuildBuff, Filigree, FiligreeSetBonus, OptionalBuff, Patron, Quest, SentientGem } from '../types/ddo'
+import type { Race, DDOClass, Feat, EnhancementTree, Item, Augment, SetBonus, Stance, GuildBuff, Filigree, FiligreeSetBonus, OptionalBuff, Patron, Quest, SentientGem, Spell } from '../types/ddo'
+import type { WeaponGroupSpec } from '../lib/weapons/groups'
 
 const BASE = '/api'
 
@@ -37,4 +38,6 @@ export const api = {
   patrons: () => get<Patron[]>('/patrons'),
   quests: () => get<Quest[]>('/quests'),
   gems: () => get<SentientGem[]>('/gems'),
+  spells: () => get<Spell[]>('/spells'),
+  weaponGroups: () => get<WeaponGroupSpec[]>('/weapongroups'),
 }

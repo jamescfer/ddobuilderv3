@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, createElement as h } from 'react'
 import type { ReactElement, ChangeEvent } from 'react'
 import type { CharacterBuild } from '../types/ddo'
 import { useCharacter } from '../context/CharacterContext'
+import { isCharacterDocument, flattenDocument } from '../lib/multiLife'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -104,6 +105,17 @@ export function usePersistence(): PersistenceAPI {
         try {
           const text = reader.result as string
           const parsed = JSON.parse(text)
+          // V2-format Character document: unwrap to its first build.
+          if (isCharacterDocument(parsed)) {
+            const flat = flattenDocument(parsed)
+            const first = flat.find(b => b.id === parsed.activeBuildId) ?? flat[0]
+            if (!first) {
+              reject(new Error('Character document contained no builds'))
+              return
+            }
+            resolve(first)
+            return
+          }
           if (
             typeof parsed !== 'object' ||
             parsed === null ||

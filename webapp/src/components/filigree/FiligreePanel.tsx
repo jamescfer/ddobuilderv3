@@ -112,7 +112,10 @@ export default function FiligreePanel() {
   const equippedCounts = countSetBonuses(allSlots, filigrees)
   const setBonusByType = new Map<string, FiligreeSetBonus>(setBonuses.map(sb => [sb.Type, sb]))
 
-  const selectedGem = build.sentientGem ?? ''
+  const selectedGem = build.sentientGem.name ?? ''
+  const personality = build.sentientGem.personality ?? ''
+  const majorAugment = build.sentientGem.majorAugment ?? ''
+  const minorAugment = build.sentientGem.minorAugment ?? ''
 
   return (
     <div className="panel">
@@ -129,13 +132,44 @@ export default function FiligreePanel() {
                 id="sentient-gem-select"
                 className={styles.gemSelect}
                 value={selectedGem}
-                onChange={e => dispatch({ type: 'SET_SENTIENT_GEM', gem: e.target.value })}
+                onChange={e => dispatch({ type: 'SET_SENTIENT_GEM_NAME', name: e.target.value })}
               >
                 <option value="">— None —</option>
                 {gems.map(gem => (
                   <option key={gem.Name} value={gem.Name}>{gem.Name}</option>
                 ))}
               </select>
+            </div>
+            {/* Sentient gem personality + augments */}
+            <div className={styles.gemRow}>
+              <label className={styles.gemLabel} htmlFor="sentient-personality">Personality:</label>
+              <input
+                id="sentient-personality"
+                className={styles.gemSelect}
+                value={personality}
+                onChange={e => dispatch({ type: 'SET_SENTIENT_GEM_PERSONALITY', personality: e.target.value })}
+                placeholder="(optional, free text)"
+              />
+            </div>
+            <div className={styles.gemRow}>
+              <label className={styles.gemLabel} htmlFor="sentient-major">Major Augment:</label>
+              <input
+                id="sentient-major"
+                className={styles.gemSelect}
+                value={majorAugment}
+                onChange={e => dispatch({ type: 'SET_SENTIENT_GEM_AUGMENT', slot: 'major', name: e.target.value })}
+                placeholder="augment name"
+              />
+            </div>
+            <div className={styles.gemRow}>
+              <label className={styles.gemLabel} htmlFor="sentient-minor">Minor Augment:</label>
+              <input
+                id="sentient-minor"
+                className={styles.gemSelect}
+                value={minorAugment}
+                onChange={e => dispatch({ type: 'SET_SENTIENT_GEM_AUGMENT', slot: 'minor', name: e.target.value })}
+                placeholder="augment name"
+              />
             </div>
 
             {/* Weapon Filigree Slots */}
