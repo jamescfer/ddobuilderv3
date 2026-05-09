@@ -1,0 +1,450 @@
+// V2 .DDOBuild XML → V3 CharacterBuild importer.
+//
+// V2 stores characters as <DDOBuilderCharacterData>/<Character>/<Life>/<Build>
+// trees with per-level <LevelTraining> blocks. Each LevelTraining contains the
+// class taken at that character level plus the feats / skills trained then.
+// Enhancement choices live in EnhancementSpendInTree blocks, gear lives in
+// EquippedGear, and stances in ActiveStances.
+//
+// V2 sources cited:
+//   Build.cpp                serialise / deserialise
+//   Life.cpp                 serialise / deserialise
+//   Character.cpp            serialise / deserialise
+//   EquippedGear.cpp         <EquippedGear> structure
+//   TrainedEnhancement.cpp   <EnhancementName>/<Ranks>/<Selection>/<IsTier5>
+
+import { XMLParser } from 'fast-xml-parser'
+import type {
+  Ability, BuildClass, CharacterBuild, FiligreeSlot, QuestDifficulty,
+} from '../types/ddo'
+import { emptyBuild } from '../types/ddo'
+
+// ---------------------------------------------------------------------------
+// XML parsing
+// ---------------------------------------------------------------------------
+
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '',
+  textNodeName: '#text',
+  parseAttributeValue: true,
+  parseTagValue: true,
+  trimValues: true,
+  // V2 XML reuses the same tag names in both single and list contexts (e.g.
+  // <TreeName> appears once inside <EnhancementSpendInTree> but as a list
+  // inside <Destiny_SelectedTrees>). We only force arrays for tags whose
+  // semantics are always "list of"; mixed-cardinality tags are normalised
+  // via arr() at the call site.
+  isArray: (name, jpath) => {
+    const ALWAYS_ARRAY = new Set([
+      'TrainedFeat', 'TrainedSkill', 'TrainedEnhancement',
+      'LevelTraining', 'Build', 'Life',
+      'Augment', 'CompletedQuest', 'EquippedGear', 'ItemAugment',
+      'Buff',
+      'EnhancementSpendInTree', 'ReaperSpendInTree', 'DestinySpendInTree',
+    ])
+    if (ALWAYS_ARRAY.has(name)) return true
+    // Stances list inside ActiveStances; TreeName inside *_SelectedTrees;
+    // Filigree / ArtifactFiligree inside SentientGem. Use jpath to scope.
+    if (name === 'Stances' && /ActiveStances/.test(jpath)) return true
+    if (name === 'TreeName' && /_SelectedTrees/.test(jpath)) return true
+    if (name === 'Filigree' && /SentientGem|Filigrees/.test(jpath)) return true
+    if (name === 'ArtifactFiligree' && /SentientGem|Filigrees/.test(jpath)) return true
+    if (name === 'SelfAndPartyBuffs' && /SelfAndPartyBuffs/.test(jpath)) return true
+    return false
+  },
+})
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+type AnyRec = Record<string, unknown>
+
+function arr<T>(v: T | T[] | undefined): T[] {
+  if (v == null) return []
+  return Array.isArray(v) ? v : [v]
+}
+
+function asStr(v: unknown): string {
+  if (typeof v === 'string') return v
+  if (typeof v === 'number') return String(v)
+  return ''
+}
+
+function asNum(v: unknown): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
+function getRec(parent: AnyRec, key: string): AnyRec | undefined {
+  const v = parent[key]
+  if (v && typeof v === 'object' && !Array.isArray(v)) return v as AnyRec
+  return undefined
+}
+
+function mapClassName(raw: string): string {
+  if (!raw || raw === 'Unknown') return ''
+  return raw
+}
+
+// ---------------------------------------------------------------------------
+// Sub-parsers
+// ---------------------------------------------------------------------------
+
+/**
+ * V2 Point-Buy cost table → score lookup (Build::DetermineBuildPoints).
+ * V3 stores raw scores; V2 stores spend deltas and we round down to the
+ * highest score whose cost ≤ spent.
+ */
+const COST_TO_SCORE: Record<number, number> = {
+  0: 8, 1: 9, 2: 10, 3: 11, 4: 12, 5: 13, 6: 14, 8: 15, 10: 16, 13: 17, 16: 18,
+}
+
+function spendToScore(spent: number): number {
+  let best = 8
+  for (const [costStr, scoreVal] of Object.entries(COST_TO_SCORE)) {
+    const cost = Number(costStr)
+    if (cost <= spent && scoreVal > best) best = scoreVal
+  }
+  return best
+}
+
+function parseAbilities(spend: AnyRec | undefined): Record<Ability, number> {
+  const result: Record<Ability, number> = {
+    Strength: 8, Dexterity: 8, Constitution: 8, Intelligence: 8, Wisdom: 8, Charisma: 8,
+  }
+  if (!spend) return result
+  result.Strength = spendToScore(asNum(spend.StrSpend))
+  result.Dexterity = spendToScore(asNum(spend.DexSpend))
+  result.Constitution = spendToScore(asNum(spend.ConSpend))
+  result.Intelligence = spendToScore(asNum(spend.IntSpend))
+  result.Wisdom = spendToScore(asNum(spend.WisSpend))
+  result.Charisma = spendToScore(asNum(spend.ChaSpend))
+  return result
+}
+
+interface LevelTrainingV2 {
+  className: string
+  feats: { name: string; type: string; level: number }[]
+  skills: string[]
+  levelUpAbility: string
+}
+
+function parseLevelTraining(lt: AnyRec | undefined): LevelTrainingV2 {
+  if (!lt) return { className: '', feats: [], skills: [], levelUpAbility: '' }
+  return {
+    className: mapClassName(asStr(lt.Class)),
+    feats: arr(lt.TrainedFeat as AnyRec | AnyRec[] | undefined).map(f => ({
+      name: asStr((f as AnyRec).FeatName),
+      type: asStr((f as AnyRec).Type),
+      level: asNum((f as AnyRec).LevelTrainedAt),
+    })),
+    skills: arr(lt.TrainedSkill as AnyRec | AnyRec[] | undefined).map(s => asStr((s as AnyRec).Skill)),
+    levelUpAbility: asStr(lt.AbilityLevelUp ?? lt.LevelUpAbility),
+  }
+}
+
+function parseEnhancements(buildNode: AnyRec, tag: string): {
+  choices: Record<string, Record<string, number>>
+  selections: Record<string, Record<string, string>>
+  pinned: string[]
+} {
+  // V2 stores TreeName + TrainedEnhancement[] inside <EnhancementSpendInTree>,
+  // <DestinySpendInTree>, and <ReaperSpendInTree>. Each TrainedEnhancement uses
+  // <EnhancementName> (not <Name>), <Ranks>, optional <Selection>, optional
+  // <IsTier5/> empty marker.
+  const choices: Record<string, Record<string, number>> = {}
+  const selections: Record<string, Record<string, string>> = {}
+  const pinned: string[] = []
+
+  const trees = arr(buildNode[tag] as AnyRec | AnyRec[] | undefined)
+  for (const t of trees) {
+    const tr = t as AnyRec
+    const treeName = asStr(tr.TreeName)
+    if (!treeName || treeName === 'No selection') continue
+    const tChoices: Record<string, number> = {}
+    const tSelections: Record<string, string> = {}
+    for (const e of arr(tr.TrainedEnhancement as AnyRec | AnyRec[] | undefined)) {
+      const er = e as AnyRec
+      const name = asStr(er.EnhancementName ?? er.Name)
+      const ranks = asNum(er.Ranks)
+      const sel = asStr(er.Selection)
+      if (!name) continue
+      if (ranks > 0) tChoices[name] = ranks
+      if (sel) tSelections[name] = sel
+    }
+    if (Object.keys(tChoices).length > 0) {
+      choices[treeName] = tChoices
+      pinned.push(treeName)
+    }
+    if (Object.keys(tSelections).length > 0) selections[treeName] = tSelections
+  }
+  return { choices, selections, pinned }
+}
+
+const V2_TO_V3_SLOT: Record<string, string> = {
+  Helmet: 'Helmet', Necklace: 'Necklace', Trinket: 'Trinket', Cloak: 'Cloak',
+  Belt: 'Belt', Goggles: 'Goggles', Gloves: 'Gloves', Boots: 'Boots',
+  Bracers: 'Bracers', Armor: 'Armor', Ring1: 'Ring', Ring2: 'Ring2',
+  MainHand: 'Main Hand', OffHand: 'Off Hand', Quiver: 'Quiver', Arrow: 'Arrow',
+}
+
+function parseGear(equippedGearNode: AnyRec): {
+  gear: Record<string, string>
+  augmentChoices: Record<string, string>
+} {
+  const gear: Record<string, string> = {}
+  const augmentChoices: Record<string, string> = {}
+  for (const [v2Slot, v3Slot] of Object.entries(V2_TO_V3_SLOT)) {
+    const item = getRec(equippedGearNode, v2Slot)
+    if (!item) continue
+    const name = asStr(item.Name)
+    if (!name) continue
+    gear[v3Slot] = name
+
+    // Each item carries <ItemAugment> children with Type + SelectedAugment.
+    const augs = arr(item.ItemAugment as AnyRec | AnyRec[] | undefined)
+    let typeIdx: Record<string, number> = {}
+    for (const a of augs) {
+      const ar = a as AnyRec
+      const type = asStr(ar.Type)
+      const augName = asStr(ar.SelectedAugment)
+      if (!type) continue
+      const idx = typeIdx[type] ?? 0
+      typeIdx[type] = idx + 1
+      if (augName) {
+        augmentChoices[`${v3Slot}:${type}:${idx}`] = augName
+      }
+    }
+    typeIdx = {}
+  }
+  return { gear, augmentChoices }
+}
+
+function parseFiligreeSlots(parent: AnyRec, tag: 'Filigree' | 'ArtifactFiligree', count: number): FiligreeSlot[] {
+  const list = arr(parent[tag] as AnyRec | AnyRec[] | undefined)
+  const slots: FiligreeSlot[] = []
+  for (const f of list) {
+    const fr = f as AnyRec
+    slots.push({
+      name: asStr(fr.Name ?? fr.SetBonus ?? f),
+      rare: Boolean(fr.Rare ?? fr.IsRare),
+    })
+  }
+  while (slots.length < count) slots.push({ name: '', rare: false })
+  return slots.slice(0, count)
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export interface ImportResult {
+  build: CharacterBuild
+  warnings: string[]
+}
+
+export function importV2Build(xml: string): ImportResult {
+  const warnings: string[] = []
+  const parsed = parser.parse(xml) as AnyRec
+  const root = (parsed.DDOBuilderCharacterData ?? parsed) as AnyRec
+  const character = getRec(root, 'Character') ?? root
+  const lifeRaw = arr(character.Life as AnyRec | AnyRec[] | undefined)
+  const activeLifeIdx = asNum(character.ActiveLifeIndex)
+  const life = (lifeRaw[activeLifeIdx] ?? lifeRaw[0]) as AnyRec | undefined
+  if (!life) {
+    warnings.push('No <Life> found in V2 build; using empty build.')
+    return { build: emptyBuild(), warnings }
+  }
+
+  const buildArr = arr(life.Build as AnyRec | AnyRec[] | undefined)
+  const activeBuildIdx = asNum(character.ActiveBuildIndex ?? life.ActiveBuildIndex)
+  const buildNode = (buildArr[activeBuildIdx] ?? buildArr[0]) as AnyRec | undefined
+  if (!buildNode) {
+    warnings.push('No <Build> found in V2 life; using empty build.')
+    return { build: emptyBuild(), warnings }
+  }
+
+  const out = emptyBuild()
+
+  // ── Top-level character fields ───────────────────────────────────────────
+  out.name = asStr(life.Name) || asStr(character.Name) || 'Imported V2 Build'
+  out.race = asStr(life.Race) || 'Human'
+  out.alignment = asStr(life.Alignment) || 'True Neutral'
+  out.guildLevel = asNum(character.GuildLevel)
+  out.applyGuildBuffs = Boolean(character.ApplyGuildBuffs)
+
+  // ── Tomes ────────────────────────────────────────────────────────────────
+  out.abilityTomes = {
+    Strength: asNum(character.StrTome),
+    Dexterity: asNum(character.DexTome),
+    Constitution: asNum(character.ConTome),
+    Intelligence: asNum(character.IntTome),
+    Wisdom: asNum(character.WisTome),
+    Charisma: asNum(character.ChaTome),
+  }
+  const skillTomesNode = getRec(life, 'SkillTomes')
+  if (skillTomesNode) {
+    for (const [k, v] of Object.entries(skillTomesNode)) {
+      const n = asNum(v)
+      if (n > 0) out.skillTomes[k] = n
+    }
+  }
+
+  // ── Notes ────────────────────────────────────────────────────────────────
+  out.notes = asStr(life.Notes) || asStr(buildNode.Notes) || ''
+
+  // ── Per-level training (drives class composition + feats + skills) ──────
+  const levelTrainings = arr(buildNode.LevelTraining as AnyRec | AnyRec[] | undefined)
+    .map(parseLevelTraining)
+
+  // V2 stores 34 LevelTraining entries: heroic 1-20 carry the actual class,
+  // 21-30 carry "Epic", 31-34 carry "Legendary".
+  const heroicSlice = levelTrainings.slice(0, 20).map(lt => lt.className)
+  const epicSlice = levelTrainings.slice(20, 30).map(lt => lt.className)
+  const legendarySlice = levelTrainings.slice(30, 34).map(lt => lt.className)
+
+  out.levelClasses = heroicSlice
+  out.totalLevel = heroicSlice.filter(Boolean).length
+  out.epicLevels = epicSlice.filter(c => c === 'Epic').length
+  out.legendaryLevels = legendarySlice.filter(c => c === 'Legendary').length
+
+  // Aggregate triple from heroic per-level (V2 first-seen ordering)
+  const counts: Record<string, number> = {}
+  const seen: string[] = []
+  for (const c of heroicSlice) {
+    if (!c) continue
+    counts[c] = (counts[c] ?? 0) + 1
+    if (!seen.includes(c)) seen.push(c)
+  }
+  out.classes = [
+    { name: seen[0] ?? '', levels: counts[seen[0]] ?? 0 },
+    { name: seen[1] ?? '', levels: counts[seen[1]] ?? 0 },
+    { name: seen[2] ?? '', levels: counts[seen[2]] ?? 0 },
+  ] as [BuildClass, BuildClass, BuildClass]
+
+  // ── Ability scores (point-buy spend) ─────────────────────────────────────
+  out.baseAbilities = parseAbilities(getRec(buildNode, 'AbilitySpend'))
+
+  // ── Feats / skills / level-ups from per-level training ───────────────────
+  out.featChoices = {}
+  out.skillRanks = {}
+  out.skillRanksByLevel = {}
+
+  let featSlotIdx = 0
+  for (let i = 0; i < levelTrainings.length; i++) {
+    const lt = levelTrainings[i]
+    const charLvl = i + 1
+
+    for (const f of lt.feats) {
+      // V2's slot key isn't directly addressable; use a deterministic v2-* key
+      // so consumers can identify it as imported.
+      const slotKey = `v2-${charLvl}-${f.type}-${featSlotIdx++}`
+      out.featChoices[slotKey] = f.name
+    }
+
+    for (const skill of lt.skills) {
+      out.skillRanks[skill] = (out.skillRanks[skill] ?? 0) + 1
+      const at = (out.skillRanksByLevel[charLvl] ?? (out.skillRanksByLevel[charLvl] = {}))
+      at[skill] = (at[skill] ?? 0) + 1
+    }
+
+    if (lt.levelUpAbility && charLvl % 4 === 0 && charLvl <= 40) {
+      const ABILITIES = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'] as const
+      if ((ABILITIES as readonly string[]).includes(lt.levelUpAbility)) {
+        out.abilityLevelUps[charLvl as 4 | 8 | 12 | 16 | 20 | 24 | 28 | 32 | 36 | 40] = lt.levelUpAbility as Ability
+      }
+    }
+  }
+
+  // ── Enhancements (heroic + epic destiny + reaper) ────────────────────────
+  const enh = parseEnhancements(buildNode, 'EnhancementSpendInTree')
+  out.enhancementChoices = enh.choices
+  out.enhancementSelections = enh.selections
+  out.enhancementPinned = enh.pinned
+
+  const dest = parseEnhancements(buildNode, 'DestinySpendInTree')
+  out.destinyChoices = dest.choices
+  // V3 destinyChoices doesn't carry a separate "selections" map; merge into
+  // the choice map's existing structure isn't possible without changing types,
+  // so we drop selections here. The active destiny is set below.
+
+  const reap = parseEnhancements(buildNode, 'ReaperSpendInTree')
+  out.reaperChoices = reap.choices
+
+  // ── Destiny tree selection ───────────────────────────────────────────────
+  const destinySel = arr(getRec(buildNode, 'Destiny_SelectedTrees')?.TreeName as string | string[] | undefined)
+    .map(asStr).filter(t => t && t !== 'No selection')
+  out.selectedDestinyTrees = [
+    destinySel[0] ?? '', destinySel[1] ?? '', destinySel[2] ?? '',
+  ]
+  // V2 stores Tier5Tree separately; surface as the active destiny.
+  out.activeEpicDestiny = asStr(getRec(buildNode, 'Destiny_SelectedTrees')?.Tier5Tree)
+
+  // ── Gear (the active EquippedGear set; V2 supports multiple gear sets) ──
+  const gearSets = arr(buildNode.EquippedGear as AnyRec | AnyRec[] | undefined)
+  const activeGearName = asStr(buildNode.ActiveGear)
+  const activeGearSet = (gearSets.find(g => asStr((g as AnyRec).Name) === activeGearName)
+    ?? gearSets[0]) as AnyRec | undefined
+  if (activeGearSet) {
+    const g = parseGear(activeGearSet)
+    out.gear = g.gear
+    out.augmentChoices = g.augmentChoices
+    out.activeGearSetName = activeGearName || asStr(activeGearSet.Name) || ''
+    // Save every gear set as a named-set so the user can switch.
+    out.namedGearSets = {}
+    for (const set of gearSets) {
+      const setName = asStr((set as AnyRec).Name)
+      if (!setName) continue
+      const parsed = parseGear(set as AnyRec)
+      out.namedGearSets[setName] = parsed.gear
+    }
+  }
+
+  // ── Filigrees (sentient + artifact) ──────────────────────────────────────
+  const sentientNode = getRec(buildNode, 'SentientGem') ?? getRec(buildNode, 'Filigrees') ?? buildNode
+  out.filigreeSlots = parseFiligreeSlots(sentientNode, 'Filigree', 6)
+  out.artifactFiligreeSlots = parseFiligreeSlots(sentientNode, 'ArtifactFiligree', 10)
+
+  // ── Active stances ───────────────────────────────────────────────────────
+  out.activeBuffs = arr(getRec(buildNode, 'ActiveStances')?.Stances as string | string[] | undefined)
+    .map(asStr).filter(Boolean)
+
+  // Self & party buffs (V2 SelfAndPartyBuffs may be a Stances-like list)
+  const selfBuffs = arr(buildNode.SelfAndPartyBuffs as string | string[] | undefined).map(asStr).filter(Boolean)
+  for (const b of selfBuffs) {
+    if (!out.activeBuffs.includes(b)) out.activeBuffs.push(b)
+  }
+
+  // ── Past lives (Character.SpecialFeats with Type=*PastLife) ─────────────
+  const specialFeats = arr(getRec(character, 'SpecialFeats')?.TrainedFeat as AnyRec | AnyRec[] | undefined)
+  for (const f of specialFeats) {
+    const fr = f as AnyRec
+    const name = asStr(fr.FeatName)
+    const type = asStr(fr.Type)
+    if (!name) continue
+    if (type === 'HeroicPastLife') {
+      const cls = name.replace(/^Past Life:\s*/, '')
+      out.pastLives[cls] = (out.pastLives[cls] ?? 0) + 1
+    } else if (type === 'RacialPastLife') {
+      const race = name.replace(/^Past Life:\s*/, '')
+      out.pastLives[race] = (out.pastLives[race] ?? 0) + 1
+    } else if (type === 'EpicPastLife' || type === 'IconicPastLife') {
+      out.pastLives[name] = (out.pastLives[name] ?? 0) + 1
+    }
+  }
+
+  // ── Quest completions (best-effort) ──────────────────────────────────────
+  const completed = arr(getRec(life, 'CompletedQuests')?.CompletedQuest as AnyRec | AnyRec[] | undefined)
+  for (const q of completed) {
+    const name = asStr((q as AnyRec).Name)
+    const diff = asStr((q as AnyRec).Difficulty) as QuestDifficulty
+    if (name) {
+      out.completedQuests[name] = true
+      if (diff) out.questDifficulty[name] = diff
+    }
+  }
+
+  return { build: out, warnings }
+}
