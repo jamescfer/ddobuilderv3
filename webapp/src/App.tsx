@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { CharacterProvider, useCharacter } from './context/CharacterContext'
 import Layout from './components/layout/Layout'
-import ComingSoon from './components/layout/ComingSoon'
 import type { NavItem } from './components/layout/Sidebar'
 import CharacterInfo from './components/builder/CharacterInfo'
 import RaceSelector from './components/builder/RaceSelector'
