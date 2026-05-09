@@ -682,6 +682,42 @@ export default function BreakdownsPanel() {
     return rows
   })()
 
+  // ── V2 BreakdownItemPactDice display: warlock eldritch blast pact dice ──
+  // V2 renders each PactDice breakdown's value as `<count>d<size>` (e.g. "5d6").
+  // We surface a row per die size when the count is non-zero. The section is
+  // hidden entirely when the build has no warlock levels and no EB effect
+  // contributions (count totals all zero).
+  const eldritchBlastRows: StatRowData[] = (() => {
+    const rows: StatRowData[] = []
+    const warlockLevels = build.classes
+      .filter(c => c.name && c.levels > 0 &&
+        (c.name.toLowerCase().includes('warlock') ||
+         c.name.toLowerCase().includes('acolyte of the skin')))
+      .reduce((s, c) => s + c.levels, 0)
+
+    const d6 = stats.resolve('eldritchBlast.d6')
+    const d8 = stats.resolve('eldritchBlast.d8')
+
+    if (d6.total > 0 || warlockLevels > 0) {
+      rows.push(fixedRow(
+        'Pact Dice (d6)',
+        d6.total,
+        d6.total > 0 ? `${d6.total}d6` : '—',
+        d6.bonuses,
+        d6.total === 0,
+      ))
+    }
+    if (d8.total > 0) {
+      rows.push(fixedRow(
+        'Pact Dice (d8)',
+        d8.total,
+        `${d8.total}d8`,
+        d8.bonuses,
+      ))
+    }
+    return rows
+  })()
+
   // ── Weapon Crit & On-Hit (slice 4b parser keys) ──────────────────────────
   const weaponCritRows: StatRowData[] = []
   {
