@@ -2,44 +2,39 @@
 // V2 vs V3 stat diff report.
 //
 // Usage:
-//   npx tsx scripts/v2DiffReport.ts <path/to/build.DDOBuild>
+//   npx tsx scripts/v2DiffReport.ts <path/to/build.DDOBuild> [--data-dir <dir>]
 //
-// Loads a V2 .DDOBuild XML, runs V3's pure stat engine on the imported
-// build, and prints a flat table of stat keys → totals. Pipe this output
-// alongside V2's own breakdown screen to spot mismatches.
-//
-// The catalogue stubs are intentionally minimal — full effect resolution
-// requires the live API (races/classes/feats/enhancement trees from XML).
-// Run V3 in the browser and import the same file there for a richer view.
+// Loads a V2 .DDOBuild XML, runs V3's full stat engine on the imported
+// build using the same XML data catalogues the live webapp uses, and
+// prints a flat stat-key → total table. Pipe alongside V2's breakdown
+// screen to spot mismatches.
 
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { importV2Build } from '../src/lib/v2Import'
 import { computeBuildStats } from '../src/hooks/useBuildStats'
-import type {
-  Race, DDOClass, Feat, EnhancementTree, Item, OptionalBuff, Augment,
-  SetBonus, FiligreeSetBonus, Filigree,
-} from '../src/types/ddo'
+import { loadAllCatalogues } from '../src/server/dataLoaders'
+import type { Item } from '../src/types/ddo'
 
-function emptyInput() {
-  return {
-    allClasses: [] as DDOClass[],
-    allRaces: [] as Race[],
-    allFeats: [] as Feat[],
-    allTrees: [] as EnhancementTree[],
-    gearItems: {} as Record<string, Item>,
-    allSelfBuffs: [] as OptionalBuff[],
-    allAugments: [] as Augment[],
-    allSetBonuses: [] as SetBonus[],
-    allFiligreeBonuses: [] as FiligreeSetBonus[],
-    allFiligrees: [] as Filigree[],
+function parseArgs(): { file: string; dataDir: string } {
+  const args = process.argv.slice(2)
+  let file = ''
+  let dataDir = resolve(__dirname, '..', '..', 'Output', 'DataFiles')
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (a === '--data-dir' && i + 1 < args.length) {
+      dataDir = resolve(args[++i])
+    } else if (!a.startsWith('-')) {
+      file = a
+    }
   }
+  return { file, dataDir }
 }
 
 function main(): void {
-  const file = process.argv[2]
+  const { file, dataDir } = parseArgs()
   if (!file) {
-    console.error('Usage: v2DiffReport <path/to/build.DDOBuild>')
+    console.error('Usage: v2DiffReport <path/to/build.DDOBuild> [--data-dir <dir>]')
     process.exit(2)
   }
   const xml = readFileSync(resolve(file), 'utf-8')
@@ -66,13 +61,44 @@ function main(): void {
   console.log(`Past lives:     ${Object.values(build.pastLives).reduce((s, n) => s + n, 0)}`)
   console.log()
 
-  const stats = computeBuildStats(emptyInput(), build)
+  console.log(`# Loading XML catalogues from ${dataDir}…`)
+  const cat = loadAllCatalogues(dataDir)
+  console.log(`  ${cat.allRaces.length} races, ${cat.allClasses.length} classes, ` +
+    `${cat.allFeats.length} feats, ${cat.allTrees.length} trees, ` +
+    `${cat.allItems.length} items, ${cat.allAugments.length} augments`)
+
+  // Resolve gear slot names → item objects
+  const gearItems: Record<string, Item> = {}
+  for (const [slot, name] of Object.entries(build.gear)) {
+    if (!name) continue
+    const item = cat.allItems.find(i => i.Name === name)
+    if (item) gearItems[slot] = item
+  }
+
+  const stats = computeBuildStats({
+    allClasses: cat.allClasses,
+    allRaces: cat.allRaces,
+    allFeats: cat.allFeats,
+    allTrees: cat.allTrees,
+    allSelfBuffs: cat.allSelfBuffs,
+    allAugments: cat.allAugments,
+    allSetBonuses: cat.allSetBonuses,
+    allFiligreeBonuses: cat.allFiligreeBonuses,
+    allFiligrees: cat.allFiligrees,
+    allWeaponGroups: cat.allWeaponGroups,
+    allSpells: cat.allSpells,
+    allGuildBuffs: cat.allGuildBuffs,
+    gearItems,
+  }, build)
+
   const keys = stats.keys().sort()
+  console.log()
   console.log('# V3 computed stat totals (sorted)')
   for (const k of keys) {
     const total = stats.total(k)
     if (total === 0) continue
-    console.log(`${k.padEnd(40)} ${total >= 0 ? '+' : ''}${total}`)
+    const formatted = Number.isInteger(total) ? total.toString() : total.toFixed(2)
+    console.log(`${k.padEnd(42)} ${total >= 0 ? '+' : ''}${formatted}`)
   }
 }
 
