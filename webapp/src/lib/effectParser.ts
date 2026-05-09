@@ -1255,20 +1255,68 @@ export function parseEffect(
       return []
 
     // -----------------------------------------------------------------------
-    // Hireling stats (modeled separately; not applied to the player build)
+    // Hireling stats (modeled separately from the player build under the
+    // hireling.* stat namespace — the breakdowns panel surfaces these in a
+    // dedicated "Hireling Stats" section).
     // -----------------------------------------------------------------------
     case 'HirelingAbilityBonus':
+      if (items.length > 0) return items.map(item => make(`hireling.ability.${item}`))
+      return []
     case 'HirelingConcealment':
+      return [make('hireling.concealment')]
     case 'HirelingHitpoints':
+      return [make('hireling.hp')]
     case 'HirelingFortification':
+      return [make('hireling.fortification')]
     case 'HirelingPRR':
+      return [make('hireling.prr')]
     case 'HirelingMRR':
+      return [make('hireling.mrr')]
     case 'HirelingDodge':
+      return [make('hireling.dodge')]
     case 'HirelingMeleePower':
+      return [make('hireling.meleePower')]
     case 'HirelingRangedPower':
+      return [make('hireling.rangedPower')]
     case 'HirelingSpellPower':
-    case 'HirelingSaveBonus':
+      if (items.length > 0) {
+        return items.map(item => make(`hireling.spellPower.${normalizeSpellElement(item)}`))
+      }
+      return [make('hireling.spellPower.Universal')]
+    case 'HirelingSaveBonus': {
+      if (items.length === 0) {
+        return [
+          make('hireling.save.Fortitude'),
+          make('hireling.save.Reflex'),
+          make('hireling.save.Will'),
+        ]
+      }
+      const results: ParsedBonus[] = []
+      for (const item of items) {
+        switch (item) {
+          case 'All':
+            results.push(make('hireling.save.Fortitude'))
+            results.push(make('hireling.save.Reflex'))
+            results.push(make('hireling.save.Will'))
+            break
+          case 'Fortitude':
+            results.push(make('hireling.save.Fortitude'))
+            break
+          case 'Reflex':
+            results.push(make('hireling.save.Reflex'))
+            break
+          case 'Will':
+            results.push(make('hireling.save.Will'))
+            break
+          default:
+            results.push(make(`hireling.save.${item}`))
+            break
+        }
+      }
+      return results
+    }
     case 'HirelingGrantFeat':
+      // Grants a feat rather than a flat stat bonus — no hireling.* stat row.
       return []
 
     // -----------------------------------------------------------------------
@@ -2055,20 +2103,67 @@ export function parseItemBuff(buff: ItemBuff, source: string, ctx?: EffectContex
     case 'RuneArmStableCharge':    return [make('runeArm.stableCharge')]
 
     // -----------------------------------------------------------------------
-    // Hireling stats — modeled separately from the player build.
+    // Hireling stats — modeled separately from the player build under the
+    // hireling.* stat namespace (mirrors the parseEffect emissions).
     // -----------------------------------------------------------------------
     case 'HirelingAbilityBonus':
+      if (items.length > 0) return items.map(item => make(`hireling.ability.${item}`))
+      return []
     case 'HirelingConcealment':
+      return [make('hireling.concealment')]
     case 'HirelingHitpoints':
+      return [make('hireling.hp')]
     case 'HirelingFortification':
+      return [make('hireling.fortification')]
     case 'HirelingPRR':
+      return [make('hireling.prr')]
     case 'HirelingMRR':
+      return [make('hireling.mrr')]
     case 'HirelingDodge':
+      return [make('hireling.dodge')]
     case 'HirelingMeleePower':
+      return [make('hireling.meleePower')]
     case 'HirelingRangedPower':
+      return [make('hireling.rangedPower')]
     case 'HirelingSpellPower':
-    case 'HirelingSaveBonus':
+      if (items.length > 0) {
+        return items.map(item => make(`hireling.spellPower.${normalizeSpellElement(item)}`))
+      }
+      return [make('hireling.spellPower.Universal')]
+    case 'HirelingSaveBonus': {
+      if (items.length === 0) {
+        return [
+          make('hireling.save.Fortitude'),
+          make('hireling.save.Reflex'),
+          make('hireling.save.Will'),
+        ]
+      }
+      const results: ParsedBonus[] = []
+      for (const item of items) {
+        switch (item) {
+          case 'All':
+            results.push(make('hireling.save.Fortitude'))
+            results.push(make('hireling.save.Reflex'))
+            results.push(make('hireling.save.Will'))
+            break
+          case 'Fortitude':
+            results.push(make('hireling.save.Fortitude'))
+            break
+          case 'Reflex':
+            results.push(make('hireling.save.Reflex'))
+            break
+          case 'Will':
+            results.push(make('hireling.save.Will'))
+            break
+          default:
+            results.push(make(`hireling.save.${item}`))
+            break
+        }
+      }
+      return results
+    }
     case 'HirelingGrantFeat':
+      // Grants a feat rather than a flat stat bonus — no hireling.* stat row.
       return []
 
     // -----------------------------------------------------------------------

@@ -1117,6 +1117,60 @@ export default function BreakdownsPanel() {
     }
   }
 
+  // ── Hireling Stats (V2 hireling.* tracks; populated by Hireling* effects) ──
+  // The effect parser emits hireling.* keys for HirelingHitpoints,
+  // HirelingPRR/MRR/Dodge, HirelingMeleePower/RangedPower, HirelingSpellPower
+  // (per element, plus Universal), HirelingSaveBonus (per save), and
+  // HirelingAbilityBonus (per ability). HirelingGrantFeat grants a feat and
+  // does not contribute a stat row.
+  const hirelingStatRows: StatRowData[] = []
+  {
+    const FIXED_HIRELING_KEYS: Array<{ key: string; label: string }> = [
+      { key: 'hireling.hp',            label: 'Hireling HP' },
+      { key: 'hireling.concealment',   label: 'Hireling Concealment' },
+      { key: 'hireling.fortification', label: 'Hireling Fortification' },
+      { key: 'hireling.prr',           label: 'Hireling PRR' },
+      { key: 'hireling.mrr',           label: 'Hireling MRR' },
+      { key: 'hireling.dodge',         label: 'Hireling Dodge' },
+      { key: 'hireling.meleePower',    label: 'Hireling Melee Power' },
+      { key: 'hireling.rangedPower',   label: 'Hireling Ranged Power' },
+    ]
+    for (const { key, label } of FIXED_HIRELING_KEYS) {
+      const r = stats.resolve(key)
+      if (r.total !== 0) {
+        hirelingStatRows.push(fixedRow(label, r.total, sign(r.total), r.bonuses))
+      }
+    }
+    const SAVE_LABEL: Record<string, string> = {
+      Fortitude: 'Fort',
+      Reflex:    'Reflex',
+      Will:      'Will',
+      All:       'All',
+    }
+    for (const k of stats.keys()) {
+      if (k.startsWith('hireling.spellPower.')) {
+        const elem = k.slice('hireling.spellPower.'.length)
+        const r = stats.resolve(k)
+        if (r.total !== 0) {
+          hirelingStatRows.push(fixedRow(`Hireling ${elem} Spell Power`, r.total, sign(r.total), r.bonuses))
+        }
+      } else if (k.startsWith('hireling.save.')) {
+        const save = k.slice('hireling.save.'.length)
+        const r = stats.resolve(k)
+        if (r.total !== 0) {
+          const lbl = SAVE_LABEL[save] ?? save
+          hirelingStatRows.push(fixedRow(`Hireling ${lbl} Save`, r.total, sign(r.total), r.bonuses))
+        }
+      } else if (k.startsWith('hireling.ability.')) {
+        const ab = k.slice('hireling.ability.'.length)
+        const r = stats.resolve(k)
+        if (r.total !== 0) {
+          hirelingStatRows.push(fixedRow(`Hireling ${ab}`, r.total, sign(r.total), r.bonuses))
+        }
+      }
+    }
+  }
+
   const hasCharacter = build.race || build.classes.some(c => c.name)
 
   return (
@@ -1369,6 +1423,12 @@ export default function BreakdownsPanel() {
             {eldritchBlastRows.length > 0 && (
               <Section title="Eldritch Blast / Pact Dice" defaultOpen={false}>
                 {eldritchBlastRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {hirelingStatRows.length > 0 && (
+              <Section title="Hireling Stats" defaultOpen={false}>
+                {hirelingStatRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
               </Section>
             )}
 
