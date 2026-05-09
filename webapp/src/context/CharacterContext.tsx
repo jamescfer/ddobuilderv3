@@ -224,6 +224,10 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
     case 'SET_SKILL_RANK':
       return { ...state, skillRanks: { ...state.skillRanks, [action.skill]: action.rank } }
     case 'SET_SKILL_RANK_AT_LEVEL': {
+      // V2 parity: this action *only* mutates the per-level view. The legacy
+      // total view (state.skillRanks) is left untouched so callers that
+      // dispatch both SET_SKILL_RANK and SET_SKILL_RANK_AT_LEVEL together can
+      // keep them consistent without one stomping the other.
       const byLevel = { ...(state.skillRanksByLevel ?? {}) }
       const lvl = action.level | 0
       const at = { ...(byLevel[lvl] ?? {}) }
@@ -231,17 +235,7 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       else at[action.skill] = action.rank
       if (Object.keys(at).length === 0) delete byLevel[lvl]
       else byLevel[lvl] = at
-      // Re-derive the legacy total view so consumers that read skillRanks see it.
-      const totals: Record<string, number> = { ...state.skillRanks }
-      // Wipe any per-level-derived rank from totals, then re-sum.
-      for (const skill of Object.keys(totals)) {
-        let sum = 0
-        for (const lv of Object.keys(byLevel)) {
-          sum += byLevel[lv as unknown as number][skill] ?? 0
-        }
-        if (sum > 0) totals[skill] = sum
-      }
-      return { ...state, skillRanksByLevel: byLevel, skillRanks: totals }
+      return { ...state, skillRanksByLevel: byLevel }
     }
     case 'SET_GEAR':
       return {

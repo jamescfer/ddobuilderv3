@@ -123,6 +123,31 @@ export default function Skills() {
     return (trained / 2).toFixed(1).replace(/\.0$/, '')
   }
 
+  /**
+   * V2 parity: per-character-level rank cap. At character level N, the rank
+   * cap for a class skill is N+3 trained levels; cross-class is half of that.
+   * If the user has already trained `current` ranks across earlier levels, we
+   * find the lowest character-level slot that still has rank-cap headroom.
+   */
+  function nextAllocableLevel(skill: SkillName, current: number, isClass: boolean): number | null {
+    const lc = getLevelClasses(build)
+    for (let i = 0; i < lc.length && i < 20; i++) {
+      const charLvl = i + 1
+      const capForLevel = isClass ? charLvl + 3 : (charLvl + 3) // both stored as trained levels; cross-class .5-rank conversion is a display detail
+      const trainedAtThisLevelOrEarlier = (() => {
+        const byLvl = build.skillRanksByLevel ?? {}
+        let n = 0
+        for (let l = 1; l <= charLvl; l++) n += byLvl[l]?.[skill] ?? 0
+        return n
+      })()
+      // Don't double-count current rank: current already includes everything
+      // distributed; we need the next slot whose total stays within cap.
+      void current
+      if (trainedAtThisLevelOrEarlier < capForLevel) return charLvl
+    }
+    return null
+  }
+
   function adjust(skill: SkillName, delta: 1 | -1) {
     const current = trainedLevels[skill] ?? 0
     const next = current + delta
@@ -130,6 +155,30 @@ export default function Skills() {
     if (next > maxTrained(skill)) return
     if (delta === 1 && remaining < 1) return
     dispatch({ type: 'SET_SKILL_RANK', skill, rank: next })
+
+    // Mirror the legacy total into the per-level array so V2 storage is also
+    // populated. We auto-distribute by appending to the earliest level that
+    // still has rank-cap headroom (V2 Build::AdjustSkillSpend allocates at
+    // the character's *current* level by default). On removal we strip from
+    // the latest level first.
+    const isClass = classSkills.has(skill)
+    if (delta === 1) {
+      const lvl = nextAllocableLevel(skill, current, isClass)
+      if (lvl != null) {
+        const ranksAtLvl = build.skillRanksByLevel?.[lvl]?.[skill] ?? 0
+        dispatch({ type: 'SET_SKILL_RANK_AT_LEVEL', level: lvl, skill, rank: ranksAtLvl + 1 })
+      }
+    } else {
+      // Remove from the latest level that has any rank in this skill.
+      const byLvl = build.skillRanksByLevel ?? {}
+      for (let l = 20; l >= 1; l--) {
+        const cur = byLvl[l]?.[skill] ?? 0
+        if (cur > 0) {
+          dispatch({ type: 'SET_SKILL_RANK_AT_LEVEL', level: l, skill, rank: cur - 1 })
+          break
+        }
+      }
+    }
   }
 
   return (
