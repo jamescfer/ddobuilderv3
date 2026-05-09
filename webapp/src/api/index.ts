@@ -1,5 +1,6 @@
 import type { Race, DDOClass, Feat, EnhancementTree, Item, Augment, SetBonus, Stance, GuildBuff, Filigree, FiligreeSetBonus, OptionalBuff, Patron, Quest, SentientGem, Spell } from '../types/ddo'
 import type { WeaponGroupSpec } from '../lib/weapons/groups'
+import type { AttackRate, BonusTypeSpec, Challenge, ItemBuffSpec, ItemClickieSpec } from '../server/dataLoaders'
 
 const BASE = '/api'
 
@@ -41,4 +42,10 @@ export const api = {
   gems: () => get<SentientGem[]>('/gems'),
   spells: () => get<Spell[]>('/spells'),
   weaponGroups: () => get<WeaponGroupSpec[]>('/weapongroups'),
+  // V2-parity additions: AttackRates / BonusTypes / Challenges / ItemBuffs / ItemClickies
+  attackRates: () => get<AttackRate[]>('/attack-rates'),
+  bonusTypes: () => get<BonusTypeSpec[]>('/bonus-types'),
+  challenges: () => get<Challenge[]>('/challenges'),
+  itemBuffs: () => get<ItemBuffSpec[]>('/item-buffs'),
+  itemClickies: () => get<ItemClickieSpec[]>('/item-clickies'),
 }

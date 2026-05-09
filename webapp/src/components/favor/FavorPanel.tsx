@@ -136,11 +136,23 @@ export default function FavorPanel() {
 
   useEffect(() => {
     setLoading(true)
-    Promise.all([api.patrons(), api.quests()])
-      .then(([p, q]) => {
+    // V2 Update 79 added Challenges.xml. Treat them as quests for the favor
+    // panel: each challenge becomes a Quest record so they appear under their
+    // patron alongside regular quests.
+    Promise.all([api.patrons(), api.quests(), api.challenges().catch(() => [])])
+      .then(([p, q, ch]) => {
         setPatrons(Array.isArray(p) ? p : [])
-        // Filter out DoNotShow quests
-        setQuests(Array.isArray(q) ? q.filter(quest => !quest.DoNotShow) : [])
+        const baseQuests = Array.isArray(q) ? q.filter(quest => !quest.DoNotShow) : []
+        const challengeQuests: Quest[] = (Array.isArray(ch) ? ch : []).map((c) => ({
+          Name: c.Name,
+          Patron: c.Patron,
+          AdventurePack: c.AdventurePack,
+          // Challenges in V2 don't carry per-tier favor in the XML so we use
+          // 0 for the moment; the user can still tick them complete.
+          Favor: 0,
+          Levels: c.LevelRange,
+        }))
+        setQuests([...baseQuests, ...challengeQuests])
       })
       .catch(() => {
         setPatrons([])

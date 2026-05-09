@@ -45,8 +45,6 @@ function calcTotalSkillPoints(
     if (!name) continue
     const cls = allClasses.find(c => c.Name === name)
     const basePoints = cls?.SkillPoints ?? 2
-    // INT mod at character level i+1 — use racial bonus + level-ups awarded
-    // by then (V2 BreakdownItemSkill::AbilityModAtLevel).
     const charLvl = i + 1
     const intScore = (build.baseAbilities.Intelligence ?? 8) + raceIntBonus +
       Object.entries(build.abilityLevelUps)
@@ -59,20 +57,48 @@ function calcTotalSkillPoints(
   return total
 }
 
+/**
+ * V2 parity: skill points available *at* a single character level. ×4 at
+ * level 1 (the first-level multiplier). Used by the per-level grid to draw
+ * a per-row budget.
+ */
+function skillPointsAtLevel(
+  build: Pick<CharacterBuild, 'classes' | 'levelClasses' | 'totalLevel' | 'baseAbilities' | 'abilityLevelUps'>,
+  allClasses: DDOClass[],
+  raceIntBonus: number,
+  raceSkillBonus: number,
+  charLvl: number,
+): number {
+  const lc = getLevelClasses(build)
+  const i = charLvl - 1
+  if (i < 0 || i >= lc.length || i >= 20) return 0
+  const name = lc[i]
+  if (!name) return 0
+  const cls = allClasses.find(c => c.Name === name)
+  const basePoints = cls?.SkillPoints ?? 2
+  const intScore = (build.baseAbilities.Intelligence ?? 8) + raceIntBonus +
+    Object.entries(build.abilityLevelUps)
+      .filter(([lvl, ab]) => ab === 'Intelligence' && Number(lvl) <= charLvl)
+      .length
+  const intMod = Math.floor((intScore - 10) / 2)
+  const pts = Math.max(1, basePoints + raceSkillBonus + intMod)
+  return i === 0 ? pts * 4 : pts
+}
+
+type ViewMode = 'totals' | 'per-level'
+
 export default function Skills() {
   const { build, dispatch } = useCharacter()
   const [allClasses, setAllClasses] = useState<DDOClass[]>([])
   const [allRaces, setAllRaces] = useState<Race[]>([])
+  const [viewMode, setViewMode] = useState<ViewMode>('totals')
 
   useEffect(() => {
     api.classes().then(setAllClasses)
     api.races().then(setAllRaces).catch(() => setAllRaces([]))
   }, [])
 
-  // V3 stores trained levels per skill (V2 storage semantics).
-  // ranks displayed = trained for class skills, trained/2 for cross-class.
   const trainedLevels = build.skillRanks
-  // V2 caps the rank-cap at character level 20 (heroic only)
   const heroicLevel = Math.min(20, build.totalLevel)
 
   const race = useMemo(
@@ -93,7 +119,6 @@ export default function Skills() {
   )
 
   const totalSpent = useMemo(() => {
-    // V2 stores trained levels and always costs 1 SP per trained level.
     let spent = 0
     for (const { name } of SKILLS) {
       spent += trainedLevels[name] ?? 0
@@ -103,18 +128,12 @@ export default function Skills() {
 
   const remaining = totalAvailable - totalSpent
 
-  /** Maximum trained levels for this skill (NOT ranks). */
   function maxTrained(skill: SkillName): number {
     const isClass = classSkills.has(skill)
     if (RESTRICTED_SKILLS.has(skill) && !isClass) return 0
-    // V2: tome is NOT added to the rank cap; only to the displayed total.
-    // Class skill: heroic + 3 trained levels. Cross-class: 2*(heroic+3)/2 = also heroic+3
-    //   because cross-class trained levels = 0.5 ranks each, capped at (heroic+3)/2 ranks
-    //   = heroic+3 trained levels. So both caps share the same trained-level number.
     return heroicLevel + 3
   }
 
-  /** Display rank (with .5 increments for cross-class). */
   function displayRank(skill: SkillName): string {
     const trained = trainedLevels[skill] ?? 0
     if (trained === 0) return '0'
@@ -123,25 +142,17 @@ export default function Skills() {
     return (trained / 2).toFixed(1).replace(/\.0$/, '')
   }
 
-  /**
-   * V2 parity: per-character-level rank cap. At character level N, the rank
-   * cap for a class skill is N+3 trained levels; cross-class is half of that.
-   * If the user has already trained `current` ranks across earlier levels, we
-   * find the lowest character-level slot that still has rank-cap headroom.
-   */
   function nextAllocableLevel(skill: SkillName, current: number, isClass: boolean): number | null {
     const lc = getLevelClasses(build)
     for (let i = 0; i < lc.length && i < 20; i++) {
       const charLvl = i + 1
-      const capForLevel = isClass ? charLvl + 3 : (charLvl + 3) // both stored as trained levels; cross-class .5-rank conversion is a display detail
+      const capForLevel = isClass ? charLvl + 3 : (charLvl + 3)
       const trainedAtThisLevelOrEarlier = (() => {
         const byLvl = build.skillRanksByLevel ?? {}
         let n = 0
         for (let l = 1; l <= charLvl; l++) n += byLvl[l]?.[skill] ?? 0
         return n
       })()
-      // Don't double-count current rank: current already includes everything
-      // distributed; we need the next slot whose total stays within cap.
       void current
       if (trainedAtThisLevelOrEarlier < capForLevel) return charLvl
     }
@@ -156,11 +167,6 @@ export default function Skills() {
     if (delta === 1 && remaining < 1) return
     dispatch({ type: 'SET_SKILL_RANK', skill, rank: next })
 
-    // Mirror the legacy total into the per-level array so V2 storage is also
-    // populated. We auto-distribute by appending to the earliest level that
-    // still has rank-cap headroom (V2 Build::AdjustSkillSpend allocates at
-    // the character's *current* level by default). On removal we strip from
-    // the latest level first.
     const isClass = classSkills.has(skill)
     if (delta === 1) {
       const lvl = nextAllocableLevel(skill, current, isClass)
@@ -169,7 +175,6 @@ export default function Skills() {
         dispatch({ type: 'SET_SKILL_RANK_AT_LEVEL', level: lvl, skill, rank: ranksAtLvl + 1 })
       }
     } else {
-      // Remove from the latest level that has any rank in this skill.
       const byLvl = build.skillRanksByLevel ?? {}
       for (let l = 20; l >= 1; l--) {
         const cur = byLvl[l]?.[skill] ?? 0
@@ -179,6 +184,33 @@ export default function Skills() {
         }
       }
     }
+  }
+
+  // Per-level view -----------------------------------------------------------
+  // V2 parity: each character level has its own SP budget; ranks at level N
+  // for a skill cap at N + 3 (class) or (N+3)/2 (cross-class).
+  function setRankAtLevel(skill: SkillName, charLvl: number, newRank: number) {
+    const isClass = classSkills.has(skill)
+    if (RESTRICTED_SKILLS.has(skill) && !isClass) return
+    const clamped = Math.max(0, Math.min(newRank, isClass ? charLvl + 3 : charLvl + 3))
+    dispatch({ type: 'SET_SKILL_RANK_AT_LEVEL', level: charLvl, skill, rank: clamped })
+    // Re-derive the legacy total view so the totals tab stays in sync.
+    const byLvl = build.skillRanksByLevel ?? {}
+    let total = 0
+    for (let l = 1; l <= 20; l++) {
+      if (l === charLvl) total += clamped
+      else total += byLvl[l]?.[skill] ?? 0
+    }
+    dispatch({ type: 'SET_SKILL_RANK', skill, rank: total })
+  }
+
+  function levelSpend(charLvl: number): number {
+    const byLvl = build.skillRanksByLevel ?? {}
+    let n = 0
+    for (const skill of Object.keys(byLvl[charLvl] ?? {})) {
+      n += byLvl[charLvl]?.[skill] ?? 0
+    }
+    return n
   }
 
   return (
@@ -193,71 +225,204 @@ export default function Skills() {
         {build.totalLevel === 0 ? (
           <p className={styles.empty}>Select class levels to allocate skill points.</p>
         ) : (
-          <div className={styles.table}>
-            <div className={styles.tableHeader}>
-              <span className={styles.colName}>Skill</span>
-              <span className={styles.colCs}>CS</span>
-              <span className={styles.colControls}>Ranks</span>
-              <span className={styles.colMax}>Max</span>
-              <span className={styles.colCost}>Cost</span>
+          <>
+            <div className={styles.viewToggle}>
+              <button
+                type="button"
+                className={`${styles.viewToggleBtn} ${viewMode === 'totals' ? styles.viewToggleBtnActive : ''}`}
+                onClick={() => setViewMode('totals')}
+              >Totals</button>
+              <button
+                type="button"
+                className={`${styles.viewToggleBtn} ${viewMode === 'per-level' ? styles.viewToggleBtnActive : ''}`}
+                onClick={() => setViewMode('per-level')}
+                title="V2-style per-character-level allocation grid"
+              >Per Level</button>
             </div>
-            {SKILLS.map(({ name: skill }) => {
-              const trained = trainedLevels[skill] ?? 0
-              const isClass = classSkills.has(skill)
-              const max = maxTrained(skill)
-              const restricted = RESTRICTED_SKILLS.has(skill) && !isClass
-              const canIncrease = !restricted && remaining >= 1 && trained < max
-              const canDecrease = trained > 0
-              const maxRanks = isClass ? max : max / 2
-              return (
-                <div
-                  key={skill}
-                  className={styles.row}
-                  data-class-skill={isClass}
-                  title={restricted ? `${skill} can only be trained as a class skill.` : undefined}
-                >
-                  <span className={styles.colName}>{skill}</span>
-                  <span className={styles.colCs}>
-                    {isClass && <span className={styles.csMarker} title="Class Skill">C</span>}
-                  </span>
-                  <span className={styles.colControls}>
-                    <button
-                      className={styles.btn}
-                      onClick={() => adjust(skill, -1)}
-                      disabled={!canDecrease}
-                      aria-label={`Decrease ${skill}`}
-                    >
-                      −
-                    </button>
-                    <span className={styles.rank} data-nonzero={trained > 0}>
-                      {displayRank(skill)}
-                    </span>
-                    <button
-                      className={styles.btn}
-                      onClick={() => adjust(skill, 1)}
-                      disabled={!canIncrease}
-                      aria-label={`Increase ${skill}`}
-                    >
-                      +
-                    </button>
-                  </span>
-                  <span className={styles.colMax}>
-                    {restricted ? '—' : (isClass ? maxRanks : maxRanks.toFixed(1).replace(/\.0$/, ''))}
-                  </span>
-                  <span className={styles.colCost}>1</span>
+
+            {viewMode === 'totals' ? (
+              <div className={styles.table}>
+                <div className={styles.tableHeader}>
+                  <span className={styles.colName}>Skill</span>
+                  <span className={styles.colCs}>CS</span>
+                  <span className={styles.colControls}>Ranks</span>
+                  <span className={styles.colMax}>Max</span>
+                  <span className={styles.colCost}>Cost</span>
                 </div>
-              )
-            })}
-          </div>
+                {SKILLS.map(({ name: skill }) => {
+                  const trained = trainedLevels[skill] ?? 0
+                  const isClass = classSkills.has(skill)
+                  const max = maxTrained(skill)
+                  const restricted = RESTRICTED_SKILLS.has(skill) && !isClass
+                  const canIncrease = !restricted && remaining >= 1 && trained < max
+                  const canDecrease = trained > 0
+                  const maxRanks = isClass ? max : max / 2
+                  return (
+                    <div
+                      key={skill}
+                      className={styles.row}
+                      data-class-skill={isClass}
+                      title={restricted ? `${skill} can only be trained as a class skill.` : undefined}
+                    >
+                      <span className={styles.colName}>{skill}</span>
+                      <span className={styles.colCs}>
+                        {isClass && <span className={styles.csMarker} title="Class Skill">C</span>}
+                      </span>
+                      <span className={styles.colControls}>
+                        <button
+                          className={styles.btn}
+                          onClick={() => adjust(skill, -1)}
+                          disabled={!canDecrease}
+                          aria-label={`Decrease ${skill}`}
+                        >−</button>
+                        <span className={styles.rank} data-nonzero={trained > 0}>
+                          {displayRank(skill)}
+                        </span>
+                        <button
+                          className={styles.btn}
+                          onClick={() => adjust(skill, 1)}
+                          disabled={!canIncrease}
+                          aria-label={`Increase ${skill}`}
+                        >+</button>
+                      </span>
+                      <span className={styles.colMax}>
+                        {restricted ? '—' : (isClass ? maxRanks : maxRanks.toFixed(1).replace(/\.0$/, ''))}
+                      </span>
+                      <span className={styles.colCost}>1</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <PerLevelGrid
+                build={build}
+                allClasses={allClasses}
+                raceIntBonus={raceIntBonus}
+                raceSkillBonus={raceSkillBonus}
+                classSkills={classSkills}
+                heroicLevel={heroicLevel}
+                onSet={setRankAtLevel}
+                levelSpend={levelSpend}
+                spAtLevel={(lvl) => skillPointsAtLevel(build, allClasses, raceIntBonus, raceSkillBonus, lvl)}
+              />
+            )}
+
+            <div className={styles.legend}>
+              <span className={styles.legendCs}>C</span>
+              <span className={styles.legendLabel}>= Class skill (1 rank per pt)</span>
+              <span className={styles.legendLabel} style={{ marginLeft: '12px' }}>
+                Cross-class = ½ rank per pt (.5 increments)
+              </span>
+            </div>
+          </>
         )}
-        <div className={styles.legend}>
-          <span className={styles.legendCs}>C</span>
-          <span className={styles.legendLabel}>= Class skill (1 rank per pt)</span>
-          <span className={styles.legendLabel} style={{ marginLeft: '12px' }}>
-            Cross-class = ½ rank per pt (.5 increments)
-          </span>
-        </div>
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Per-character-level allocation grid (V2 SkillsPane layout)
+// ---------------------------------------------------------------------------
+
+interface PerLevelGridProps {
+  build: CharacterBuild
+  allClasses: DDOClass[]
+  raceIntBonus: number
+  raceSkillBonus: number
+  classSkills: Set<string>
+  heroicLevel: number
+  onSet: (skill: SkillName, charLvl: number, newRank: number) => void
+  levelSpend: (charLvl: number) => number
+  spAtLevel: (charLvl: number) => number
+}
+
+function PerLevelGrid({
+  build, classSkills, heroicLevel, onSet, levelSpend, spAtLevel,
+}: PerLevelGridProps) {
+  const byLvl = build.skillRanksByLevel ?? {}
+  const levels = Array.from({ length: heroicLevel }, (_, i) => i + 1)
+
+  return (
+    <div>
+      <div
+        className={styles.perLevelGrid}
+        style={{ gridTemplateColumns: `100px repeat(${levels.length}, minmax(28px, 1fr)) 36px` }}
+      >
+        {/* header row */}
+        <div className={styles.perLevelHeader}>Skill</div>
+        {levels.map(l => (
+          <div key={`h-${l}`} className={styles.perLevelHeader} title={`Character level ${l}`}>{l}</div>
+        ))}
+        <div className={styles.perLevelHeader}>Σ</div>
+
+        {SKILLS.map(({ name: skill }) => {
+          const isClass = classSkills.has(skill)
+          const restricted = RESTRICTED_SKILLS.has(skill) && !isClass
+          let runningTotal = 0
+          for (const l of levels) runningTotal += byLvl[l]?.[skill] ?? 0
+          const totalDisplay = isClass
+            ? String(runningTotal)
+            : (runningTotal / 2).toFixed(1).replace(/\.0$/, '')
+          return (
+            <div key={skill} className={styles.perLevelRow}>
+              <div className={styles.perLevelLabel} title={restricted ? `${skill} can only be trained as a class skill.` : skill}>
+                {skill}
+              </div>
+              {levels.map(l => {
+                const ranks = byLvl[l]?.[skill] ?? 0
+                const cap = isClass ? l + 3 : l + 3
+                const locked = restricted
+                return (
+                  <div
+                    key={`${skill}-${l}`}
+                    className={`${styles.perLevelCell} ${locked ? styles.perLevelCellLocked : ''}`}
+                  >
+                    <input
+                      className={styles.perLevelInput}
+                      data-zero={ranks === 0}
+                      type="number"
+                      min={0}
+                      max={cap}
+                      value={ranks || ''}
+                      placeholder="—"
+                      disabled={locked}
+                      onChange={e => {
+                        const n = Number(e.target.value)
+                        onSet(skill as SkillName, l, isFinite(n) ? n : 0)
+                      }}
+                      title={locked
+                        ? `${skill} can only be trained as a class skill.`
+                        : `Level ${l}: rank cap ${isClass ? cap : `${(cap / 2).toFixed(1)} (cross-class)`}`}
+                    />
+                  </div>
+                )
+              })}
+              <div className={styles.perLevelTotalCell}>{totalDisplay}</div>
+            </div>
+          )
+        })}
+
+        {/* Per-level totals footer */}
+        <div className={`${styles.perLevelLabel} ${styles.perLevelTotalCell}`}>SP @ lvl</div>
+        {levels.map(l => {
+          const spent = levelSpend(l)
+          const budget = spAtLevel(l)
+          const over = spent > budget
+          return (
+            <div
+              key={`tot-${l}`}
+              className={styles.perLevelTotalCell}
+              style={{ color: over ? 'var(--color-red)' : undefined }}
+              title={`Spent ${spent} of ${budget} skill points at level ${l}`}
+            >
+              {spent}/{budget}
+            </div>
+          )
+        })}
+        <div className={styles.perLevelTotalCell}>—</div>
+      </div>
+      <p className={styles.perLevelOverflow} style={{ display: 'none' }}>placeholder</p>
     </div>
   )
 }
