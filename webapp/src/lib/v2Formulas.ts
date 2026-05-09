@@ -1,0 +1,73 @@
+// V2-canonical formulas extracted as pure functions so the parity-tests can
+// hit them without standing up the full useBuildStats hook. Each function
+// cites the V2 source it mirrors.
+
+/**
+ * V2 BreakdownItemHitpoints.cpp:174-181 — reaper HP cap by character level.
+ * Returns the cap (Infinity above level 25).
+ */
+export function reaperHpCap(level: number): number {
+  if (level <= 5) return 50
+  if (level <= 10) return 100
+  if (level <= 15) return 200
+  if (level <= 20) return 400
+  if (level <= 25) return 800
+  return Infinity
+}
+
+/**
+ * V2 BreakdownItemHitpoints.cpp:139-152 — fighting-style HP bonus.
+ * `0.25 × min(4, styleFeats) × non-epic-class-HD`, floor.
+ *
+ * `nonEpicHD` is sum across heroic/iconic class levels of (level × HitDie),
+ * with Epic and Legendary classes contributing half-HD per :74-83.
+ */
+export function styleBonusHp(styleFeats: number, nonEpicHD: number): number {
+  if (styleFeats <= 0 || nonEpicHD <= 0) return 0
+  return Math.floor(0.25 * Math.min(4, styleFeats) * nonEpicHD)
+}
+
+/**
+ * V2 BreakdownItemDodge.cpp:31-65 — effective dodge cap. Returns the lowest
+ * applicable cap among dodgeCap, MDB-when-not-cloth, MDBShields-when-tower.
+ * Caller compares the cap against the resolved dodge total to decide whether
+ * to clamp.
+ */
+export function effectiveDodgeCap(args: {
+  dodgeCap: number
+  hasDodgeCap: boolean
+  mdb: number
+  hasMdb: boolean
+  mdbShields: number
+  isClothArmor: boolean
+  isTowerShield: boolean
+}): number {
+  let cap = args.hasDodgeCap ? args.dodgeCap : Infinity
+  if (!args.isClothArmor && args.hasMdb) {
+    cap = Math.min(cap, args.mdb)
+  }
+  if (args.isTowerShield) {
+    cap = Math.min(cap, args.mdbShields)
+  }
+  return cap
+}
+
+/**
+ * V2 BreakdownItemSave.cpp:484-510 — Divine Grace cap.
+ * `max(2 + 3 × Paladin levels, 2 + 3 × Sacred Fist levels)`, requires
+ * level ≥ 2 in the relevant class.
+ */
+export function divineGraceCap(palLevels: number, sfLevels: number): number {
+  const palCap = palLevels >= 2 ? 2 + 3 * palLevels : 0
+  const sfCap = sfLevels >= 2 ? 2 + 3 * sfLevels : 0
+  return Math.max(palCap, sfCap)
+}
+
+/**
+ * V2 BreakdownItemSave.cpp:520-549 — Half-Elf Lesser Divine Grace cap.
+ * Base 2, +1 per "Improved Dilettante: Paladin" selection trained across
+ * the three Half-Elf "Improved Dilettante I/II/III" enhancements.
+ */
+export function halfElfLesserDivineGraceCap(improvedDilettantePaladinCount: number): number {
+  return 2 + Math.max(0, improvedDilettantePaladinCount)
+}

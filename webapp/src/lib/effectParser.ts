@@ -778,13 +778,16 @@ export function parseEffect(
     case 'ArcaneSpellFailureShields':
       return [make('arcaneSpellFailureShield')]
 
-    // Tower-shield-gated dodge / mdb — V2 gates these via Requirements; if
-    // the requirement evaluator passes, treat them as standard dodge / mdb.
+    // Tower-shield-gated dodge / mdb — V2 keeps a separate breakdown for
+    // tower-shield MDB (Effect.h:Effect_MaxDexBonusTowerShield →
+    // Breakdown_MaxDexBonusShields) so the AC and Dodge breakdowns can apply
+    // it as an additional cap when a tower shield is equipped
+    // (BreakdownItemAC.cpp:71-82, BreakdownItemDodge.cpp:55-63).
     case 'DodgeBonusTowerShield':
       return [make('dodge', 'Dodge')]
 
     case 'MaxDexBonusTowerShield':
-      return [make('mdb')]
+      return [make('mdbShields')]
 
     case 'BlockingDR':
       return [make('blockingDR')]
@@ -813,8 +816,11 @@ export function parseEffect(
     case 'HitpointsReaper':
       return [make('hp', 'Reaper')]
 
+    // V2 BreakdownItemHitpoints.cpp:139-152 — style feats are a *count*; HP
+    // bonus is then derived as 0.25 × min(4, count) × non-epic class HD.
+    // Route the raw effect into a counter the hook reads later.
     case 'HitpointsStyleBonus':
-      return [make('hp')]
+      return [make('styleFeats')]
 
     case 'FalseLife':
       return [make('hp', 'False Life')]
@@ -1641,6 +1647,14 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
     // -----------------------------------------------------------------------
     case 'HitpointsReaper':
       return [make('hp', 'Reaper')]
+
+    // V2 BreakdownItemHitpoints.cpp:139-152 — counter (see parseEffect note)
+    case 'HitpointsStyleBonus':
+      return [make('styleFeats')]
+
+    // V2 separate Breakdown_MaxDexBonusShields (Effect.h:Effect_MaxDexBonusTowerShield)
+    case 'MaxDexBonusTowerShield':
+      return [make('mdbShields')]
 
     case 'FalseLife':
       return [make('hp', 'False Life')]
