@@ -1027,6 +1027,12 @@ export function parseEffect(
     case 'Immunity':
       return [make(`immunity.${items[0] ?? 'All'}`)]
 
+    case 'EldritchBlastD6':
+      return [make('eldritchBlast.d6')]
+
+    case 'EldritchBlastD8':
+      return [make('eldritchBlast.d8')]
+
     case 'DragonmarkUse':
       return [make('dragonmark.uses')]
 
@@ -1180,20 +1186,26 @@ export function parseEffect(
         : []
 
     // -----------------------------------------------------------------------
-    // Weapon-specific effects (modeled by the weapon breakdown engine, not
-    // the flat-stat aggregator). These touch only equipped weapons that match
-    // Item filters and are emitted into per-weapon breakdown items in V2.
+    // Weapon-specific effects: surface a subset as flat stat keys so the
+    // breakdowns engine can show per-weapon attack-speed / crit / vorpal /
+    // keen totals (V2 BreakdownItemWeaponAttackSpeed, ...VorpalRange).
     // -----------------------------------------------------------------------
     case 'Weapon_Alacrity':
+      return [make('weapon.alacrity')]
+    case 'Weapon_Keen':
+      return [make('weapon.keen')]
+    case 'Weapon_VorpalRange':
+      return [make('weapon.vorpalRange')]
+    case 'Weapon_CriticalMultiplier':
+      return [make('weapon.critMultiplier')]
+    case 'Weapon_CriticalMultiplier19To20':
+      return [make('weapon.critMultiplier19to20')]
+    case 'Weapon_CriticalRange':
+      return [make('weapon.critRange')]
     case 'Weapon_AttackAbility':
     case 'Weapon_BaseDamage':
-    case 'Weapon_CriticalMultiplier':
-    case 'Weapon_CriticalMultiplier19To20':
-    case 'Weapon_CriticalRange':
     case 'Weapon_DamageAbility':
     case 'Weapon_Enchantment':
-    case 'Weapon_Keen':
-    case 'Weapon_VorpalRange':
     case 'Weapon_AttackCritical':
     case 'Weapon_DamageCritical':
     case 'Weapon_AttackAndDamageCritical':
@@ -1839,6 +1851,12 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
     case 'Immunity':
       return [make(`immunity.${items[0] ?? 'All'}`)]
 
+    case 'EldritchBlastD6':
+      return [make('eldritchBlast.d6')]
+
+    case 'EldritchBlastD8':
+      return [make('eldritchBlast.d8')]
+
     // -----------------------------------------------------------------------
     // Save / skill ability replacement
     // -----------------------------------------------------------------------
@@ -1919,22 +1937,28 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
     // Weapon-specific (modeled by the weapon breakdown engine)
     // -----------------------------------------------------------------------
     case 'Weapon_Alacrity':
+      return [make('weapon.alacrity')]
+    case 'Weapon_Keen':
+      return [make('weapon.keen')]
+    case 'Weapon_VorpalRange':
+      return [make('weapon.vorpalRange')]
+    case 'Weapon_CriticalMultiplier':
+      return [make('weapon.critMultiplier')]
+    case 'Weapon_CriticalMultiplier19To20':
+      return [make('weapon.critMultiplier19to20')]
+    case 'Weapon_CriticalRange':
+      return [make('weapon.critRange')]
     case 'Weapon_Attack':
     case 'Weapon_AttackAbility':
     case 'Weapon_AttackAndDamage':
     case 'Weapon_AttackAndDamageCritical':
     case 'Weapon_AttackCritical':
     case 'Weapon_BaseDamage':
-    case 'Weapon_CriticalMultiplier':
-    case 'Weapon_CriticalMultiplier19To20':
-    case 'Weapon_CriticalRange':
     case 'Weapon_Damage':
     case 'Weapon_DamageAbility':
     case 'Weapon_DamageCritical':
     case 'Weapon_Enchantment':
-    case 'Weapon_Keen':
     case 'Weapon_OtherDamageBonus':
-    case 'Weapon_VorpalRange':
     case 'WeaponOtherDamageBonus':
     case 'WeaponOtherDamageBonusCritical':
     case 'WeaponOtherDamageBonusClass':

@@ -134,9 +134,65 @@ export default function CombatPanel() {
                 </tbody>
               </table>
             )}
+
+            <AttackChainsEditor />
           </>
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * Editor for named attack chains (V2 AttackChain.h). Each chain is a
+ * comma-separated ordered list of attack-action names. Surfaced for parity
+ * with V2's chain editor.
+ */
+function AttackChainsEditor() {
+  const { build, dispatch } = useCharacter()
+  const [newName, setNewName] = useState('')
+  const chains = Object.entries(build.attackChains)
+
+  return (
+    <details className={styles.chainsBlock}>
+      <summary>Attack Chains ({chains.length})</summary>
+      <div className={styles.chainsList}>
+        {chains.length === 0 && <p className={styles.empty}>No chains defined.</p>}
+        {chains.map(([name, attacks]) => (
+          <div key={name} className={styles.chainRow}>
+            <strong>{name}</strong>
+            <input
+              type="text"
+              defaultValue={attacks.join(', ')}
+              onBlur={e => dispatch({
+                type: 'SET_ATTACK_CHAIN',
+                chainName: name,
+                attacks: e.target.value.split(',').map(s => s.trim()).filter(Boolean),
+              })}
+            />
+            <button onClick={() => dispatch({ type: 'DELETE_ATTACK_CHAIN', chainName: name })}>
+              ×
+            </button>
+          </div>
+        ))}
+        <div className={styles.chainRow}>
+          <input
+            placeholder="New chain name"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+          />
+          <button
+            onClick={() => {
+              if (newName.trim()) {
+                dispatch({ type: 'SET_ATTACK_CHAIN', chainName: newName.trim(), attacks: [] })
+                setNewName('')
+              }
+            }}
+          >
+            Add
+          </button>
+        </div>
+      </div>
+    </details>
   )
 }

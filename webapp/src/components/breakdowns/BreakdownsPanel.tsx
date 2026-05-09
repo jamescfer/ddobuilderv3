@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff } from '../../types/ddo'
+import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, GuildBuff } from '../../types/ddo'
 import { useBuildStats } from '../../hooks/useBuildStats'
 import type { ResolvedBonus } from '../../lib/bonus'
 import { SKILLS, SCHOOL_DCS, SPELL_POWER_TYPES, SPELL_POWER_LABELS } from '../../lib/gamedata'
@@ -206,6 +206,7 @@ export default function BreakdownsPanel() {
   const [allFiligreeBonuses,setAllFiligreeBonuses]= useState<FiligreeSetBonus[]>([])
   const [allFiligrees,      setAllFiligrees]      = useState<Filigree[]>([])
   const [allWeaponGroups,   setAllWeaponGroups]   = useState<import('../../lib/weapons/groups').WeaponGroupSpec[]>([])
+  const [allGuildBuffs,     setAllGuildBuffs]     = useState<GuildBuff[]>([])
   const [gearItems,         setGearItems]         = useState<Record<string, Item>>({})
   const [tip, setTip] = useState<TipState | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -222,6 +223,7 @@ export default function BreakdownsPanel() {
     api.filigreeSetBonuses().then(setAllFiligreeBonuses)
     api.filigree().then(setAllFiligrees)
     api.weaponGroups().then(setAllWeaponGroups).catch(() => setAllWeaponGroups([]))
+    api.guildbuffs().then(setAllGuildBuffs).catch(() => setAllGuildBuffs([]))
   }, [])
 
   // Resolve gear items whenever equipped slots change
@@ -249,11 +251,11 @@ export default function BreakdownsPanel() {
     () => ({
       allClasses, allRaces, allFeats, allTrees, gearItems,
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-      allWeaponGroups,
+      allWeaponGroups, allGuildBuffs,
     }),
     [allClasses, allRaces, allFeats, allTrees, gearItems,
      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-     allWeaponGroups],
+     allWeaponGroups, allGuildBuffs],
   )
   const stats = useBuildStats(statsInput)
 
@@ -474,7 +476,35 @@ export default function BreakdownsPanel() {
     fixedRow('Skill Pts',  skillPointsTotal, String(skillPointsTotal), stats.resolve('skillPoints').bonuses),
     statRow('Off-hand Atk', 'offhand.attack', pct),
     statRow('Helpless Dmg', 'helpless',        pct),
+    statRow('Tactical DC',  'tacticalDC.All',  sign),
+    statRow('  vs Trip',    'tacticalDC.Trip', sign),
+    statRow('  vs Stun',    'tacticalDC.Stun', sign),
+    statRow('  vs Sunder',  'tacticalDC.Sunder', sign),
+    statRow('  vs Assassinate', 'tacticalDC.Assassinate', sign),
   ]
+
+  // Weapon-effect breakdowns (Stream-audit additions)
+  const weaponEffectStats: StatRowData[] = []
+  const wAlac = stats.resolve('weapon.alacrity')
+  if (wAlac.total !== 0) weaponEffectStats.push(fixedRow('Alacrity', wAlac.total, pct(wAlac.total), wAlac.bonuses))
+  const wKeen = stats.resolve('weapon.keen')
+  if (wKeen.total !== 0) weaponEffectStats.push(fixedRow('Keen', wKeen.total, sign(wKeen.total), wKeen.bonuses))
+  const wVorpal = stats.resolve('weapon.vorpalRange')
+  if (wVorpal.total !== 0) weaponEffectStats.push(fixedRow('Vorpal Range', wVorpal.total, sign(wVorpal.total), wVorpal.bonuses))
+
+  // Immunities — list every immunity.<name> key set anywhere in the build
+  const immunityKeys = stats.keys().filter(k => k.startsWith('immunity.'))
+  const immunityStats: StatRowData[] = immunityKeys.map(k => {
+    const r = stats.resolve(k)
+    return fixedRow(k.slice('immunity.'.length), r.total, r.total > 0 ? '✓' : '–', r.bonuses)
+  })
+
+  // Eldritch Blast
+  const eldritchStats: StatRowData[] = []
+  const ebD6 = stats.resolve('eldritchBlast.d6')
+  if (ebD6.total !== 0) eldritchStats.push(fixedRow('Eldritch Blast d6', ebD6.total, `${ebD6.total}d6`, ebD6.bonuses))
+  const ebD8 = stats.resolve('eldritchBlast.d8')
+  if (ebD8.total !== 0) eldritchStats.push(fixedRow('Eldritch Blast d8', ebD8.total, `${ebD8.total}d8`, ebD8.bonuses))
 
   const skillStats: StatRowData[] = SKILLS.map(({ name }) => {
     const resolved = stats.resolve(`skill.${name}`)
@@ -581,6 +611,24 @@ export default function BreakdownsPanel() {
             <Section title="Combat">
               {miscStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
             </Section>
+
+            {weaponEffectStats.length > 0 && (
+              <Section title="Weapon Effects" defaultOpen={false}>
+                {weaponEffectStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {eldritchStats.length > 0 && (
+              <Section title="Eldritch Blast" defaultOpen={false}>
+                {eldritchStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {immunityStats.length > 0 && (
+              <Section title="Immunities" defaultOpen={false}>
+                {immunityStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
 
             {hirelingStats.length > 0 && (
               <Section title="Hireling" defaultOpen={false}>

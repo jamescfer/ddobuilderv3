@@ -16,7 +16,7 @@ import { SKILLS } from '../lib/gamedata'
 import type {
   Race, DDOClass, Feat, EnhancementTree, EnhancementTreeItem, Item,
   Effect, EnhancementSelection, Augment, SetBonus, FiligreeSetBonus, Filigree,
-  OptionalBuff, FiligreeSlot, Spell,
+  OptionalBuff, FiligreeSlot, Spell, GuildBuff,
 } from '../types/ddo'
 import { parseEffect, parseItemBuff } from '../lib/effectParser'
 import type { EffectContext } from '../lib/effectParser'
@@ -71,6 +71,8 @@ export interface BuildStatsInput {
   allWeaponGroups?: WeaponGroupSpec[]
   /** All spell metadata (from /api/spells). Optional — used for trained-spell self-effects. */
   allSpells?: Spell[]
+  /** All guild-buff definitions (from /api/guildbuffs). Optional. */
+  allGuildBuffs?: GuildBuff[]
 }
 
 // ---------------------------------------------------------------------------
@@ -441,6 +443,28 @@ function accumulateSelfBuffs(
 }
 
 /**
+ * Guild buffs apply when applyGuildBuffs is true and the buff's required level
+ * is at or below the build's guild level. Mirrors V2 Build::ApplyGuildBuffs.
+ */
+function accumulateGuildBuffs(
+  map: StatMap,
+  guildLevel: number,
+  applyGuildBuffs: boolean,
+  allGuildBuffs: GuildBuff[] | undefined,
+  ctx?: EffectContext,
+): void {
+  if (!applyGuildBuffs || !allGuildBuffs) return
+  for (const gb of allGuildBuffs) {
+    const reqLevel = (gb as { Level?: number }).Level ?? 0
+    if (reqLevel > guildLevel) continue
+    const effects = (gb as { Effect?: Effect | Effect[] }).Effect
+    for (const eff of toArray(effects)) {
+      addParsed(map, parseEffect(eff, 1, `Guild Buff: ${gb.Name}`, 0, 0, ctx))
+    }
+  }
+}
+
+/**
  * Trained-spell self-effects. V2 parity: spells with Effect entries (e.g.
  * passive buffs cast on self) contribute their bonuses while trained.
  * Stance-gated effects fire only when their gating stance is active.
@@ -511,7 +535,7 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
     const {
       allClasses, allRaces, allFeats, allTrees, gearItems,
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-      allWeaponGroups, allSpells,
+      allWeaponGroups, allSpells, allGuildBuffs,
     } = input
 
     // ──────────────────────────────────────────────────────────────────────
@@ -739,6 +763,9 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
     if (allSpells && allSpells.length > 0) {
       accumulateTrainedSpells(map, build.trainedSpells, allSpells, ctx)
     }
+
+    // ── Guild buffs (V2 parity) ───────────────────────────────────────────
+    accumulateGuildBuffs(map, build.guildLevel, build.applyGuildBuffs, allGuildBuffs, ctx)
 
     // ── Skill tomes ───────────────────────────────────────────────────────
     for (const [skill, bonus] of Object.entries(build.skillTomes ?? {})) {

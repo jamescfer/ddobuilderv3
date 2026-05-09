@@ -9,8 +9,12 @@ import styles from './GearPanel.module.css'
 // Slot definitions
 // ---------------------------------------------------------------------------
 const LEFT_SLOTS = ['Helmet', 'Necklace', 'Trinket', 'Armor', 'Cloak', 'Belt', 'Ring', 'Ring2']
-const RIGHT_SLOTS = ['Gloves', 'Bracers', 'Boots', 'Goggles', 'Main Hand', 'Off Hand']
-const ALL_SLOTS = [...LEFT_SLOTS, ...RIGHT_SLOTS]
+const RIGHT_SLOTS = ['Gloves', 'Bracers', 'Boots', 'Goggles', 'Main Hand', 'Off Hand', 'Quiver', 'Arrow']
+// V2 also supports cosmetic-only slots that don't contribute stats but do
+// participate in gear-set persistence and forum export. Listed here so they
+// round-trip through save/load.
+const COSMETIC_SLOTS = ['Cosmetic Helmet', 'Cosmetic Armor', 'Cosmetic Cloak', 'Cosmetic Weapon', 'Cosmetic Off Hand']
+const ALL_SLOTS = [...LEFT_SLOTS, ...RIGHT_SLOTS, ...COSMETIC_SLOTS]
 
 function apiSlotName(slot: string): string {
   if (slot === 'Ring2') return 'Ring'
@@ -484,6 +488,15 @@ export default function GearPanel() {
             {RIGHT_SLOTS.map(renderSlot)}
           </div>
         </div>
+
+        <details className={styles.cosmetics}>
+          <summary>Cosmetic slots ({COSMETIC_SLOTS.filter(s => build.gear[s]).length})</summary>
+          <div className={styles.grid}>
+            <div className={styles.column}>
+              {COSMETIC_SLOTS.map(renderSlot)}
+            </div>
+          </div>
+        </details>
 
         {build.totalLevel === 0 && (
           <p className={styles.hint}>Set your character level to filter items by level.</p>
