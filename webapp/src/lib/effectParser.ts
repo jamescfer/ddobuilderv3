@@ -222,6 +222,25 @@ export function getAmountAtRank(raw: unknown, rank: number): number {
   return amounts[idx]
 }
 
+/**
+ * Coerces a `<Number>` or `<Sides>` value from a Dice block into a number.
+ * fast-xml-parser may produce a number, a string, or an object with `#text`
+ * (when the element carries a `size` attribute). Returns 0 if uncoerceable.
+ */
+function diceComponent(raw: unknown): number {
+  if (raw === undefined || raw === null) return 0
+  if (typeof raw === 'number') return raw
+  if (typeof raw === 'string') {
+    const n = parseFloat(raw.trim())
+    return isNaN(n) ? 0 : n
+  }
+  if (typeof raw === 'object') {
+    const text = (raw as Record<string, unknown>)['#text']
+    if (text !== undefined) return diceComponent(text)
+  }
+  return 0
+}
+
 // ---------------------------------------------------------------------------
 // Spell element normalization
 // ---------------------------------------------------------------------------
@@ -465,6 +484,32 @@ export function parseEffect(
     if (!requirementsMet(effect.Requirements, ctx)) return []
   } else {
     if (hasStanceRequirement(effect)) return []
+  }
+
+  // V2 on-hit dice damage: WeaponOtherDamageBonus + AType=Dice carries a
+  // <Dice> block (e.g. 6d6 Fire). resolveValue returns null for AType=Dice
+  // because it has no access to the Dice block, so we special-case it here.
+  // We emit weapon.diceDamage.<DamageType> with the *average* roll value
+  // (V2 formula: Number * (Sides + 1) / 2).
+  if (
+    effect.AType === 'Dice' &&
+    effect.Dice &&
+    (effect.Type === 'WeaponOtherDamageBonus' || effect.Type === 'Weapon_OtherDamageBonus')
+  ) {
+    const items = toStringArray(effect.Item)
+    if (!weaponEffectMatches(items, ctx)) return []
+    const num   = diceComponent(effect.Dice.Number)
+    const sides = diceComponent(effect.Dice.Sides)
+    if (num <= 0 || sides <= 0) return []
+    const avg = num * (sides + 1) / 2
+    const dmg = (effect.Dice.Damage ?? 'Untyped').toString() || 'Untyped'
+    const bonusType = effect.Bonus ?? 'Enhancement'
+    return [{
+      statKey: `weapon.diceDamage.${dmg}`,
+      value: avg,
+      bonusType,
+      source,
+    }]
   }
 
   const resolved = resolveValue(effect, rank, classLevels, treeTotalAP, ctx)

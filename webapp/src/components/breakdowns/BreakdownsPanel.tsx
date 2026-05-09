@@ -763,6 +763,20 @@ export default function BreakdownsPanel() {
     }
   }
 
+  // V2 on-hit dice damage (e.g. flaming weapon's +6d6 Fire). These are emitted
+  // by the effect parser as 'weapon.diceDamage.<DamageType>' with the *average*
+  // dice value (Number * (Sides + 1) / 2). We don't currently round-trip the
+  // raw XdY notation, so only the average is shown.
+  const onHitDamageRows: StatRowData[] = stats
+    .keys()
+    .filter(k => k.startsWith('weapon.diceDamage.'))
+    .map(k => {
+      const dmg = k.slice('weapon.diceDamage.'.length)
+      const r = stats.resolve(k)
+      return fixedRow(`${dmg}: avg ${r.total}`, r.total, sign(r.total), r.bonuses)
+    })
+    .filter(s => s.total !== 0)
+
   const skillStats: StatRowData[] = SKILLS.map(({ name }) => {
     const resolved = stats.resolve(`skill.${name}`)
     return {
@@ -981,6 +995,12 @@ export default function BreakdownsPanel() {
             {classResourceRows.length > 0 && (
               <Section title="Class Resources" defaultOpen={false}>
                 {classResourceRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {onHitDamageRows.length > 0 && (
+              <Section title="On-Hit Damage" defaultOpen={false}>
+                {onHitDamageRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
               </Section>
             )}
 

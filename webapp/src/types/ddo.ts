@@ -46,6 +46,11 @@ export interface Effect {
   StackSource?: string
   ApplyAsItemEffect?: boolean
   Rare?: boolean             // effect only applies when filigree slot is marked rare
+  // V2 on-hit / on-crit dice block (e.g. <Dice><Number>6</Number><Sides>6</Sides>
+  // <Damage>Fire</Damage></Dice> for a flaming weapon's +6d6 fire on hit). The
+  // Number/Sides may parse as either number or string (with a `size` attribute);
+  // callers must coerce when reading. Damage is optional (defaults to 'Untyped').
+  Dice?: { Number: number | string; Sides: number | string; Damage?: string }
 }
 
 // ---------------------------------------------------------------------------
