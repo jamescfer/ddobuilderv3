@@ -593,18 +593,19 @@ function extractArmorMaxDex(gearItems: Record<string, Item>): number | null {
 // Main hook
 // ---------------------------------------------------------------------------
 
-export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterBuild): BuildStats {
-  const ctx = useCharacter()
-  const build = buildOverride ?? ctx.build
+/**
+ * Pure variant of the stat-aggregation pipeline. Builds the same StatMap
+ * the hook produces but without React. Use from CLI tools and unit tests
+ * to compare V3-computed numbers against V2 (e.g. via the V2 importer).
+ */
+export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): StatMap {
+  const map: StatMap = new Map()
 
-  const statMap = useMemo<StatMap>(() => {
-    const map: StatMap = new Map()
-
-    const {
-      allClasses, allRaces, allFeats, allTrees, gearItems,
-      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-      allWeaponGroups, allSpells, allGuildBuffs,
-    } = input
+  const {
+    allClasses, allRaces, allFeats, allTrees, gearItems,
+    allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+    allWeaponGroups, allSpells, allGuildBuffs,
+  } = input
 
     // ──────────────────────────────────────────────────────────────────────
     // Build the EffectContext used to gate effects via Requirements::Met.
@@ -1302,14 +1303,47 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
       }
     }
 
-    return map
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    build,
-    input.allClasses, input.allRaces, input.allFeats, input.allTrees,
-    input.allSelfBuffs, input.allAugments, input.allSetBonuses,
-    input.allFiligreeBonuses, input.allFiligrees, input.gearItems,
-  ])
+  return map
+}
+
+/**
+ * Pure variant of useBuildStats — builds the same BuildStats object the
+ * React hook returns, but doesn't read from any context. Lets V2-imported
+ * builds be evaluated head-to-head with V2 in unit tests.
+ */
+export function computeBuildStats(input: BuildStatsInput, build: CharacterBuild): BuildStats {
+  const map = buildStatMap(input, build)
+  const weaponInfo = extractWeaponInfo(input.gearItems)
+  const armorMaxDex = extractArmorMaxDex(input.gearItems)
+  return {
+    resolve: (key: string): ResolvedStat => {
+      const bonuses = map.get(key)
+      return bonuses?.length ? resolveBonus(bonuses) : emptyResolvedStat()
+    },
+    total: (key: string): number => {
+      const bonuses = map.get(key)
+      return bonuses?.length ? resolveBonus(bonuses).total : 0
+    },
+    keys: () => Array.from(map.keys()),
+    weapon: weaponInfo,
+    armorMaxDex,
+  }
+}
+
+export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterBuild): BuildStats {
+  const ctx = useCharacter()
+  const build = buildOverride ?? ctx.build
+
+  const statMap = useMemo<StatMap>(
+    () => buildStatMap(input, build),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      build,
+      input.allClasses, input.allRaces, input.allFeats, input.allTrees,
+      input.allSelfBuffs, input.allAugments, input.allSetBonuses,
+      input.allFiligreeBonuses, input.allFiligrees, input.gearItems,
+    ],
+  )
 
   const weaponInfo = useMemo(() => extractWeaponInfo(input.gearItems), [input.gearItems])
   const armorMaxDex = useMemo(() => extractArmorMaxDex(input.gearItems), [input.gearItems])
