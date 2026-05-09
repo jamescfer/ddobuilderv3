@@ -4,10 +4,13 @@
 // forum export section.
 
 import type { CharacterBuild, DDOClass, Race } from '../types/ddo'
+import { characterLevelForClassLevel } from './levelProgression'
 
 export interface AutomaticFeatGroup {
   source: string
   feats: string[]
+  /** Character level the group was granted at (for sorting; 0 for race/completionist). */
+  charLevel?: number
 }
 
 function toArray<T>(val: T | T[] | undefined): T[] {
@@ -16,7 +19,7 @@ function toArray<T>(val: T | T[] | undefined): T[] {
 }
 
 export function buildAutomaticFeatGroups(
-  build: Pick<CharacterBuild, 'race' | 'classes' | 'totalLevel' | 'pastLives'>,
+  build: Pick<CharacterBuild, 'race' | 'classes' | 'levelClasses' | 'totalLevel' | 'pastLives'>,
   allClasses: DDOClass[],
   allRaces: Race[],
 ): AutomaticFeatGroup[] {
@@ -26,7 +29,7 @@ export function buildAutomaticFeatGroups(
     const race = allRaces.find(r => r.Name === build.race)
     if (race) {
       const feats = toArray(race.GrantedFeat).filter(Boolean)
-      if (feats.length > 0) groups.push({ source: build.race, feats })
+      if (feats.length > 0) groups.push({ source: build.race, feats, charLevel: 0 })
     }
   }
 
@@ -35,22 +38,31 @@ export function buildAutomaticFeatGroups(
     const cls = allClasses.find(c => c.Name === bc.name)
     if (!cls?.AutomaticFeats) continue
     for (const autoFeat of cls.AutomaticFeats) {
-      if ((autoFeat.Level ?? 1) > bc.levels) continue
+      const classLvl = autoFeat.Level ?? 1
+      if (classLvl > bc.levels) continue
       const featNames = toArray(autoFeat.Feats).filter(Boolean)
       if (featNames.length === 0) continue
-      groups.push({ source: `${bc.name} Lv ${autoFeat.Level}`, feats: featNames })
+      // V2 parity: the auto-feat is granted at the character level where the
+      // class hits this class-level. Surface this so the panel and forum
+      // export can sort and label correctly for multi-class builds.
+      const charLvl = characterLevelForClassLevel(build, bc.name, classLvl)
+      const sourceLabel = charLvl
+        ? `Lv ${charLvl} — ${bc.name} ${classLvl}`
+        : `${bc.name} Lv ${classLvl}`
+      groups.push({ source: sourceLabel, feats: featNames, charLevel: charLvl })
     }
   }
 
   const heroicClassNames = allClasses.filter(c => !c.NotHeroic).map(c => c.Name)
   if (heroicClassNames.length > 0 && heroicClassNames.every(cn => (build.pastLives[cn] ?? 0) >= 3)) {
-    groups.push({ source: 'Completionist', feats: ['Completionist'] })
+    groups.push({ source: 'Completionist', feats: ['Completionist'], charLevel: 0 })
   }
 
   const heroicRaceNames = allRaces.filter(r => !r.NotHeroic && !r.IsIconic).map(r => r.Name)
   if (heroicRaceNames.length > 0 && heroicRaceNames.every(rn => (build.pastLives[rn] ?? 0) >= 3)) {
-    groups.push({ source: 'Racial Completionist', feats: ['Racial Completionist'] })
+    groups.push({ source: 'Racial Completionist', feats: ['Racial Completionist'], charLevel: 0 })
   }
 
-  return groups
+  // Sort: race/completionist first (charLevel=0), then by character level ascending.
+  return groups.sort((a, b) => (a.charLevel ?? 0) - (b.charLevel ?? 0))
 }

@@ -256,6 +256,14 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', dataDir: DATA_DIR })
 })
 
+app.get('/api/version', (_req, res) => {
+  let version = 'unknown'
+  try {
+    version = fs.readFileSync(path.resolve(__dirname, '..', 'VERSION'), 'utf-8').trim()
+  } catch { /* fall through */ }
+  res.json({ version })
+})
+
 app.get('/api/races', (_req, res) => {
   res.json(cached('races', loadRaces))
 })

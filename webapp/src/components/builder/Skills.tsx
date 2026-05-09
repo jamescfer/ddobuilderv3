@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, Race } from '../../types/ddo'
+import type { CharacterBuild, DDOClass, Race } from '../../types/ddo'
 import { SKILLS } from '../../lib/gamedata'
+import { getLevelClasses } from '../../lib/levelProgression'
 import styles from './Skills.module.css'
 
 type SkillName = typeof SKILLS[number]['name']
@@ -30,28 +31,25 @@ function getClassSkills(classes: { name: string; levels: number }[], allClasses:
  * V2 Class::SkillPoints — per-level skill points for a class.
  * `points = max(1, classBase + raceBonus + intModForLevel)`, ×4 at character level 1.
  *
- * V3 simplification: we use the lowest of base+race+intModBase (no tomes
- * because those don't apply at character creation per V2's
- * AbilityAtLevel(intModForLevel) which excludes tomes at level 1).
+ * V3 walks the per-level class array (V2 m_Levels parity) so the
+ * character-level-1 ×4 multiplier uses the class actually taken at level 1
+ * — not whichever class happens to be first in the aggregate triple.
  */
 function calcTotalSkillPoints(
-  classes: { name: string; levels: number }[],
+  build: Pick<CharacterBuild, 'classes' | 'levelClasses' | 'totalLevel'>,
   allClasses: DDOClass[],
   intMod: number,
   raceSkillBonus: number,
 ): number {
+  const lc = getLevelClasses(build)
   let total = 0
-  let charLevelIdx = 0   // 0-based character level across all classes
-
-  for (const bc of classes) {
-    if (!bc.name || bc.levels === 0) continue
-    const cls = allClasses.find(c => c.Name === bc.name)
+  for (let i = 0; i < lc.length && i < 20; i++) {
+    const name = lc[i]
+    if (!name) continue
+    const cls = allClasses.find(c => c.Name === name)
     const basePoints = cls?.SkillPoints ?? 2
-
-    for (let i = 0; i < bc.levels && charLevelIdx < 20; i++, charLevelIdx++) {
-      const pts = Math.max(1, basePoints + raceSkillBonus + intMod)
-      total += charLevelIdx === 0 ? pts * 4 : pts
-    }
+    const pts = Math.max(1, basePoints + raceSkillBonus + intMod)
+    total += i === 0 ? pts * 4 : pts
   }
   return total
 }
@@ -85,8 +83,8 @@ export default function Skills() {
   )
 
   const totalAvailable = useMemo(
-    () => calcTotalSkillPoints(build.classes, allClasses, intMod, raceSkillBonus),
-    [build.classes, allClasses, intMod, raceSkillBonus],
+    () => calcTotalSkillPoints(build, allClasses, intMod, raceSkillBonus),
+    [build, allClasses, intMod, raceSkillBonus],
   )
 
   const totalSpent = useMemo(() => {

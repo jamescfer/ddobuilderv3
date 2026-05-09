@@ -1,6 +1,7 @@
-import React, { useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import styles from './Sidebar.module.css'
 import { useCharacter } from '../../context/CharacterContext'
+import { api } from '../../api'
 
 export type NavItem =
   | 'Builder'
@@ -137,6 +138,17 @@ interface SidebarProps {
 
 export default function Sidebar({ activeItem, onNavigate, isOpen, onClose, saveBar }: SidebarProps) {
   const { build } = useCharacter()
+  const [version, setVersion] = useState<string>(
+    typeof __BUILDER_VERSION__ !== 'undefined' ? __BUILDER_VERSION__ : ''
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    api.version()
+      .then(v => { if (!cancelled && v?.version) setVersion(v.version) })
+      .catch(() => { /* keep build-time version */ })
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <>
@@ -151,6 +163,9 @@ export default function Sidebar({ activeItem, onNavigate, isOpen, onClose, saveB
             <span className={styles.logoText}>DDO Builder</span>
             <span className={styles.vBadge}>v3</span>
           </div>
+          {version && (
+            <div className={styles.versionLine} title="Builder version">v{version}</div>
+          )}
           {build.name && (
             <div className={styles.charName}>{build.name}</div>
           )}

@@ -404,6 +404,15 @@ export interface CharacterBuild {
   race: string
   alignment: string
   classes: [BuildClass, BuildClass, BuildClass]
+  /**
+   * Authoritative per-heroic-level class assignment (V2 Build::m_Levels parity).
+   * Index i (0-based) is the class taken at character level i+1. Length is
+   * `totalLevel`. Empty string entries mean "no class assigned" (the level is
+   * counted in totalLevel but is awaiting selection). Older saves that lack
+   * this field fall back to a deterministic flatten of `classes` in
+   * declaration order via `getLevelClasses()`.
+   */
+  levelClasses?: string[]
   /** Heroic class levels total (max 20) */
   totalLevel: number
   /** Epic progression levels 21–30 (0–10) */
@@ -562,6 +571,7 @@ export function emptyBuild(): CharacterBuild {
       { name: '', levels: 0 },
       { name: '', levels: 0 },
     ],
+    levelClasses: Array.from({ length: 20 }, () => 'Fighter'),
     totalLevel: 20,
     epicLevels: 10,
     legendaryLevels: 4,

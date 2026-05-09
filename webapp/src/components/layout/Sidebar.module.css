@@ -60,6 +60,14 @@
   letter-spacing: 0.05em;
 }
 
+.versionLine {
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
 .charName {
   margin-top: 4px;
   font-size: 12px;
