@@ -755,6 +755,34 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     const ctxWeaponClassMain    = weaponClassesOf(['Weapon1', 'MainHand', 'Weapon'])
     const ctxWeaponClassOffhand = weaponClassesOf(['Weapon2', 'OffHand'])
 
+    // V2 WeaponDamageType: derive Slashing / Piercing / Bludgeoning from the
+    // weapon's DRBypass list (V2 stores these as DR-bypass tags), plus
+    // Ranged / Thrown from weapon-class membership. Used to gate
+    // WeaponXxxDamageType effects (e.g. "+5 attack vs all Slashing weapons").
+    const DR_TO_DAMAGE: Record<string, string> = {
+      Slash:    'Slashing',
+      Pierce:   'Piercing',
+      Bludgeon: 'Bludgeoning',
+    }
+    function damageTypesOf(slotKeys: string[], classes: Set<string>): Set<string> {
+      const out = new Set<string>()
+      for (const sk of slotKeys) {
+        const item = gearItems[sk]
+        if (!item?.Weapon) continue
+        for (const dr of toArray(item.DRBypass)) {
+          const mapped = DR_TO_DAMAGE[dr]
+          if (mapped) out.add(mapped)
+        }
+      }
+      if (classes.has('Bows') || classes.has('Crossbow') || classes.has('RepeatingCrossbow') || classes.has('Ranged')) {
+        out.add('Ranged')
+      }
+      if (classes.has('Thrown')) out.add('Thrown')
+      return out
+    }
+    const ctxWeaponDamageTypeMain    = damageTypesOf(['Weapon1', 'MainHand', 'Weapon'], ctxWeaponClassMain)
+    const ctxWeaponDamageTypeOffhand = damageTypesOf(['Weapon2', 'OffHand'], ctxWeaponClassOffhand)
+
     // V2 AType=FeatCount uses the number of times a feat has been trained.
     // Feat slots can repeat (e.g. Improved Critical for different weapon
     // groups). featChoices is a flat map of slotKey → featName, so we count
@@ -795,6 +823,8 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       setBonusCounts: ctxSetBonusCounts,
       weaponClassMain: ctxWeaponClassMain.size > 0 ? ctxWeaponClassMain : undefined,
       weaponClassOffhand: ctxWeaponClassOffhand.size > 0 ? ctxWeaponClassOffhand : undefined,
+      weaponDamageTypeMain: ctxWeaponDamageTypeMain.size > 0 ? ctxWeaponDamageTypeMain : undefined,
+      weaponDamageTypeOffhand: ctxWeaponDamageTypeOffhand.size > 0 ? ctxWeaponDamageTypeOffhand : undefined,
     }
 
     // ── Ability base scores ───────────────────────────────────────────────
