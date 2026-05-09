@@ -763,6 +763,91 @@ export default function BreakdownsPanel() {
     }
   }
 
+  // V2 BreakdownItemWeapon family — per-equipped-weapon detail. We don't yet
+  // split the weapon.* stat aggregates into mainhand/offhand stats (a deeper
+  // refactor); instead we show each equipped weapon's intrinsic data alongside
+  // the global weapon.* aggregate so the build's per-hand picture is clear.
+  function gearLookup(...keys: string[]): { item: Item; slot: string } | null {
+    for (const k of keys) {
+      const it = gearItems[k]
+      if (it) return { item: it, slot: k }
+    }
+    return null
+  }
+  function buildWeaponRows(slotLabel: string, hit: { item: Item; slot: string } | null): StatRowData[] {
+    if (!hit?.item.Weapon) return []
+    const item = hit.item
+    const rows: StatRowData[] = []
+    rows.push({
+      label: 'Weapon',
+      total: 0,
+      display: `${item.Name} (${item.Weapon})`,
+      bonuses: [{ value: 0, type: 'Equipped', source: `${slotLabel}: ${item.Name}`, active: true }],
+    })
+    if (item.BaseDice) {
+      const dmgMult = item.WeaponDamage ?? 1
+      const display = dmgMult !== 1
+        ? `${item.BaseDice.Number}d${item.BaseDice.Sides} ×${dmgMult}`
+        : `${item.BaseDice.Number}d${item.BaseDice.Sides}`
+      rows.push({
+        label: 'Base Damage',
+        total: 0,
+        display,
+        bonuses: [{ value: 0, type: 'Base', source: `${item.Name} dice`, active: true }],
+      })
+    }
+    if (item.CriticalMultiplier != null) {
+      const bonus = stats.total('weapon.critMult')
+      const total = item.CriticalMultiplier + bonus
+      rows.push({
+        label: 'Crit Multiplier',
+        total,
+        display: `×${total}`,
+        bonuses: [
+          { value: item.CriticalMultiplier, type: 'Base', source: `${item.Name}`, active: true },
+          ...stats.resolve('weapon.critMult').bonuses,
+        ],
+      })
+    }
+    if (item.CriticalThreatRange != null) {
+      const bonus = stats.total('weapon.threatRange')
+      const total = item.CriticalThreatRange + bonus
+      const display = total > 1 ? `${21 - total}–20` : '20'
+      rows.push({
+        label: 'Threat Range',
+        total,
+        display,
+        bonuses: [
+          { value: item.CriticalThreatRange, type: 'Base', source: `${item.Name}`, active: true },
+          ...stats.resolve('weapon.threatRange').bonuses,
+        ],
+      })
+    }
+    if (item.AttackModifier) {
+      const ams = Array.isArray(item.AttackModifier) ? item.AttackModifier : [item.AttackModifier]
+      rows.push({
+        label: 'Attack Mod',
+        total: 0,
+        display: ams.join(' / '),
+        bonuses: [{ value: 0, type: 'Base', source: `${item.Name}`, active: true }],
+      })
+    }
+    const drBypass = Array.isArray(item.DRBypass) ? item.DRBypass : (item.DRBypass ? [item.DRBypass] : [])
+    if (drBypass.length > 0) {
+      rows.push({
+        label: 'DR Bypass',
+        total: 0,
+        display: drBypass.join(', '),
+        bonuses: [{ value: 0, type: 'Base', source: `${item.Name}`, active: true }],
+      })
+    }
+    return rows
+  }
+  const mainHand = gearLookup('Weapon1', 'MainHand', 'Weapon')
+  const offHand  = gearLookup('Weapon2', 'OffHand')
+  const mainWeaponRows = buildWeaponRows('Main hand', mainHand)
+  const offWeaponRows  = buildWeaponRows('Off hand', offHand)
+
   // V2 on-hit dice damage (e.g. flaming weapon's +6d6 Fire). These are emitted
   // by the effect parser as 'weapon.diceDamage.<DamageType>' with the *average*
   // dice value (Number * (Sides + 1) / 2). We don't currently round-trip the
@@ -995,6 +1080,18 @@ export default function BreakdownsPanel() {
             {classResourceRows.length > 0 && (
               <Section title="Class Resources" defaultOpen={false}>
                 {classResourceRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {mainWeaponRows.length > 0 && (
+              <Section title="Main Hand Weapon" defaultOpen={false}>
+                {mainWeaponRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {offWeaponRows.length > 0 && (
+              <Section title="Off Hand Weapon" defaultOpen={false}>
+                {offWeaponRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
               </Section>
             )}
 
