@@ -308,3 +308,24 @@
   color: var(--color-text-muted);
   font-weight: 400;
 }
+
+/* ── Spell Damage section ─────────────────────────────────────────────── */
+.spellSchoolHeader {
+  font-family: var(--font-heading);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  padding: 4px 8px 1px;
+  margin-top: 2px;
+}
+
+/* Wider value column so "123 (185 w/crit)" fits without truncation. */
+.spellDmgRow {
+  grid-template-columns: 1fr 130px;
+}
+
+.spellDmgValue {
+  white-space: nowrap;
+}

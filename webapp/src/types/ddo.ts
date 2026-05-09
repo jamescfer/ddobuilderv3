@@ -522,3 +522,59 @@ export function pointBuyCost(score: number): number {
 export function totalPointsSpent(abilities: AbilityScores): number {
   return (Object.values(abilities) as number[]).reduce((sum, s) => sum + pointBuyCost(s), 0)
 }
+
+// ---------------------------------------------------------------------------
+// Spells (Spells.xml)
+// ---------------------------------------------------------------------------
+//
+// V2 SpellDamage / SpellDice / BasicDice mirror. The Number / Sides / Bonus /
+// PerCasterLevels fields can parse as either `number` or `string` from
+// fast-xml-parser depending on whether an attribute (e.g. `size="…"`) is
+// present, so callers must coerce when reading.
+export interface SpellBonusDice {
+  Number?: number | string
+  Sides?: number | string
+  Bonus?: number | string
+}
+
+export interface SpellBaseDice {
+  Number?: number | string
+  Sides?: number | string
+  Bonus?: number | string
+}
+
+/**
+ * V2 SpellDice block: an optional flat dice roll (BaseDice) and an optional
+ * scaling-with-caster-level dice roll (BonusDice) applied once per
+ * `PerCasterLevels` caster levels (default 1).
+ */
+export interface SpellDice {
+  BaseDice?: SpellBaseDice
+  BonusDice?: SpellBonusDice
+  PerCasterLevels?: number | string
+}
+
+/**
+ * V2 SpellDamage block. A single spell may have multiple SpellDamage entries
+ * (e.g. Hellball → Acid + Electric + Fire + Sonic), each with its own
+ * SpellDice + Damage type + SpellPower scaling type.
+ */
+export interface SpellDamage {
+  SpellDice?: SpellDice
+  Damage?: string       // Fire / Cold / Acid / Electric / Sonic / Force / Bludgeon / etc.
+  SpellPower?: string   // SpellPowerType key — empty / missing means "no spell-power scaling"
+}
+
+/**
+ * Subset of V2 Spell relevant for the breakdowns spell-damage display.
+ * Only fields the panel reads are typed; everything else is left untyped.
+ */
+export interface Spell {
+  Name: string
+  Icon?: string
+  School?: string
+  MaxCasterLevel?: number | string
+  Description?: string
+  /** Fast-xml-parser collapses single elements; SpellDamage may be one or many. */
+  SpellDamage?: SpellDamage | SpellDamage[]
+}
