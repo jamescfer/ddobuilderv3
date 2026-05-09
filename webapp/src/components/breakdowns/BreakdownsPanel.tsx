@@ -1366,6 +1366,12 @@ export default function BreakdownsPanel() {
               </Section>
             )}
 
+            {eldritchBlastRows.length > 0 && (
+              <Section title="Eldritch Blast / Pact Dice" defaultOpen={false}>
+                {eldritchBlastRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
             <Section title="Skills" defaultOpen={false}>
               {skillStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
             </Section>
