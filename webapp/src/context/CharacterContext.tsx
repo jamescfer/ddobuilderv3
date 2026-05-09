@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer } from 'react'
 import type { CharacterBuild, Ability, FiligreeSlot } from '../types/ddo'
-import { emptyBuild } from '../types/ddo'
+import { emptyBuild, migrateSentientGem } from '../types/ddo'
 
 type Action =
   | { type: 'SET_NAME'; name: string }
@@ -35,7 +35,9 @@ type Action =
   | { type: 'TOGGLE_BUFF'; buffName: string }
   | { type: 'TOGGLE_QUEST'; questName: string }
   | { type: 'SET_NOTES'; notes: string }
-  | { type: 'SET_SENTIENT_GEM'; gem: string }
+  | { type: 'SET_SENTIENT_GEM_NAME'; name: string }
+  | { type: 'SET_SENTIENT_GEM_PERSONALITY'; personality: string }
+  | { type: 'SET_SENTIENT_GEM_AUGMENT'; slot: 'major' | 'minor'; name: string }
   | { type: 'SET_ENH_CHOICES'; treeName: string; choices: Record<string, number> }
   | { type: 'SET_ENH_SELECTIONS'; treeName: string; selections: Record<string, string> }
   | { type: 'SET_ENH_PINNED'; pinned: string[] }
@@ -45,6 +47,14 @@ type Action =
   | { type: 'DELETE_GEAR_SET'; setName: string }
   | { type: 'LOAD_BUILD'; build: CharacterBuild }
   | { type: 'RESET' }
+  // V2 parity actions
+  | { type: 'SET_SLIDER'; name: string; value: number }
+  | { type: 'TRAIN_SPELL'; className: string; spellLevel: number; spellName: string }
+  | { type: 'REVOKE_SPELL'; className: string; spellLevel: number; spellName: string }
+  | { type: 'TOGGLE_SPELL_METAMAGIC'; className: string; spellName: string; metamagic: string }
+  | { type: 'CLEAR_SPELL_METAMAGICS'; className: string }
+  | { type: 'SET_CLICKIE_CHARGES'; key: string; remaining: number }
+  | { type: 'RESET_ALL_CLICKIES' }
 
 function migrateFiligreeSlots(raw: unknown, count: number): FiligreeSlot[] {
   const arr: FiligreeSlot[] = []
@@ -88,9 +98,13 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     activeBuffs: raw.activeBuffs ?? [],
     completedQuests: raw.completedQuests ?? {},
     notes: raw.notes ?? '',
-    sentientGem: raw.sentientGem ?? '',
+    sentientGem: migrateSentientGem(raw.sentientGem as unknown),
     namedGearSets: raw.namedGearSets ?? {},
     activeGearSetName: raw.activeGearSetName ?? '',
+    sliderValues: (raw as unknown as { sliderValues?: Record<string, number> }).sliderValues ?? {},
+    trainedSpells: (raw as unknown as { trainedSpells?: Record<string, Record<number, string[]>> }).trainedSpells ?? {},
+    spellMetamagics: (raw as unknown as { spellMetamagics?: Record<string, Record<string, string[]>> }).spellMetamagics ?? {},
+    clickieCharges: (raw as unknown as { clickieCharges?: Record<string, number> }).clickieCharges ?? {},
   }
 }
 
@@ -217,8 +231,65 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       return { ...state, completedQuests: { ...state.completedQuests, [action.questName]: !state.completedQuests[action.questName] } }
     case 'SET_NOTES':
       return { ...state, notes: action.notes }
-    case 'SET_SENTIENT_GEM':
-      return { ...state, sentientGem: action.gem }
+    case 'SET_SENTIENT_GEM_NAME':
+      return { ...state, sentientGem: { ...state.sentientGem, name: action.name } }
+    case 'SET_SENTIENT_GEM_PERSONALITY':
+      return { ...state, sentientGem: { ...state.sentientGem, personality: action.personality } }
+    case 'SET_SENTIENT_GEM_AUGMENT': {
+      const sentientGem = { ...state.sentientGem }
+      if (action.slot === 'major') sentientGem.majorAugment = action.name
+      else sentientGem.minorAugment = action.name
+      return { ...state, sentientGem }
+    }
+    case 'SET_SLIDER': {
+      const sliderValues = { ...state.sliderValues, [action.name]: action.value }
+      return { ...state, sliderValues }
+    }
+    case 'TRAIN_SPELL': {
+      const cls = state.trainedSpells[action.className] ?? {}
+      const cur = cls[action.spellLevel] ?? []
+      if (cur.includes(action.spellName)) return state
+      const next = [...cur, action.spellName]
+      return {
+        ...state,
+        trainedSpells: { ...state.trainedSpells, [action.className]: { ...cls, [action.spellLevel]: next } },
+      }
+    }
+    case 'REVOKE_SPELL': {
+      const cls = state.trainedSpells[action.className] ?? {}
+      const cur = cls[action.spellLevel] ?? []
+      const next = cur.filter(n => n !== action.spellName)
+      const clsNext = { ...cls, [action.spellLevel]: next }
+      // Also revoke metamagic toggles for this spell
+      const mm = state.spellMetamagics[action.className] ?? {}
+      const mmNext = { ...mm }
+      delete mmNext[action.spellName]
+      return {
+        ...state,
+        trainedSpells: { ...state.trainedSpells, [action.className]: clsNext },
+        spellMetamagics: { ...state.spellMetamagics, [action.className]: mmNext },
+      }
+    }
+    case 'TOGGLE_SPELL_METAMAGIC': {
+      const cls = state.spellMetamagics[action.className] ?? {}
+      const cur = cls[action.spellName] ?? []
+      const next = cur.includes(action.metamagic)
+        ? cur.filter(m => m !== action.metamagic)
+        : [...cur, action.metamagic]
+      return {
+        ...state,
+        spellMetamagics: { ...state.spellMetamagics, [action.className]: { ...cls, [action.spellName]: next } },
+      }
+    }
+    case 'CLEAR_SPELL_METAMAGICS': {
+      const next = { ...state.spellMetamagics }
+      delete next[action.className]
+      return { ...state, spellMetamagics: next }
+    }
+    case 'SET_CLICKIE_CHARGES':
+      return { ...state, clickieCharges: { ...state.clickieCharges, [action.key]: action.remaining } }
+    case 'RESET_ALL_CLICKIES':
+      return { ...state, clickieCharges: {} }
     case 'SET_ENH_CHOICES':
       return { ...state, enhancementChoices: { ...state.enhancementChoices, [action.treeName]: action.choices } }
     case 'SET_ENH_SELECTIONS':

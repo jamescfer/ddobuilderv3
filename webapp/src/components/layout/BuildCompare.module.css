@@ -1,0 +1,62 @@
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+  font-size: 12px;
+}
+
+.controls select {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  padding: 2px 6px;
+}
+
+.empty {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  padding: 1rem;
+  text-align: center;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.spacer {
+  width: 0;
+}
+
+.statCol {
+  vertical-align: top;
+  min-width: 14rem;
+}
+
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--color-border-light, var(--color-border));
+}
+
+.statLabel {
+  color: var(--color-text-secondary);
+}
+
+.statValue {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}

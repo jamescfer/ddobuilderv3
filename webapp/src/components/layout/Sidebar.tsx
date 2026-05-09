@@ -16,9 +16,12 @@ export type NavItem =
   | 'Gear'
   | 'Filigrees'
   | 'Set Bonuses'
+  | 'Clickies'
+  | 'Combat'
   | 'Breakdowns'
   | 'Bonuses'
   | 'Stances'
+  | 'Compare'
   | 'Past Lives'
   | 'Tomes'
   | 'Favor'
@@ -36,8 +39,8 @@ const NAV_GROUPS: NavGroup[] = [
   { label: 'Character', items: ['Builder', 'Ability Ups', 'Skills'] },
   { label: 'Combat', items: ['Feats', 'Automatic Feats', 'Spells', 'DCs'] },
   { label: 'Progression', items: ['Enhancements', 'Epic Destinies', 'Reaper'] },
-  { label: 'Equipment', items: ['Gear', 'Filigrees', 'Set Bonuses'] },
-  { label: 'Analysis', items: ['Breakdowns', 'Bonuses', 'Stances'] },
+  { label: 'Equipment', items: ['Gear', 'Filigrees', 'Set Bonuses', 'Clickies'] },
+  { label: 'Analysis', items: ['Breakdowns', 'Combat', 'Bonuses', 'Stances', 'Compare'] },
   { label: 'History', items: ['Past Lives', 'Tomes', 'Favor'] },
   { label: 'Buffs & Misc', items: ['Self Buffs', 'Guild Buffs', 'Notes', 'Forum Export'] },
 ]

@@ -341,6 +341,55 @@ export interface SentientGem {
 }
 
 // ---------------------------------------------------------------------------
+// Spells (V2 Spell.h parity — used for spell training, DC, CL, cost)
+// ---------------------------------------------------------------------------
+export interface SpellDC {
+  Amount?: number               // base DC (defaults to 10 if omitted)
+  CastingStatMod?: boolean      // add casting-stat ability mod + spell level
+  ModAbility?: string | string[] // pick max() of these ability mods
+  School?: string | string[]    // schools whose dc.<school> contributes
+}
+
+export interface SpellDamage {
+  School?: string
+  Amount?: unknown
+  // Allow further fields without strict typing
+  [k: string]: unknown
+}
+
+/**
+ * Spell metadata as parsed from /api/spells. Mirrors V2 DDOBuilder/Spell.h:55-78.
+ * Cost defaults to 5*spell-level when omitted. Level is a per-class map.
+ */
+export interface Spell {
+  Name: string
+  Icon?: string
+  Description?: string
+  School?: string | string[]
+  Primer?: string                            // damage school for spell power
+  Level?: Record<string, number>             // class name → spell level (1-9)
+  Cost?: number                              // SP cost override
+  Cooldown?: number
+  MaxCasterLevel?: number
+  // Metamagic flags (Spell.h:67-77 maps these to bool fields)
+  Accelerate?: boolean
+  Embolden?: boolean
+  Empower?: boolean
+  EmpowerHealing?: boolean
+  Enlarge?: boolean
+  EschewMaterials?: boolean
+  Extend?: boolean
+  Heighten?: boolean
+  Intensify?: boolean
+  Maximize?: boolean
+  Quicken?: boolean
+  // Effect lists
+  Effect?: Effect | Effect[]
+  SpellDC?: SpellDC | SpellDC[]
+  SpellDamage?: SpellDamage | SpellDamage[]
+}
+
+// ---------------------------------------------------------------------------
 // Character build (client-side state)
 // ---------------------------------------------------------------------------
 export type BuildClass = { name: string; levels: number }
@@ -394,8 +443,13 @@ export interface CharacterBuild {
   /** quest name → completed */
   completedQuests: Record<string, boolean>
   notes: string
-  /** name of equipped sentient gem */
-  sentientGem: string
+  /**
+   * Sentient gem state. V2 parity: per-build personality + per-gem augment slots.
+   * Filigree slots themselves live on `filigreeSlots`. Legacy saves stored
+   * `sentientGem` as a bare string; the migration in CharacterContext widens it
+   * to this object shape automatically.
+   */
+  sentientGem: SentientGemState
   /** setName → slot → itemName */
   namedGearSets: Record<string, Record<string, string>>
   activeGearSetName: string
@@ -405,6 +459,52 @@ export interface CharacterBuild {
   enhancementSelections: Record<string, Record<string, string>>
   /** ordered list of pinned heroic enhancement tree names */
   enhancementPinned: string[]
+
+  // ── V2 parity additions ────────────────────────────────────────────────────
+  /** Slider name → current value (Effect_CreateSlider state). */
+  sliderValues: Record<string, number>
+  /** Class → spell level (1-9) → list of trained spell names. */
+  trainedSpells: Record<string, Record<number, string[]>>
+  /** Class → spell name → list of enabled metamagic names. */
+  spellMetamagics: Record<string, Record<string, string[]>>
+  /** Clickie key (slot:itemName:effectIndex) → remaining charges. */
+  clickieCharges: Record<string, number>
+}
+
+export interface SentientGemState {
+  name: string
+  personality: string
+  majorAugment: string
+  minorAugment: string
+}
+
+// ---------------------------------------------------------------------------
+// V2 Character → Life → Build hierarchy
+// ---------------------------------------------------------------------------
+export interface Life {
+  id: string
+  name: string
+  race: string
+  alignment: string
+  abilityTomes: Partial<Record<Ability, number>>
+  skillTomes: Record<string, number>
+  selfBuffs: string[]
+  specialFeats: string[]
+  builds: CharacterBuild[]
+}
+
+export interface CharacterDocument {
+  id: string
+  name: string
+  guildLevel: number
+  applyGuildBuffs: boolean
+  characterTomes: Partial<Record<Ability, number>>
+  contentIDontOwn: string[]
+  lives: Life[]
+  activeLifeId: string
+  activeBuildId: string
+  /** Storage version. */
+  _v?: 2
 }
 
 function generateId(): string {
@@ -452,13 +552,37 @@ export function emptyBuild(): CharacterBuild {
     activeBuffs: [],
     completedQuests: {},
     notes: '',
-    sentientGem: '',
+    sentientGem: { name: '', personality: '', majorAugment: '', minorAugment: '' },
     namedGearSets: {},
     activeGearSetName: '',
     enhancementChoices: {},
     enhancementSelections: {},
     enhancementPinned: [],
+    sliderValues: {},
+    trainedSpells: {},
+    spellMetamagics: {},
+    clickieCharges: {},
   }
+}
+
+/**
+ * Wraps a legacy bare-string sentient-gem value into the modern object shape,
+ * or returns the input unchanged if it's already an object.
+ */
+export function migrateSentientGem(raw: unknown): SentientGemState {
+  if (raw && typeof raw === 'object' && 'name' in (raw as object)) {
+    const o = raw as Partial<SentientGemState>
+    return {
+      name: o.name ?? '',
+      personality: o.personality ?? '',
+      majorAugment: o.majorAugment ?? '',
+      minorAugment: o.minorAugment ?? '',
+    }
+  }
+  if (typeof raw === 'string') {
+    return { name: raw, personality: '', majorAugment: '', minorAugment: '' }
+  }
+  return { name: '', personality: '', majorAugment: '', minorAugment: '' }
 }
 
 export const POINT_BUY_COSTS: Record<number, number> = {

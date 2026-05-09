@@ -63,3 +63,22 @@
 .textarea:focus {
   border-color: var(--color-border-focus);
 }
+
+.sectionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.sectionToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.sectionToggle input[type='checkbox'] {
+  cursor: pointer;
+}

@@ -1,0 +1,138 @@
+import { describe, expect, it } from 'vitest'
+import {
+  computeSpellDC, computeCasterLevel, computeMaxCasterLevel,
+  computeSpellCost, computeMaxSpellLevel, availableMetamagics,
+} from '../lib/spells/spellMath'
+import type { Spell, DDOClass } from '../types/ddo'
+import type { BuildStats } from '../hooks/useBuildStats'
+import type { ResolvedStat } from '../lib/bonus'
+
+function makeStats(map: Record<string, number>): BuildStats {
+  return {
+    resolve: (k: string): ResolvedStat => ({ total: map[k] ?? 0, bonuses: [] }),
+    total: (k: string) => map[k] ?? 0,
+    keys: () => Object.keys(map),
+    weapon: null,
+    armorMaxDex: null,
+  }
+}
+
+const wizard: DDOClass = ({
+  Name: 'Wizard',
+  CastingStat: 'Intelligence',
+  Level20: '4 4 4 4 4 4 4 4 4',
+} as unknown) as DDOClass
+
+describe('computeMaxSpellLevel', () => {
+  it('reads Level20 row to determine cap', () => {
+    expect(computeMaxSpellLevel(wizard, 20)).toBe(9)
+  })
+  it('falls back when row missing (full caster)', () => {
+    const cls = { Name: 'Cleric' } as DDOClass
+    expect(computeMaxSpellLevel(cls, 20)).toBe(10) // (20+1)/2 = 10 (clamped by data normally)
+  })
+})
+
+describe('computeSpellDC', () => {
+  it('Fireball at Wizard 20 with INT 24 and Spell Focus Evocation', () => {
+    const fireball: Spell = {
+      Name: 'Fireball',
+      School: 'Evocation',
+      Level: { Wizard: 3 },
+    }
+    const stats = makeStats({
+      'ability.Intelligence': 24,         // mod = +7
+      'dc.Evocation': 1,                  // Spell Focus
+    })
+    const dc = computeSpellDC(fireball, { Amount: 10, CastingStatMod: true }, wizard, 20, stats)
+    expect(dc).toBe(10 + 7 + 3 + 1)
+  })
+
+  it('returns base DC when CastingStatMod false', () => {
+    const spell: Spell = { Name: 'X', Level: { Wizard: 2 } }
+    expect(computeSpellDC(spell, { Amount: 12 }, wizard, 20, makeStats({}))).toBe(12)
+  })
+
+  it('Heighten substitutes spell level with max class spell level', () => {
+    const spell: Spell = { Name: 'Magic Missile', Level: { Wizard: 1 }, Heighten: true }
+    const stats = makeStats({ 'ability.Intelligence': 10 })
+    const dc = computeSpellDC(
+      spell, { Amount: 10, CastingStatMod: true }, wizard, 20, stats,
+      { heightenActive: true },
+    )
+    // Heighten replaces 1 with the class max (9 from Level20 row).
+    expect(dc).toBe(10 + 0 + 9)
+  })
+
+  it('ModAbility picks best of options', () => {
+    const dc = computeSpellDC(
+      { Name: 'X' } as Spell,
+      { Amount: 10, ModAbility: ['Charisma', 'Wisdom'] },
+      wizard, 20,
+      makeStats({ 'ability.Wisdom': 14, 'ability.Charisma': 20 }),
+    )
+    // mod(20)=5, mod(14)=2, picks 5
+    expect(dc).toBe(15)
+  })
+})
+
+describe('computeMaxCasterLevel', () => {
+  it('returns +Infinity when not capped', () => {
+    const spell: Spell = { Name: 'X' }
+    expect(computeMaxCasterLevel(spell, wizard, 20, makeStats({}))).toBe(Infinity)
+  })
+  it('respects MaxCasterLevel + bonuses', () => {
+    const spell: Spell = { Name: 'X', MaxCasterLevel: 10, School: 'Evocation' }
+    const stats = makeStats({ 'maxCl.Wizard': 1, 'maxClSchool.Evocation': 1 })
+    expect(computeMaxCasterLevel(spell, wizard, 20, stats)).toBe(20) // 12 vs 20: max(20)
+  })
+})
+
+describe('computeCasterLevel', () => {
+  it('caps at maxCasterLevel', () => {
+    const spell: Spell = { Name: 'Burning Hands', MaxCasterLevel: 5, School: 'Evocation' }
+    const stats = makeStats({ 'cl.Wizard': 0, 'clSchool.Evocation': 0 })
+    expect(computeCasterLevel(spell, wizard, 20, stats)).toBe(20) // max(5, classLevel)=20
+  })
+  it('adds class+school+per-spell CL bonuses', () => {
+    const spell: Spell = { Name: 'Magic Missile', MaxCasterLevel: 30, School: 'Evocation' }
+    const stats = makeStats({
+      'cl.Wizard': 2, 'clSchool.Evocation': 1, 'clSpell.Magic Missile': 3,
+    })
+    expect(computeCasterLevel(spell, wizard, 10, stats)).toBe(16)
+  })
+})
+
+describe('computeSpellCost', () => {
+  it('default cost is 5*spellLevel when not overridden', () => {
+    const spell: Spell = { Name: 'Fireball', Level: { Wizard: 3 } }
+    expect(computeSpellCost(spell, wizard, 20, makeStats({}), [])).toBe(15)
+  })
+  it('respects Cost override', () => {
+    const spell: Spell = { Name: 'X', Cost: 22, Level: { Wizard: 3 } }
+    expect(computeSpellCost(spell, wizard, 20, makeStats({}), [])).toBe(22)
+  })
+  it('Maximize adds metamagic cost', () => {
+    const spell: Spell = { Name: 'Fireball', Level: { Wizard: 3 }, Maximize: true }
+    const stats = makeStats({ 'metamagic.cost.Maximize': 20 })
+    expect(computeSpellCost(spell, wizard, 20, stats, ['Maximize'])).toBe(15 + 20)
+  })
+  it('Heighten adds (maxLevel-spellLevel) * cost.Heighten', () => {
+    const spell: Spell = { Name: 'Magic Missile', Level: { Wizard: 1 }, Heighten: true }
+    const stats = makeStats({ 'metamagic.cost.Heighten': 8 })
+    // maxLevel(Wizard L20) = 9, spellLvl=1 → delta=8 → +64
+    expect(computeSpellCost(spell, wizard, 20, stats, ['Heighten'])).toBe(5 + 64)
+  })
+  it('applies percentage reduction last', () => {
+    const spell: Spell = { Name: 'Fireball', Level: { Wizard: 3 } }
+    const stats = makeStats({ spellCostPct: 25 })
+    expect(computeSpellCost(spell, wizard, 20, stats, [])).toBe(11) // 15 * 0.75 = 11.25 → 11
+  })
+})
+
+describe('availableMetamagics', () => {
+  it('lists only declared metamagics', () => {
+    const spell: Spell = { Name: 'X', Empower: true, Maximize: true, Heighten: true }
+    expect(availableMetamagics(spell).sort()).toEqual(['Empower', 'Heighten', 'Maximize'])
+  })
+})

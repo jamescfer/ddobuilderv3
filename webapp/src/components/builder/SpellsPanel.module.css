@@ -114,3 +114,71 @@
   flex-shrink: 0;
   font-style: italic;
 }
+
+.levelCount {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 4px;
+}
+
+.trainCheckbox {
+  margin-right: 6px;
+  cursor: pointer;
+}
+
+.spellStat {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.metamagic {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.mmToggle {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.mmActive {
+  background: var(--color-gold, #c8882a);
+  color: #000;
+  border-color: var(--color-gold, #c8882a);
+}
+
+.mmLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border);
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.mmLegend kbd {
+  display: inline-block;
+  padding: 0 4px;
+  margin-right: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  font-family: var(--font-mono, monospace);
+}

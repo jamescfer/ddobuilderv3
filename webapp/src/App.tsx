@@ -17,7 +17,10 @@ import EnhancementTreePanel from './components/enhancements/EnhancementTreePanel
 import EpicDestiniesPanel from './components/epicdestinies/EpicDestiniesPanel'
 import ReaperPanel from './components/reaper/ReaperPanel'
 import GearPanel from './components/items/GearPanel'
+import ClickiesPanel from './components/items/ClickiesPanel'
 import BreakdownsPanel from './components/breakdowns/BreakdownsPanel'
+import CombatPanel from './components/combat/CombatPanel'
+import BuildCompare from './components/layout/BuildCompare'
 import PastLivesPanel from './components/pastlives/PastLivesPanel'
 import GuildBuffsPanel from './components/guildbuffs/GuildBuffsPanel'
 import SetBonusesPanel from './components/setbonuses/SetBonusesPanel'
@@ -144,9 +147,27 @@ function AppInner() {
           </div>
         )}
 
+        {activeItem === 'Clickies' && (
+          <div className={styles.single}>
+            <ClickiesPanel />
+          </div>
+        )}
+
         {activeItem === 'Breakdowns' && (
           <div className={styles.single}>
             <BreakdownsPanel />
+          </div>
+        )}
+
+        {activeItem === 'Combat' && (
+          <div className={styles.single}>
+            <CombatPanel />
+          </div>
+        )}
+
+        {activeItem === 'Compare' && (
+          <div className={styles.single}>
+            <BuildCompare />
           </div>
         )}
 

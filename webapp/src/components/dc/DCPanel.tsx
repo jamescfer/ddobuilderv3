@@ -83,6 +83,7 @@ export default function DCPanel() {
   const [allSetBonuses,      setAllSetBonuses]      = useState<SetBonus[]>([])
   const [allFiligreeBonuses, setAllFiligreeBonuses] = useState<FiligreeSetBonus[]>([])
   const [allFiligrees,       setAllFiligrees]       = useState<Filigree[]>([])
+  const [allWeaponGroups,    setAllWeaponGroups]    = useState<import('../../lib/weapons/groups').WeaponGroupSpec[]>([])
   const [gearItems,          setGearItems]          = useState<Record<string, Item>>({})
 
   useEffect(() => {
@@ -95,6 +96,7 @@ export default function DCPanel() {
     api.setbonuses().then(setAllSetBonuses)
     api.filigreeSetBonuses().then(setAllFiligreeBonuses)
     api.filigree().then(setAllFiligrees)
+    api.weaponGroups().then(setAllWeaponGroups).catch(() => setAllWeaponGroups([]))
   }, [])
 
   useEffect(() => {
@@ -117,8 +119,10 @@ export default function DCPanel() {
   const statsInput = useMemo(() => ({
     allClasses, allRaces, allFeats, allTrees, gearItems,
     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+    allWeaponGroups,
   }), [allClasses, allRaces, allFeats, allTrees, gearItems,
-      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees])
+      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+      allWeaponGroups])
 
   const stats = useBuildStats(statsInput)
 
