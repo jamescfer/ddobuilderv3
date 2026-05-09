@@ -5,6 +5,12 @@ import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, Fi
 import { useBuildStats } from '../../hooks/useBuildStats'
 import type { ResolvedBonus } from '../../lib/bonus'
 import { SKILLS, SCHOOL_DCS, SPELL_POWER_TYPES, SPELL_POWER_LABELS } from '../../lib/gamedata'
+import {
+  MAX_BAB,
+  applyBabCap, applyDodgeCap, applyCasterLevelCap, applyMRRCap,
+  effectiveMDB, mitigationPercent, multiplicativeAbsorption,
+  TACTICAL_TYPES, TURN_UNDEAD_KEYS, HEAL_AMP_KEYS, THREAT_KEYS, BYPASS_KEYS,
+} from '../../lib/breakdowns'
 import styles from './BreakdownsPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -309,31 +315,88 @@ export default function BreakdownsPanel() {
 
   const hpTotal = stats.total('hp')
   const acTotal = stats.total('ac')
-  const mrrCapTotal = stats.total('mrrCap')
   const spTotal = stats.total('spellPoints')
-  // V2: BAB capped at MAX_BAB (25)
-  const babRaw = stats.total('bab')
-  const babTotal = Math.min(25, babRaw)
-  const prrTotal = stats.total('prr')
-  const mrrTotal = stats.total('mrr')
 
-  // Mitigation % = 100 - (100 / (100 + value)) * 100
+  // ── V2 BreakdownItem caps ────────────────────────────────────────────────
+  const bab = applyBabCap(stats.resolve('bab'))
+  const babTotal = bab.total
+
+  const mrr = applyMRRCap(stats.resolve('mrr'), stats.resolve('mrrCap'))
+  const mrrTotal = mrr.total
+  const mrrCapResolved = stats.resolve('mrrCap')
+
+  // V2 BreakdownItemMDB: cloth armor + no tower shield → "no limit".
+  const mdbResolved      = stats.resolve('mdb')
+  const mdbTowerResolved = stats.resolve('mdb.tower')
+  const mdbValue      = effectiveMDB(mdbResolved,      stats.inClothArmor, stats.inTowerShield)
+  const mdbTowerValue = stats.inTowerShield && mdbTowerResolved.bonuses.length > 0
+    ? mdbTowerResolved.total
+    : null
+
+  const dodge = applyDodgeCap({
+    dodge: stats.resolve('dodge'),
+    dodgeCap: stats.resolve('dodgeCap'),
+    mdbArmor: mdbValue,
+    mdbTowerShield: mdbTowerValue,
+  })
+
+  const prrTotal = stats.total('prr')
+
   function mitigation(n: number): string {
     if (n === 0) return '+0'
-    const pctVal = 100 - (100 / (100 + n)) * 100
-    return `${sign(n)} (${pctVal.toFixed(1)}%)`
+    return `${sign(n)} (${mitigationPercent(n).toFixed(1)}%)`
   }
 
   const defenseStats: StatRowData[] = [
     fixedRow('Hit Points', hpTotal, String(hpTotal), stats.resolve('hp').bonuses, hpTotal === 0),
     fixedRow('AC', acTotal, String(acTotal), stats.resolve('ac').bonuses, acTotal <= 10),
     fixedRow('PRR', prrTotal, mitigation(prrTotal), stats.resolve('prr').bonuses, prrTotal === 0),
-    fixedRow('MRR', mrrTotal, mitigation(mrrTotal), stats.resolve('mrr').bonuses, mrrTotal === 0),
-    fixedRow('MRR Cap', mrrCapTotal, mrrCapTotal > 0 ? String(mrrCapTotal) : '—', stats.resolve('mrrCap').bonuses, mrrCapTotal === 0),
-    statRow('Dodge',          'dodge',          pct),
+    fixedRow(
+      'MRR',
+      mrrTotal,
+      mrr.capped ? `${mitigation(mrrTotal)} (capped from ${sign(mrr.raw)})` : mitigation(mrrTotal),
+      mrr.bonuses,
+      mrrTotal === 0,
+    ),
+    fixedRow(
+      'MRR Cap',
+      mrrCapResolved.total,
+      mrrCapResolved.total > 0 ? String(mrrCapResolved.total) : '—',
+      mrrCapResolved.bonuses,
+      mrrCapResolved.total === 0,
+    ),
+    fixedRow(
+      'Dodge',
+      dodge.total,
+      dodge.capped ? `${pct(dodge.total)} (capped from ${pct(dodge.raw)})` : pct(dodge.total),
+      dodge.bonuses,
+      dodge.raw === 0,
+    ),
+    fixedRow(
+      'Dodge Cap',
+      stats.resolve('dodgeCap').total,
+      pct(25 + stats.resolve('dodgeCap').total),
+      stats.resolve('dodgeCap').bonuses,
+      stats.resolve('dodgeCap').bonuses.length === 0,
+    ),
+    fixedRow(
+      'Max Dex Bonus',
+      mdbValue ?? 0,
+      mdbValue == null ? 'No limit' : String(mdbValue),
+      mdbResolved.bonuses,
+      mdbResolved.bonuses.length === 0,
+    ),
+    ...(mdbTowerValue != null ? [fixedRow(
+      'MDB (Tower Shield)',
+      mdbTowerValue,
+      String(mdbTowerValue),
+      mdbTowerResolved.bonuses,
+    )] : []),
     statRow('Fortification',  'fortification',  pct),
     statRow('Concealment',    'concealment',    pct),
     statRow('Displacement',   'displacement',   pct),
+    statRow('Incorporeality',  'incorporeality', pct),
+    statRow('True Seeing',     'trueSeeing'),
     fixedRow('Move Speed', stats.total('speed'), pct(stats.total('speed')), stats.resolve('speed').bonuses),
     statRow('Spell Resistance', 'spellResistance', String),
   ]
@@ -348,10 +411,8 @@ export default function BreakdownsPanel() {
       energyStats.push(fixedRow(`${e} Resistance`, r.total, String(r.total), r.bonuses))
     }
     if (a.total !== 0) {
-      // Multiplicative absorption: 100 - Π((100-x)/100)*100
-      let factor = 1
-      for (const b of a.bonuses) if (b.active) factor *= (100 - b.value) / 100
-      const absPct = 100 - factor * 100
+      // V2 multiplicative absorption stacking
+      const absPct = multiplicativeAbsorption(a.bonuses)
       energyStats.push(fixedRow(`${e} Absorption`, absPct, `${absPct.toFixed(1)}%`, a.bonuses))
     }
   }
@@ -406,15 +467,16 @@ export default function BreakdownsPanel() {
   const spellStats: StatRowData[] = [
     fixedRow('Spell Points', spTotal, String(spTotal), stats.resolve('spellPoints').bonuses, spTotal === 0),
     ...casterClasses.map(({ name, levels }) => {
-      const clClass = stats.resolve(`cl.${name}`)
-      const clAll = stats.resolve('cl.All')
-      const total = levels + clClass.total + clAll.total
-      return fixedRow(`${name} CL`, total, String(total),
-        [
-          { value: levels, type: 'Base', source: `${name} class levels`, active: true },
-          ...clClass.bonuses,
-          ...clAll.bonuses,
-        ])
+      const cl = applyCasterLevelCap({
+        className: name,
+        classLevels: levels,
+        classCl: stats.resolve(`cl.${name}`),
+        allCl: stats.resolve('cl.All'),
+        classMaxCl: stats.resolve(`maxCl.${name}`),
+        allMaxCl: stats.resolve('maxCl.All'),
+      })
+      const display = cl.capped ? `${cl.total} (capped from ${cl.raw})` : String(cl.total)
+      return fixedRow(`${name} CL`, cl.total, display, cl.bonuses)
     }),
     statRow('Spell Penetration', 'spellPenetration'),
     ...SCHOOL_DCS.map(school => statRow(`${school} DC`, `dc.${school}`)),
@@ -422,14 +484,56 @@ export default function BreakdownsPanel() {
 
   const initiativeTotal  = stats.total('initiative')
   const skillPointsTotal = stats.total('skillPoints')
-  const babDisplay = babRaw > babTotal ? `${sign(babTotal)} (capped, raw ${sign(babRaw)})` : sign(babTotal)
+  const babDisplay = bab.capped ? `${sign(bab.total)} (capped from ${sign(bab.raw)})` : sign(bab.total)
   const miscStats: StatRowData[] = [
-    fixedRow('BAB',        babTotal,        babDisplay,            stats.resolve('bab').bonuses),
+    fixedRow('BAB',        babTotal,        babDisplay,            bab.bonuses),
     fixedRow('Initiative', initiativeTotal, sign(initiativeTotal), stats.resolve('initiative').bonuses),
     fixedRow('Skill Pts',  skillPointsTotal, String(skillPointsTotal), stats.resolve('skillPoints').bonuses),
     statRow('Off-hand Atk', 'offhand.attack', pct),
     statRow('Helpless Dmg', 'helpless',        pct),
   ]
+
+  // ── V2 BreakdownItem parity: stat groups newly populated by slice 1 ─────
+  const healAmpStats: StatRowData[] = HEAL_AMP_KEYS
+    .map(({ key, label }) => statRow(label, key, pct))
+    .filter(s => s.total !== 0)
+
+  const tacticalStats: StatRowData[] = TACTICAL_TYPES
+    .map(({ key, label }) => statRow(`${label} DC`, `tacticalDC.${key}`))
+    .filter(s => s.total !== 0)
+
+  const threatStats: StatRowData[] = THREAT_KEYS
+    .map(({ key, label }) => statRow(label, key, pct))
+    .filter(s => s.total !== 0)
+
+  const turnUndeadStats: StatRowData[] = TURN_UNDEAD_KEYS
+    .map(({ key, label }) => statRow(label, key))
+    .filter(s => s.total !== 0)
+
+  // V2 Bypass family + per-material DR bypass
+  const bypassRows: StatRowData[] = []
+  for (const { key, label } of BYPASS_KEYS) {
+    const r = stats.resolve(key)
+    if (r.bonuses.length > 0) bypassRows.push(fixedRow(label, r.total, sign(r.total), r.bonuses))
+  }
+  const drBypassKeys = stats.keys().filter(k => k.startsWith('drBypass.'))
+  for (const k of drBypassKeys) {
+    const material = k.slice('drBypass.'.length)
+    const r = stats.resolve(k)
+    if (r.total > 0) {
+      bypassRows.push(fixedRow(`DR Bypass: ${material}`, r.total, String(r.total), r.bonuses))
+    }
+  }
+
+  // Immunities — surfaced in slice 1 as 'immunity.<type>'
+  const immunityRows: StatRowData[] = stats
+    .keys()
+    .filter(k => k.startsWith('immunity.'))
+    .map(k => {
+      const t = k.slice('immunity.'.length)
+      const r = stats.resolve(k)
+      return fixedRow(`Immunity: ${t}`, r.total, '✓', r.bonuses)
+    })
 
   const skillStats: StatRowData[] = SKILLS.map(({ name }) => {
     const resolved = stats.resolve(`skill.${name}`)
@@ -536,6 +640,42 @@ export default function BreakdownsPanel() {
             <Section title="Combat">
               {miscStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
             </Section>
+
+            {threatStats.length > 0 && (
+              <Section title="Threat" defaultOpen={false}>
+                {threatStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {tacticalStats.length > 0 && (
+              <Section title="Tactical DCs" defaultOpen={false}>
+                {tacticalStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {turnUndeadStats.length > 0 && (
+              <Section title="Turn Undead" defaultOpen={false}>
+                {turnUndeadStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {healAmpStats.length > 0 && (
+              <Section title="Healing Amplification" defaultOpen={false}>
+                {healAmpStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {bypassRows.length > 0 && (
+              <Section title="Bypasses" defaultOpen={false}>
+                {bypassRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {immunityRows.length > 0 && (
+              <Section title="Immunities" defaultOpen={false}>
+                {immunityRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
 
             <Section title="Skills" defaultOpen={false}>
               {skillStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}

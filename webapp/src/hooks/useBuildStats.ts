@@ -37,6 +37,10 @@ export interface BuildStats {
   weapon: WeaponInfo | null
   /** Armor max-DEX cap (null = no cap) */
   armorMaxDex: number | null
+  /** True iff the active armor stance is Cloth Armor (drives V2 MDB no-limit) */
+  inClothArmor: boolean
+  /** True iff a tower shield is equipped (drives V2 tower-shield MDB cap) */
+  inTowerShield: boolean
 }
 
 export interface WeaponInfo {
@@ -704,6 +708,31 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       add(map, 'mrrCap', { value: 100, type: 'Stance', source: 'Light Armor' })
     }
 
+    // V2 BreakdownItemMDB intrinsic input: equipped armor's MaximumDexterityBonus
+    // contributes to the unified 'mdb' breakdown as a Base bonus, on top of any
+    // MaxDexBonus effect contributions already accumulated. Cloth Armor + no
+    // tower shield is "no limit" (handled by effectiveMDB() at display time).
+    {
+      const armor = gearItems['Armor'] ?? gearItems['Body']
+      if (armor?.MaximumDexterityBonus != null) {
+        add(map, 'mdb', {
+          value: armor.MaximumDexterityBonus,
+          type: 'Base',
+          source: `${armor.Name} (Armor MaxDex)`,
+        })
+      }
+      // V2 BreakdownItemMaxDexBonusShields: tower shield intrinsic MaxDex.
+      const shield = gearItems['OffHand'] ?? gearItems['Shield']
+      const isTowerShield = shield?.Armor === 'Tower Shield' || shield?.Armor === 'TowerShield'
+      if (isTowerShield && shield?.MaximumDexterityBonus != null) {
+        add(map, 'mdb.tower', {
+          value: shield.MaximumDexterityBonus,
+          type: 'Base',
+          source: `${shield.Name} (Shield MaxDex)`,
+        })
+      }
+    }
+
     // =========================================================================
     // Phase 2: resolve ability scores fully, add ability-mod-derived bonuses
     // =========================================================================
@@ -757,12 +786,32 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     // Initiative
     if (dexMod !== 0) add(map, 'initiative', { value: dexMod, type: 'Ability mod', source: 'Dexterity' })
 
-    // AC: base 10 + DEX mod (capped by armor max-dex if armor equipped)
+    // AC: base 10 + DEX mod (capped by V2 BreakdownItemMDB total when not in
+    // cloth armor; cloth armor has no MDB cap by V2 BreakdownItemMDB::CreateOtherEffects).
     add(map, 'ac', { value: 10, type: 'Base', source: 'Base AC' })
-    const armorMaxDex = extractArmorMaxDex(gearItems)
-    const effectiveDexForAC = armorMaxDex != null ? Math.min(dexMod, armorMaxDex) : dexMod
-    if (effectiveDexForAC !== 0) {
-      add(map, 'ac', { value: effectiveDexForAC, type: 'Ability mod', source: armorMaxDex != null ? `Dexterity (capped at ${armorMaxDex})` : 'Dexterity' })
+    {
+      const isCloth = armorStances.has('Cloth Armor')
+      const isTowerShield = armorStances.has('Tower Shield')
+      const mdbTotal = resolveBonus(map.get('mdb') ?? []).total
+      const mdbTowerTotal = resolveBonus(map.get('mdb.tower') ?? []).total
+      const armorCapApplies = !isCloth || isTowerShield
+      const towerCapApplies = isTowerShield && (map.get('mdb.tower')?.length ?? 0) > 0
+
+      let cap: number | null = null
+      let capSrc: string | null = null
+      if (armorCapApplies) { cap = mdbTotal; capSrc = `Armor MDB ${mdbTotal}` }
+      if (towerCapApplies && (cap == null || mdbTowerTotal < cap)) {
+        cap = mdbTowerTotal
+        capSrc = `Tower Shield MDB ${mdbTowerTotal}`
+      }
+      const effectiveDexForAC = cap != null ? Math.min(dexMod, cap) : dexMod
+      if (effectiveDexForAC !== 0) {
+        add(map, 'ac', {
+          value: effectiveDexForAC,
+          type: 'Ability mod',
+          source: cap != null && dexMod > cap ? `Dexterity (capped: ${capSrc})` : 'Dexterity',
+        })
+      }
     }
 
     // HP: CON mod correction if gear changed CON
@@ -969,6 +1018,9 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
 
   const weaponInfo = useMemo(() => extractWeaponInfo(input.gearItems), [input.gearItems])
   const armorMaxDex = useMemo(() => extractArmorMaxDex(input.gearItems), [input.gearItems])
+  const armorStances = useMemo(() => deriveArmorStances(input.gearItems), [input.gearItems])
+  const inClothArmor = armorStances.has('Cloth Armor')
+  const inTowerShield = armorStances.has('Tower Shield')
 
   return useMemo<BuildStats>(() => ({
     resolve: (key: string): ResolvedStat => {
@@ -982,7 +1034,9 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     keys: () => Array.from(statMap.keys()),
     weapon: weaponInfo,
     armorMaxDex,
-  }), [statMap, weaponInfo, armorMaxDex])
+    inClothArmor,
+    inTowerShield,
+  }), [statMap, weaponInfo, armorMaxDex, inClothArmor, inTowerShield])
 }
 
 // ---------------------------------------------------------------------------

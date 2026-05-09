@@ -772,13 +772,16 @@ export function parseEffect(
     case 'ArcaneSpellFailureShields':
       return [make('arcaneSpellFailureShield')]
 
-    // Tower-shield-gated dodge / mdb — V2 gates these via Requirements; if
-    // the requirement evaluator passes, treat them as standard dodge / mdb.
+    // Tower-shield-gated dodge — V2 gates this via Requirements; once the
+    // requirement evaluator passes the bonus is a standard Dodge bonus.
     case 'DodgeBonusTowerShield':
       return [make('dodge', 'Dodge')]
 
+    // V2 keeps armor MDB and tower-shield MDB as two distinct breakdowns
+    // (Breakdown_MaxDexBonus vs Breakdown_MaxDexBonusShields). Both caps
+    // apply concurrently — Dodge takes the minimum across them.
     case 'MaxDexBonusTowerShield':
-      return [make('mdb')]
+      return [make('mdb.tower')]
 
     case 'BlockingDR':
       return [make('blockingDR')]
@@ -1372,6 +1375,9 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
 
     case 'MaxDexBonus':
       return [make('mdb')]
+
+    case 'MaxDexBonusTowerShield':
+      return [make('mdb.tower')]
 
     case 'DodgeCap':
       return [make('dodgeCap')]
