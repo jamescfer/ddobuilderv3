@@ -1021,6 +1021,69 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     // Ranged
     if (dexMod !== 0) add(map, 'ranged.toHit', { value: dexMod, type: 'Ability mod', source: 'Dexterity' })
 
+    // V2 BreakdownItemWeaponAttackBonus non-proficient penalty (-4 to attack
+    // when wielding a weapon you don't have proficiency for). V2 maintains a
+    // dynamic "Proficiency" weapon group built up from AddGroupWeapon effects
+    // on trained feats (player-chosen, race-granted, class auto-feats, past
+    // lives). We mirror that by walking ctx.feats and extracting their
+    // AddGroupWeapon Item="Proficiency" effects.
+    {
+      const proficientWeapons = new Set<string>()
+      for (const featName of ctx.feats) {
+        const feat = allFeats.find(f => f.Name === featName)
+        if (!feat) continue
+        for (const eff of toArray(feat.Effect)) {
+          if (eff.Type !== 'AddGroupWeapon') continue
+          const items = toArray(eff.Item)
+          if (items[0] !== 'Proficiency') continue
+          for (let i = 1; i < items.length; i++) proficientWeapons.add(items[i])
+        }
+      }
+      function isProficient(weaponName: string): boolean {
+        if (!weaponName) return true
+        if (proficientWeapons.has(weaponName)) return true
+        // V2 enum names drop spaces ("GreatAxe"); WeaponGroupings.xml uses spaces.
+        // Accept both directions.
+        const spaced = weaponName.replace(/([a-z])([A-Z])/g, '$1 $2')
+        if (proficientWeapons.has(spaced)) return true
+        const noSpace = weaponName.replace(/\s+/g, '')
+        if (proficientWeapons.has(noSpace)) return true
+        return false
+      }
+      function isRangedWeapon(weaponName: string): boolean {
+        const classes = wgIndex.get(weaponName) ?? wgIndex.get(weaponName.replace(/\s+/g, ''))
+        if (!classes) return false
+        return classes.has('Ranged') || classes.has('Bows') || classes.has('Crossbow') ||
+               classes.has('RepeatingCrossbow') || classes.has('Thrown')
+      }
+      for (const slotKey of ['Weapon1', 'MainHand', 'Weapon']) {
+        const item = gearItems[slotKey]
+        if (!item?.Weapon) continue
+        if (isProficient(item.Weapon)) break
+        const targetKey = isRangedWeapon(item.Weapon) ? 'ranged.toHit' : 'melee.toHit'
+        add(map, targetKey, {
+          value: -4,
+          type: 'Penalty',
+          source: `Non-proficient: ${item.Weapon}`,
+        })
+        break
+      }
+      // Off-hand contributes its own non-proficient penalty to melee.toHit
+      // (V2 evaluates each weapon separately; with the unified melee.toHit
+      // stat we add the penalty once per non-proficient hand).
+      for (const slotKey of ['Weapon2', 'OffHand']) {
+        const item = gearItems[slotKey]
+        if (!item?.Weapon) continue
+        if (isProficient(item.Weapon)) break
+        add(map, 'melee.toHit', {
+          value: -4,
+          type: 'Penalty',
+          source: `Non-proficient (off-hand): ${item.Weapon}`,
+        })
+        break
+      }
+    }
+
     // Initiative
     if (dexMod !== 0) add(map, 'initiative', { value: dexMod, type: 'Ability mod', source: 'Dexterity' })
 
