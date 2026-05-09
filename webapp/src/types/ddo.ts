@@ -117,6 +117,20 @@ export interface DDOClass {
   FeatSlot?: FeatSlot[]
   AutomaticFeats?: AutomaticFeat[]
   NotHeroic?: boolean
+  /**
+   * V2 Class::ClassSpell list — every spell the class can cast at any level.
+   * Used by the Spell Damage breakdown to map a spell to the casting class
+   * (and thus the correct per-class caster level).
+   */
+  ClassSpell?: ClassSpell | ClassSpell[]
+}
+
+/** V2 ClassSpell entry: name + spell level (and optional MaxCasterLevel cap). */
+export interface ClassSpell {
+  Name: string
+  Level?: number | string
+  Cost?: number | string
+  MaxCasterLevel?: number | string
 }
 
 // ---------------------------------------------------------------------------

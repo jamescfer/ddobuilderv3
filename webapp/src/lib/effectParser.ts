@@ -994,6 +994,19 @@ export function parseEffect(
       return [make('ki.passive')]
 
     // -----------------------------------------------------------------------
+    // Eldritch Blast pact dice (warlock). V2 BreakdownItemPactDice tracks the
+    // number of d6/d8 dice via Effect_EldritchBlastD6 / Effect_EldritchBlastD8;
+    // the breakdown's final value is rendered as `<count>d<size>`. We map each
+    // contribution as a 'Stacking' bonus to a shared count stat key so they all
+    // sum (V2 sums every contribution unconditionally).
+    // -----------------------------------------------------------------------
+    case 'EldritchBlastD6':
+      return [make('eldritchBlast.d6', 'Stacking')]
+
+    case 'EldritchBlastD8':
+      return [make('eldritchBlast.d8', 'Stacking')]
+
+    // -----------------------------------------------------------------------
     // Songs (bard) — V2 emits these as Music-typed bonuses to the corresponding
     // primary stat key. We carry the V2 stat shape and tag the bonus type as
     // 'Music' so they stack-resolve correctly under the bard exclusive type.
@@ -1242,20 +1255,68 @@ export function parseEffect(
       return []
 
     // -----------------------------------------------------------------------
-    // Hireling stats (modeled separately; not applied to the player build)
+    // Hireling stats (modeled separately from the player build under the
+    // hireling.* stat namespace — the breakdowns panel surfaces these in a
+    // dedicated "Hireling Stats" section).
     // -----------------------------------------------------------------------
     case 'HirelingAbilityBonus':
+      if (items.length > 0) return items.map(item => make(`hireling.ability.${item}`))
+      return []
     case 'HirelingConcealment':
+      return [make('hireling.concealment')]
     case 'HirelingHitpoints':
+      return [make('hireling.hp')]
     case 'HirelingFortification':
+      return [make('hireling.fortification')]
     case 'HirelingPRR':
+      return [make('hireling.prr')]
     case 'HirelingMRR':
+      return [make('hireling.mrr')]
     case 'HirelingDodge':
+      return [make('hireling.dodge')]
     case 'HirelingMeleePower':
+      return [make('hireling.meleePower')]
     case 'HirelingRangedPower':
+      return [make('hireling.rangedPower')]
     case 'HirelingSpellPower':
-    case 'HirelingSaveBonus':
+      if (items.length > 0) {
+        return items.map(item => make(`hireling.spellPower.${normalizeSpellElement(item)}`))
+      }
+      return [make('hireling.spellPower.Universal')]
+    case 'HirelingSaveBonus': {
+      if (items.length === 0) {
+        return [
+          make('hireling.save.Fortitude'),
+          make('hireling.save.Reflex'),
+          make('hireling.save.Will'),
+        ]
+      }
+      const results: ParsedBonus[] = []
+      for (const item of items) {
+        switch (item) {
+          case 'All':
+            results.push(make('hireling.save.Fortitude'))
+            results.push(make('hireling.save.Reflex'))
+            results.push(make('hireling.save.Will'))
+            break
+          case 'Fortitude':
+            results.push(make('hireling.save.Fortitude'))
+            break
+          case 'Reflex':
+            results.push(make('hireling.save.Reflex'))
+            break
+          case 'Will':
+            results.push(make('hireling.save.Will'))
+            break
+          default:
+            results.push(make(`hireling.save.${item}`))
+            break
+        }
+      }
+      return results
+    }
     case 'HirelingGrantFeat':
+      // Grants a feat rather than a flat stat bonus — no hireling.* stat row.
       return []
 
     // -----------------------------------------------------------------------
@@ -1918,6 +1979,10 @@ export function parseItemBuff(buff: ItemBuff, source: string, ctx?: EffectContex
     case 'KiMaximum':              return [make('ki.max')]
     case 'KiPassive':              return [make('ki.passive')]
 
+    // V2 BreakdownItemPactDice: warlock eldritch blast dice (d6/d8 counts).
+    case 'EldritchBlastD6':        return [make('eldritchBlast.d6', 'Stacking')]
+    case 'EldritchBlastD8':        return [make('eldritchBlast.d8', 'Stacking')]
+
     // -----------------------------------------------------------------------
     // Helpless / damage ability multiplier / divine grace
     // -----------------------------------------------------------------------
@@ -2038,20 +2103,67 @@ export function parseItemBuff(buff: ItemBuff, source: string, ctx?: EffectContex
     case 'RuneArmStableCharge':    return [make('runeArm.stableCharge')]
 
     // -----------------------------------------------------------------------
-    // Hireling stats — modeled separately from the player build.
+    // Hireling stats — modeled separately from the player build under the
+    // hireling.* stat namespace (mirrors the parseEffect emissions).
     // -----------------------------------------------------------------------
     case 'HirelingAbilityBonus':
+      if (items.length > 0) return items.map(item => make(`hireling.ability.${item}`))
+      return []
     case 'HirelingConcealment':
+      return [make('hireling.concealment')]
     case 'HirelingHitpoints':
+      return [make('hireling.hp')]
     case 'HirelingFortification':
+      return [make('hireling.fortification')]
     case 'HirelingPRR':
+      return [make('hireling.prr')]
     case 'HirelingMRR':
+      return [make('hireling.mrr')]
     case 'HirelingDodge':
+      return [make('hireling.dodge')]
     case 'HirelingMeleePower':
+      return [make('hireling.meleePower')]
     case 'HirelingRangedPower':
+      return [make('hireling.rangedPower')]
     case 'HirelingSpellPower':
-    case 'HirelingSaveBonus':
+      if (items.length > 0) {
+        return items.map(item => make(`hireling.spellPower.${normalizeSpellElement(item)}`))
+      }
+      return [make('hireling.spellPower.Universal')]
+    case 'HirelingSaveBonus': {
+      if (items.length === 0) {
+        return [
+          make('hireling.save.Fortitude'),
+          make('hireling.save.Reflex'),
+          make('hireling.save.Will'),
+        ]
+      }
+      const results: ParsedBonus[] = []
+      for (const item of items) {
+        switch (item) {
+          case 'All':
+            results.push(make('hireling.save.Fortitude'))
+            results.push(make('hireling.save.Reflex'))
+            results.push(make('hireling.save.Will'))
+            break
+          case 'Fortitude':
+            results.push(make('hireling.save.Fortitude'))
+            break
+          case 'Reflex':
+            results.push(make('hireling.save.Reflex'))
+            break
+          case 'Will':
+            results.push(make('hireling.save.Will'))
+            break
+          default:
+            results.push(make(`hireling.save.${item}`))
+            break
+        }
+      }
+      return results
+    }
     case 'HirelingGrantFeat':
+      // Grants a feat rather than a flat stat bonus — no hireling.* stat row.
       return []
 
     // -----------------------------------------------------------------------

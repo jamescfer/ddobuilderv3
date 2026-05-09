@@ -20,7 +20,8 @@ import type {
 import { parseEffect, resolveItemBuff, buildBuffIndex } from '../lib/effectParser'
 import type { EffectContext } from '../lib/effectParser'
 import { resolveBonus, emptyResolvedStat } from '../lib/bonus'
-import type { RawBonus, ResolvedStat } from '../lib/bonus'
+import type { RawBonus, ResolvedBonus, ResolvedStat } from '../lib/bonus'
+import { applyCasterLevelCap, TACTICAL_TYPES } from '../lib/breakdowns'
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -41,6 +42,22 @@ export interface BuildStats {
   inClothArmor: boolean
   /** True iff a tower shield is equipped (drives V2 tower-shield MDB cap) */
   inTowerShield: boolean
+  /**
+   * V2 BreakdownItemCasterLevel port: effective per-class caster level for the
+   * given class name. Sums every level entry in build.classes that matches the
+   * class (multiclassing into the same class is rare but possible) and applies
+   * universal + class-specific CL bonuses, capped at the higher of the two
+   * MaxCasterLevel totals when present.
+   *
+   * When the build has no levels in `className`, returns total/raw 0 with an
+   * empty bonus list.
+   */
+  casterLevelOf: (className: string) => {
+    total: number
+    raw: number
+    capped: boolean
+    bonuses: ResolvedBonus[]
+  }
 }
 
 export interface WeaponInfo {
@@ -603,6 +620,162 @@ function accumulateFavor(
 }
 
 // ---------------------------------------------------------------------------
+// V2 BreakdownItemTactical port — each tactical DC is 10 + level + ability mod
+// + bonuses. The bonus contributions are already accumulated into
+// `tacticalDC.<key>` by parseEffect (Effect_TacticalDC). Here we add the
+// per-type Base contribution (10 + level + ability mod) so the breakdown
+// reflects the full V2 formula instead of just bonus sums.
+//
+// Per-type ability mod choices (V2 BreakdownItemTactical.cpp registers both
+// STR and CHA observers — selection per type follows the V2 character pane):
+//   Trip / Stun / Sunder / StunningShield → STR (level = total character level)
+//   Assassinate                           → INT (level = Rogue class levels)
+//   Trap                                  → INT (level = total character level)
+//   Fear / Wands / InnateAttack /
+//     BreathWeapon / Poison / RuneArm /
+//     General                             → CHA (level = total character level)
+// ---------------------------------------------------------------------------
+
+interface TacticalDCInputs {
+  totalLevel: number
+  rogueLevels: number
+  strMod: number
+  intMod: number
+  chaMod: number
+}
+
+function accumulateTacticalDC(map: StatMap, input: TacticalDCInputs): void {
+  const { totalLevel, rogueLevels, strMod, intMod, chaMod } = input
+
+  // Per-type ability + level selectors. `level` is the level component used in
+  // the formula (character level for most types; rogue class levels for
+  // Assassinate per V2's class-restricted ability).
+  const TYPE_FORMULA: Record<string, { abName: string; abMod: number; level: number }> = {
+    Trip:            { abName: 'STR', abMod: strMod, level: totalLevel },
+    Stun:            { abName: 'STR', abMod: strMod, level: totalLevel },
+    Sunder:          { abName: 'STR', abMod: strMod, level: totalLevel },
+    StunningShield:  { abName: 'STR', abMod: strMod, level: totalLevel },
+    Assassinate:     { abName: 'INT', abMod: intMod, level: rogueLevels },
+    Trap:            { abName: 'INT', abMod: intMod, level: totalLevel },
+    Fear:            { abName: 'CHA', abMod: chaMod, level: totalLevel },
+    Wands:           { abName: 'CHA', abMod: chaMod, level: totalLevel },
+    InnateAttack:    { abName: 'CHA', abMod: chaMod, level: totalLevel },
+    BreathWeapon:    { abName: 'CHA', abMod: chaMod, level: totalLevel },
+    Poison:          { abName: 'CHA', abMod: chaMod, level: totalLevel },
+    RuneArm:         { abName: 'CHA', abMod: chaMod, level: totalLevel },
+    General:         { abName: 'CHA', abMod: chaMod, level: totalLevel },
+  }
+
+  for (const { key, label } of TACTICAL_TYPES) {
+    const formula = TYPE_FORMULA[key]
+    if (!formula) continue
+    // Skip Assassinate when no Rogue levels — V2 hides it for non-rogues
+    // (the row will still be empty unless effects add bonuses).
+    if (key === 'Assassinate' && formula.level <= 0) continue
+
+    const statKey = `tacticalDC.${key}`
+    add(map, statKey, { value: 10, type: 'Base', source: `${label} DC base` })
+    if (formula.level !== 0) {
+      add(map, statKey, {
+        value: formula.level,
+        type: 'Base',
+        source: key === 'Assassinate' ? 'Rogue levels' : 'Character level',
+      })
+    }
+    if (formula.abMod !== 0) {
+      add(map, statKey, {
+        value: formula.abMod,
+        type: 'Ability mod',
+        source: formula.abName,
+      })
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// V2 BreakdownItemPactDice port — warlock eldritch blast pact dice.
+//
+// V2 BreakdownItemPactDice.cpp is purely effect-driven: every
+// Effect_EldritchBlastD6 / Effect_EldritchBlastD8 contribution is summed (it
+// overrides AffectsUs to always return true, and CreateOtherEffects clears
+// any built-ins). The actual per-warlock-level dice come from the class's
+// automatic feats — "Warlock: Eldritch Blast Focused" at L1 and "Warlock:
+// Eldritch Blast Damage" at L4/8/12/16/20 — which would normally emit those
+// effects. Those feats aren't currently emitting EldritchBlast effects in v3
+// feat data, so we approximate the per-level contribution here as a Base
+// bonus to the d6 dice count, giving any warlock build a non-zero pact-dice
+// readout that matches what V2 produces with the auto-feat effects applied.
+// ---------------------------------------------------------------------------
+
+function accumulatePactDice(
+  map: StatMap,
+  classes: { name: string; levels: number }[],
+): void {
+  // Sum levels in any class whose name contains "Warlock" (matches base
+  // "Warlock", "Warlock (Acolyte of the Skin)", and the "Acolyte Of The Skin"
+  // standalone class file).
+  let warlockLevels = 0
+  for (const bc of classes) {
+    if (!bc.name || bc.levels <= 0) continue
+    const n = bc.name.toLowerCase()
+    if (n.includes('warlock') || n.includes('acolyte of the skin')) {
+      warlockLevels += bc.levels
+    }
+  }
+  if (warlockLevels <= 0) return
+  // V2 BreakdownItemPactDice has no inline class-level → dice formula (it
+  // relies entirely on EldritchBlast{D6,D8} effects from class auto-feats and
+  // enhancements). Approximation: floor(warlockLevels / 2) base d6's, capped
+  // at 10 (L20 → 10d6), so any warlock build shows a non-zero pact-dice
+  // readout even when the auto-feat EB effects are absent from feat data.
+  const baseDice = Math.min(10, Math.floor(warlockLevels / 2))
+  if (baseDice > 0) {
+    add(map, 'eldritchBlast.d6', {
+      value: baseDice,
+      type: 'Base',
+      source: `Warlock (${warlockLevels} lv) base eldritch blast`,
+    })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// V2 BreakdownItemMaximumKi port — monk maximum ki pool.
+//
+// V2 BreakdownItemMaximumKi.cpp:
+//   - Base 40   ("Standard Max Ki", Bonus="Base")
+//   - Wisdom mod × 5  (Bonus="Ability")
+//   - Plus any Effect_KiMaximum contributions (already wired via 'ki.max').
+// V2 always exposes the breakdown for any character, but the displayed total
+// only matters for ki-using classes. We gate emission on monk levels > 0 so
+// non-monks don't see a phantom ki pool.
+// ---------------------------------------------------------------------------
+
+function accumulateMaxKi(
+  map: StatMap,
+  classes: { name: string; levels: number }[],
+  wisMod: number,
+): void {
+  let monkLevels = 0
+  for (const bc of classes) {
+    if (!bc.name || bc.levels <= 0) continue
+    if (bc.name === 'Monk') monkLevels += bc.levels
+  }
+  if (monkLevels <= 0) return
+  add(map, 'ki.max', {
+    value: 40,
+    type: 'Base',
+    source: 'Standard Max Ki',
+  })
+  if (wisMod !== 0) {
+    add(map, 'ki.max', {
+      value: wisMod * 5,
+      type: 'Ability mod',
+      source: 'Wisdom bonus ×5',
+    })
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Weapon info extractor
 // ---------------------------------------------------------------------------
 
@@ -943,6 +1116,11 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
 
     // ── Twists of Fate ───────────────────────────────────────────────────
     accumulateTwists(map, build.twistChoices ?? [], build.unlockedDestinyTrees ?? [], allTrees, ctx)
+
+    // ── V2 BreakdownItemPactDice port ───────────────────────────────────
+    // Warlock pact-dice base contribution (effect contributions to
+    // eldritchBlast.d6/d8 are already applied earlier via parseEffect).
+    accumulatePactDice(map, build.classes)
 
     // ── Patron favor (V2 Build::ApplyFavorBonuses port) ───────────────────
     if (input.allPatrons?.length && input.allQuests?.length) {
@@ -1338,6 +1516,45 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       }
     }
 
+    // V2 BreakdownItemSpellPoints: Fate Points add SP at character level
+    // 20+ (epic). V2 BreakdownItemSpellPoints.cpp:54-72 looks up the
+    // Breakdown_FatePoints total and adds it as a "Fate Points bonus" entry.
+    // Effect_FatePoint contributions are already accumulated into the
+    // 'fatePoint' stat via parseEffect; we mirror them into spellPoints.
+    if (build.totalLevel >= 20) {
+      const fp = resolveBonus(map.get('fatePoint') ?? []).total
+      if (fp > 0) {
+        add(map, 'spellPoints', {
+          value: fp,
+          type: 'Stacking',
+          source: 'Fate Points bonus',
+        })
+      }
+    }
+
+    // V2 BreakdownItemTactical formulas — emit base 10 + level + ability mod
+    // contributions for every tactical type, on top of the bonuses already
+    // accumulated into tacticalDC.<type> via Effect_TacticalDC.
+    {
+      const rogueLevels = build.classes
+        .filter(c => c.name === 'Rogue')
+        .reduce((s, c) => s + c.levels, 0)
+      accumulateTacticalDC(map, {
+        totalLevel: build.totalLevel,
+        rogueLevels,
+        strMod,
+        intMod: intModFull,
+        chaMod,
+      })
+    }
+
+    // V2 BreakdownItemMaximumKi port — base 40 + WIS×5 (gated on Monk levels).
+    // Goes after Wisdom is fully resolved so the ability-mod component is
+    // computed against the final WIS total (point buy + tomes + level-ups +
+    // racial + gear + enhancements). Effect_KiMaximum contributions are
+    // already accumulated into ki.max via parseEffect.
+    accumulateMaxKi(map, build.classes, wisMod)
+
     return map
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -1353,21 +1570,51 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
   const inClothArmor = armorStances.has('Cloth Armor')
   const inTowerShield = armorStances.has('Tower Shield')
 
-  return useMemo<BuildStats>(() => ({
-    resolve: (key: string): ResolvedStat => {
+  // Per-class level totals — multiclassing into the same class adds up here.
+  const classLevelMap = useMemo<Map<string, number>>(() => {
+    const m = new Map<string, number>()
+    for (const bc of build.classes) {
+      if (!bc.name || bc.levels <= 0) continue
+      m.set(bc.name, (m.get(bc.name) ?? 0) + bc.levels)
+    }
+    return m
+  }, [build.classes])
+
+  return useMemo<BuildStats>(() => {
+    const resolveStat = (key: string): ResolvedStat => {
       const bonuses = statMap.get(key)
       return bonuses?.length ? resolveBonus(bonuses) : emptyResolvedStat()
-    },
-    total: (key: string): number => {
-      const bonuses = statMap.get(key)
-      return bonuses?.length ? resolveBonus(bonuses).total : 0
-    },
-    keys: () => Array.from(statMap.keys()),
-    weapon: weaponInfo,
-    armorMaxDex,
-    inClothArmor,
-    inTowerShield,
-  }), [statMap, weaponInfo, armorMaxDex, inClothArmor, inTowerShield])
+    }
+    return {
+      resolve: resolveStat,
+      total: (key: string): number => {
+        const bonuses = statMap.get(key)
+        return bonuses?.length ? resolveBonus(bonuses).total : 0
+      },
+      keys: () => Array.from(statMap.keys()),
+      weapon: weaponInfo,
+      armorMaxDex,
+      inClothArmor,
+      inTowerShield,
+      casterLevelOf: (className: string) => {
+        const classLevels = classLevelMap.get(className) ?? 0
+        const cl = applyCasterLevelCap({
+          className,
+          classLevels,
+          classCl: resolveStat(`cl.${className}`),
+          allCl: resolveStat('cl.All'),
+          classMaxCl: resolveStat(`maxCl.${className}`),
+          allMaxCl: resolveStat('maxCl.All'),
+        })
+        return {
+          total: cl.total,
+          raw: cl.raw,
+          capped: cl.capped,
+          bonuses: cl.bonuses,
+        }
+      },
+    }
+  }, [statMap, weaponInfo, armorMaxDex, inClothArmor, inTowerShield, classLevelMap])
 }
 
 // ---------------------------------------------------------------------------
