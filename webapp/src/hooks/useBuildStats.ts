@@ -15,9 +15,9 @@ import { SKILLS } from '../lib/gamedata'
 import type {
   Race, DDOClass, Feat, EnhancementTree, EnhancementTreeItem, Item,
   Effect, EnhancementSelection, Augment, SetBonus, FiligreeSetBonus, Filigree,
-  OptionalBuff, FiligreeSlot,
+  OptionalBuff, FiligreeSlot, Buff,
 } from '../types/ddo'
-import { parseEffect, parseItemBuff } from '../lib/effectParser'
+import { parseEffect, resolveItemBuff, buildBuffIndex } from '../lib/effectParser'
 import type { EffectContext } from '../lib/effectParser'
 import { resolveBonus, emptyResolvedStat } from '../lib/bonus'
 import type { RawBonus, ResolvedStat } from '../lib/bonus'
@@ -64,6 +64,10 @@ export interface BuildStatsInput {
   allFiligreeBonuses: FiligreeSetBonus[]
   allFiligrees: Filigree[]
   gearItems: Record<string, Item>    // slot → resolved Item object
+  // ItemBuffs.xml database; optional so callers that haven't been wired
+  // yet still work. Without it, parseItemBuff falls back to the legacy
+  // direct-Type mapping.
+  allItemBuffs?: Buff[]
 }
 
 // ---------------------------------------------------------------------------
@@ -268,11 +272,16 @@ function accumulateEnhancementTree(
   }
 }
 
-function accumulateGear(map: StatMap, gearItems: Record<string, Item>): void {
+function accumulateGear(
+  map: StatMap,
+  gearItems: Record<string, Item>,
+  buffIndex: Map<string, Buff> | undefined,
+  ctx?: EffectContext,
+): void {
   for (const [slot, item] of Object.entries(gearItems)) {
     const source = `${item.Name} (${slot})`
     for (const buff of toArray(item.Buff)) {
-      addParsed(map, parseItemBuff(buff, source))
+      addParsed(map, resolveItemBuff(buff, buffIndex, source, ctx))
     }
     // Armor bonus from armor/shield items — treated as Armor bonus type
     if (item.ArmorBonus) {
@@ -478,7 +487,9 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     const {
       allClasses, allRaces, allFeats, allTrees, gearItems,
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+      allItemBuffs,
     } = input
+    const buffIndex = allItemBuffs ? buildBuffIndex(allItemBuffs) : undefined
 
     // ──────────────────────────────────────────────────────────────────────
     // Build the EffectContext used to gate effects via Requirements::Met.
@@ -660,7 +671,7 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     }
 
     // ── Gear item buffs ───────────────────────────────────────────────────
-    accumulateGear(map, gearItems)
+    accumulateGear(map, gearItems, buffIndex, ctx)
 
     // ── Augments ─────────────────────────────────────────────────────────
     accumulateAugments(map, build.augmentChoices, allAugments, ctx)

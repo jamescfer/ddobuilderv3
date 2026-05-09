@@ -4,7 +4,7 @@
 // entries for specific stat keys. Stat keys are flat dot-separated strings
 // (e.g. "ability.Strength", "save.Fort", "skill.Heal", "sp.Fire", …).
 
-import type { Effect, ItemBuff, Requirements, Requirement } from '../types/ddo'
+import type { Effect, ItemBuff, Buff, Requirements, Requirement } from '../types/ddo'
 
 // ---------------------------------------------------------------------------
 // EffectContext: evaluated build state used to gate effects
@@ -1937,4 +1937,156 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
     default:
       return []
   }
+}
+
+// ---------------------------------------------------------------------------
+// V2 buff-database lookup + UpdatedEffects resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds a Type → Buff lookup map from the global ItemBuffs.xml database.
+ * Pass the result of `api.itemBuffs()` directly.
+ */
+export function buildBuffIndex(buffs: Buff[]): Map<string, Buff> {
+  const map = new Map<string, Buff>()
+  for (const b of buffs) {
+    if (b && typeof b.Type === 'string') map.set(b.Type, b)
+  }
+  return map
+}
+
+/**
+ * Returns true for fast-xml-parser's representation of a self-closing flag
+ * tag (e.g. `<NegativeValues />`), which becomes `""` in the parsed object.
+ * Plain booleans are also accepted in case the data shape evolves.
+ */
+function flag(v: boolean | '' | undefined): boolean {
+  return v === true || v === ''
+}
+
+/**
+ * Returns a flat string array, treating fast-xml-parser's possible shapes
+ * (single string, array of strings, or undefined) uniformly.
+ */
+function asStringList(v: string | string[] | undefined): string[] {
+  if (!v) return []
+  return Array.isArray(v) ? v : [v]
+}
+
+/**
+ * Returns a shallow array of effects from a parsed Buff. fast-xml-parser may
+ * deliver `Effect` as a single object or an array depending on count.
+ */
+function effectsOf(buff: Buff): Effect[] {
+  const e = buff.Effect
+  if (!e) return []
+  return Array.isArray(e) ? e : [e]
+}
+
+/**
+ * V2 `Buff::UpdatedEffects` port. Mutates a list of Effect copies to apply
+ * the inline buff's overrides:
+ *
+ *   - `BonusType` overrides every effect's Bonus.
+ *   - `Item` replaces every effect's Item list (single string).
+ *   - `Item2` appends to every effect's Item list.
+ *   - `Value1` alone → set as Amount on every effect.
+ *   - `Value1` + `Value2` → odd-indexed effects get Value1, even get Value2.
+ *   - `negativeValues` flips the sign of applied values.
+ *   - `requirementsToUse` (from the database buff) becomes the gating
+ *     Requirements on every effect.
+ *
+ * The inline ItemBuff fields take precedence; the database Buff's defaults
+ * fill in any inline field that wasn't explicitly set.
+ */
+function applyBuffOverrides(
+  effects: Effect[],
+  inline: ItemBuff,
+  dbBuff: Buff,
+): Effect[] {
+  const bonusType = inline.BonusType ?? dbBuff.BonusType
+  const item = inline.Item ?? dbBuff.Item
+  const item2 = inline.Item2 ?? dbBuff.Item2
+  const value1 = inline.Value1 ?? dbBuff.Value1
+  const value2 = inline.Value2 ?? dbBuff.Value2
+  const negative = flag(dbBuff.NegativeValues)
+  const requirementsToUse = dbBuff.RequirementsToUse
+
+  // Each Effect from the DB is shared across all consumers — clone before
+  // mutating so we don't poison the cached database.
+  const out = effects.map(e => ({ ...e }))
+
+  if (bonusType) {
+    for (const e of out) e.Bonus = bonusType
+  }
+  if (item) {
+    for (const e of out) e.Item = item
+  }
+  if (item2) {
+    for (const e of out) {
+      const existing = asStringList(e.Item as string | string[] | undefined)
+      e.Item = [...existing, item2]
+    }
+  }
+
+  if (value1 !== undefined && value2 !== undefined) {
+    out.forEach((e, i) => {
+      const v = i % 2 === 0 ? value1 : value2
+      e.Amount = negative ? -v : v
+    })
+  } else if (value1 !== undefined) {
+    for (const e of out) {
+      e.Amount = negative ? -value1 : value1
+    }
+  }
+
+  if (requirementsToUse) {
+    for (const e of out) e.Requirements = requirementsToUse
+  }
+
+  return out
+}
+
+/**
+ * Resolves an inline `<Buff>` (from an item, augment, set bonus, etc.)
+ * against the global ItemBuffs database and returns ParsedBonus entries.
+ *
+ * V2 flow (Build::ApplyItem → Build::ApplyItemEffect):
+ *   1. `FindBuff(ibit.Type())` — look up by name.
+ *   2. Copy the database buff's Effect list.
+ *   3. `ibit.UpdatedEffects(&effects, buff.HasNegativeValues())` —
+ *      apply Value/BonusType/Item overrides from the inline buff.
+ *   4. For each effect, notify the build via `parseEffect`.
+ *
+ * Falls back to the legacy hard-coded `parseItemBuff` mapping when:
+ *   - The buff name isn't in the database (rare; a few inline-only types).
+ *   - The database buff has no `Effect` entries (purely cosmetic / display).
+ *   - No buff index was supplied (call sites that haven't been wired yet).
+ */
+export function resolveItemBuff(
+  inline: ItemBuff,
+  buffIndex: Map<string, Buff> | undefined,
+  source: string,
+  ctx?: EffectContext,
+): ParsedBonus[] {
+  if (!buffIndex) return parseItemBuff(inline, source)
+
+  const dbBuff = buffIndex.get(inline.Type)
+  if (!dbBuff) return parseItemBuff(inline, source)
+
+  const baseEffects = effectsOf(dbBuff)
+  if (baseEffects.length === 0) {
+    // Database buff is display-text only (no Effects). Try the legacy
+    // direct-Type fallback so the inline Type remains addressable.
+    return parseItemBuff(inline, source)
+  }
+
+  const effects = applyBuffOverrides(baseEffects, inline, dbBuff)
+  const out: ParsedBonus[] = []
+  for (const eff of effects) {
+    // Stack count of an inline buff is always 1; ATypes that read stacks
+    // (e.g. Stacks, Simple) treat rank=1 the same as a singular application.
+    out.push(...parseEffect(eff, 1, source, 0, 0, ctx))
+  }
+  return out
 }

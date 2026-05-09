@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff } from '../../types/ddo'
+import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, Buff } from '../../types/ddo'
 import { useBuildStats } from '../../hooks/useBuildStats'
 import type { ResolvedBonus } from '../../lib/bonus'
 import { SKILLS, SCHOOL_DCS, SPELL_POWER_TYPES, SPELL_POWER_LABELS } from '../../lib/gamedata'
@@ -205,6 +205,7 @@ export default function BreakdownsPanel() {
   const [allSetBonuses,     setAllSetBonuses]     = useState<SetBonus[]>([])
   const [allFiligreeBonuses,setAllFiligreeBonuses]= useState<FiligreeSetBonus[]>([])
   const [allFiligrees,      setAllFiligrees]      = useState<Filigree[]>([])
+  const [allItemBuffs,      setAllItemBuffs]      = useState<Buff[]>([])
   const [gearItems,         setGearItems]         = useState<Record<string, Item>>({})
   const [tip, setTip] = useState<TipState | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -220,6 +221,7 @@ export default function BreakdownsPanel() {
     api.setbonuses().then(setAllSetBonuses)
     api.filigreeSetBonuses().then(setAllFiligreeBonuses)
     api.filigree().then(setAllFiligrees)
+    api.itemBuffs().then(setAllItemBuffs)
   }, [])
 
   // Resolve gear items whenever equipped slots change
@@ -247,9 +249,11 @@ export default function BreakdownsPanel() {
     () => ({
       allClasses, allRaces, allFeats, allTrees, gearItems,
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+      allItemBuffs,
     }),
     [allClasses, allRaces, allFeats, allTrees, gearItems,
-     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees],
+     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+     allItemBuffs],
   )
   const stats = useBuildStats(statsInput)
 

@@ -240,6 +240,13 @@ function loadSentientGems() {
   } catch { return [] }
 }
 
+function loadItemBuffs() {
+  try {
+    const parsed = readXml(path.join(DATA_DIR, 'ItemBuffs.xml')) as { Buffs?: { Buff?: unknown[] } }
+    return (parsed?.Buffs?.Buff ?? []) as unknown[]
+  } catch { return [] }
+}
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -366,6 +373,7 @@ app.get('/api/selfbuffs', (_req, res) => {
 app.get('/api/patrons', (_req, res) => res.json(cached('patrons', loadPatrons)))
 app.get('/api/quests', (_req, res) => res.json(cached('quests', loadQuests)))
 app.get('/api/gems', (_req, res) => res.json(cached('gems', loadSentientGems)))
+app.get('/api/itembuffs', (_req, res) => res.json(cached('itembuffs', loadItemBuffs)))
 
 // ---------------------------------------------------------------------------
 // Auto-update routes

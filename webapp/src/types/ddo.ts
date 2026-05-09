@@ -172,12 +172,44 @@ export interface EnhancementTree {
 // ---------------------------------------------------------------------------
 // Item
 // ---------------------------------------------------------------------------
+
+/**
+ * Inline `<Buff>` reference inside an item (or a generic buff source). The
+ * `Type` field is the *name* that maps to a `Buff` entry in the global
+ * ItemBuffs.xml database. The optional fields are V2 `Buff::UpdatedEffects`
+ * overrides applied to every Effect in the looked-up Buff.
+ */
 export interface ItemBuff {
   Type: string
   Value1?: number
+  Value2?: number
   BonusType?: string
   Description1?: string
   Item?: string
+  Item2?: string
+}
+
+/**
+ * A `Buff` row as it appears in ItemBuffs.xml. Mirrors V2's `Buff` class:
+ * a named container of one or more Effects with optional default Value /
+ * BonusType / Item overrides and optional ApplyToWeaponOnly /
+ * NegativeValues flags.
+ */
+export interface Buff {
+  Type: string
+  ApplyToWeaponOnly?: boolean | ''
+  NegativeValues?: boolean | ''
+  DisplayText?: string | string[]
+  Ignore?: string | string[]
+  Value1?: number
+  Value2?: number
+  BonusType?: string
+  Description1?: string
+  Item?: string
+  Item2?: string
+  Effect?: Effect | Effect[]
+  Stance?: unknown
+  RequirementsToUse?: Requirements
 }
 
 export interface ItemAugment {
