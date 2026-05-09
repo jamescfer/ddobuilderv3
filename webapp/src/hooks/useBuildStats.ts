@@ -28,7 +28,7 @@ import {
   reaperHpCap, styleBonusHp, effectiveDodgeCap,
   divineGraceCap, halfElfLesserDivineGraceCap,
 } from '../lib/v2Formulas'
-import { getLevelClasses } from '../lib/levelProgression'
+import { getLevelClasses, tomeCapAtLevel } from '../lib/levelProgression'
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -107,16 +107,8 @@ function abMod(score: number): number {
   return Math.floor((score - 10) / 2)
 }
 
-/** V2 Life::TomeAtLevel — caps tome value by character level. */
-function tomeCapAtLevel(level: number): number {
-  if (level <= 2) return 2
-  if (level <= 6) return 3
-  if (level <= 10) return 4
-  if (level <= 14) return 5
-  if (level <= 18) return 6
-  if (level <= 21) return 7
-  return 999
-}
+// tomeCapAtLevel is imported from lib/levelProgression so the rule is shared
+// across the codebase (V2 Life::TomeAtLevel parity).
 
 const MAX_BAB = 25
 

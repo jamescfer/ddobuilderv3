@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { CharacterBuild, DDOClass, Feat, Race, Requirement, RequiresOneOf } from '../../types/ddo'
+import type { CharacterBuild, DDOClass, Feat, Race, Requirement } from '../../types/ddo'
 import {
-  abilityAtLevel,
   buildSnapshotAtCharacterLevel,
   characterLevelForClassLevel,
-  classLevelsAtLevel,
-  getLevelClasses,
-  tomeCapAtLevel,
 } from '../../lib/levelProgression'
+import { meetsRequirements as sharedMeetsRequirements } from '../../lib/requirements'
 import DdoIcon from '../DdoIcon'
 import styles from './FeatSlots.module.css'
 
@@ -148,129 +145,6 @@ function buildSlots(
   return slots
 }
 
-// ---------------------------------------------------------------------------
-// BAB helpers — parse class BAB array (e.g. "0 1 2 3 ... 20")
-// ---------------------------------------------------------------------------
-function classBABAtLevel(cls: DDOClass | undefined, levels: number): number {
-  if (!cls?.BAB) return Math.floor(levels * 0.75)
-  const arr = String(cls.BAB).trim().split(/\s+/).map(Number)
-  // BAB array is 0-indexed from level 0: arr[0]=0, arr[1]=1, etc.
-  return arr[levels] ?? arr[arr.length - 1] ?? Math.floor(levels * 0.75)
-}
-
-function totalBAB(build: CharacterBuild, allClasses: DDOClass[]): number {
-  // V2 parity: BAB sums each class's contribution based on the levels the
-  // character actually has in that class (counted from the per-level array,
-  // which the snapshot truncates for "BAB at level N" queries).
-  const lc = getLevelClasses(build)
-  const counts: Record<string, number> = {}
-  for (const c of lc) if (c) counts[c] = (counts[c] ?? 0) + 1
-  let sum = 0
-  for (const [name, levels] of Object.entries(counts)) {
-    const cls = allClasses.find(c => c.Name === name)
-    sum += classBABAtLevel(cls, levels)
-  }
-  return sum
-}
-
-// ---------------------------------------------------------------------------
-// Prerequisite checking
-// ---------------------------------------------------------------------------
-function meetsSingleRequirement(req: Requirement, build: CharacterBuild, allClasses: DDOClass[], race?: Race): boolean {
-  const item = Array.isArray(req.Item) ? req.Item[0] : req.Item ?? ''
-  const value = req.Value ?? 0
-
-  switch (req.Type) {
-    case 'Ability': {
-      // V2 parity: ability score at the snapshot's character level (counts
-      // only level-up bonuses awarded by then, with the tome cap applied
-      // and the racial modifier folded in).
-      const charLvl = Math.max(1, build.totalLevel || 1)
-      const tomeRaw = (build.abilityTomes ?? {})[item as keyof CharacterBuild['abilityTomes']] ?? 0
-      const tome = Math.min(tomeRaw, tomeCapAtLevel(charLvl))
-      const racial = race ? Number((race as unknown as Record<string, unknown>)[item] ?? 0) || 0 : 0
-      const score = abilityAtLevel(build, item as 'Strength', charLvl, racial, tome)
-      return score >= value
-    }
-    case 'BAB':
-      return totalBAB(build, allClasses) >= value
-    case 'Feat': {
-      const chosen = Object.values(build.featChoices)
-      return chosen.includes(item)
-    }
-    case 'Race':
-      return build.race === item
-    case 'Class':
-      return build.classes.some(c => c.name === item && c.levels > 0)
-    case 'ClassLevel': {
-      const bc = build.classes.find(c => c.name === item)
-      return (bc?.levels ?? 0) >= value
-    }
-    case 'ClassMinLevel': {
-      // V2 ClassMinLevel checks any single class meets the level. The
-      // `item` field encodes the class name (or empty / "Any" → any class).
-      if (!item || item === 'Any') {
-        return build.classes.some(c => c.levels >= value)
-      }
-      const bc = build.classes.find(c => c.name === item)
-      return (bc?.levels ?? 0) >= value
-    }
-    case 'BaseClassMinLevel': {
-      // Class with name == item, OR any class whose BaseClass == item
-      return classLevelsAtLevel(build, item, build.totalLevel || 20, allClasses, true) >= value
-    }
-    case 'Level':
-      return build.totalLevel >= value
-    case 'SpecificLevel':
-      // V2 Requirement::EvaluateSpecificLevel — character level meets the
-      // exact level (1-based Value vs the snapshot's totalLevel).
-      return build.totalLevel >= value
-    case 'Stance':
-      // V2 evaluates stances against active stance state. The snapshot
-      // doesn't model stance toggling at training time, so accept it.
-      return true
-    case 'EnemyType':
-      // V2 Requirement_EnemyType — runtime combat condition; treat as met
-      // for prerequisite display.
-      return true
-    case 'Skill':
-      // V2 Requirement_Skill — depends on per-level skill ranks which
-      // aren't tracked per-level in V3. Surface as met to avoid false
-      // negatives until the per-level skill model is in place.
-      return true
-    case 'StartingWorld':
-      return true
-    default:
-      return true
-  }
-}
-
-function meetsOneOfGroup(group: RequiresOneOf, build: CharacterBuild, allClasses: DDOClass[], race?: Race): boolean {
-  const reqs = Array.isArray(group.Requirement) ? group.Requirement : [group.Requirement]
-  return reqs.some(r => meetsSingleRequirement(r, build, allClasses, race))
-}
-
-function meetsRequirements(feat: Feat, build: CharacterBuild, allClasses: DDOClass[], race?: Race): boolean {
-  const reqs = feat.Requirements
-  if (!reqs) return true
-
-  if (reqs.Requirement) {
-    const list = Array.isArray(reqs.Requirement) ? reqs.Requirement : [reqs.Requirement]
-    if (!list.every(r => meetsSingleRequirement(r, build, allClasses, race))) return false
-  }
-
-  if (reqs.RequiresOneOf) {
-    const groups = Array.isArray(reqs.RequiresOneOf) ? reqs.RequiresOneOf : [reqs.RequiresOneOf]
-    if (!groups.every(g => meetsOneOfGroup(g, build, allClasses, race))) return false
-  }
-
-  if (reqs.RequiresNoneOf) {
-    const groups = Array.isArray(reqs.RequiresNoneOf) ? reqs.RequiresNoneOf : [reqs.RequiresNoneOf]
-    if (groups.some(g => meetsOneOfGroup(g, build, allClasses, race))) return false
-  }
-
-  return true
-}
 
 // ---------------------------------------------------------------------------
 // Prerequisite label formatting
@@ -389,7 +263,7 @@ function getOptions(
       const featGroups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
       return slotMatchesFeat(slot.featType, featGroups)
     })
-    .map(f => ({ feat: f, prereqsMet: meetsRequirements(f, snap, allClasses, race) }))
+    .map(f => ({ feat: f, prereqsMet: sharedMeetsRequirements(f.Requirements, { build: snap, allClasses, race }) }))
     .sort((a, b) => {
       if (a.prereqsMet !== b.prereqsMet) return a.prereqsMet ? -1 : 1
       return a.feat.Name.localeCompare(b.feat.Name)
