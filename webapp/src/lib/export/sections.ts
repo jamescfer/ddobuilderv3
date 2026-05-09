@@ -290,6 +290,80 @@ const notes: SectionDef = {
   },
 }
 
+const slas: SectionDef = {
+  id: 'SLAs',
+  label: 'Spell-Like Abilities',
+  emit: ({ build }) => {
+    const entries = Object.entries(build.slaCharges).filter(([, c]) => c > 0)
+    if (entries.length === 0) return []
+    const out = ['[b]SLAs[/b]:']
+    for (const [name, charges] of entries) out.push(`  ${name}: ${charges} charges`)
+    return out
+  },
+}
+
+const grantedFeats: SectionDef = {
+  id: 'GrantedFeats',
+  label: 'Granted feats',
+  emit: ({ build }) => {
+    // Heuristic: any feat slot whose key starts with "granted:" represents an
+    // auto-grant. (V2's GrantedFeat list is derived from feat/race/enhancement
+    // GrantFeat effects; v3's UI does not yet flag these explicitly, so we
+    // surface a reminder placeholder.)
+    const grants = Object.entries(build.featChoices).filter(([k]) => k.startsWith('granted:'))
+    if (grants.length === 0) return []
+    return ['[b]Granted Feats[/b]:', ...grants.map(([k, v]) => `  ${k.slice(8)}: ${v}`)]
+  },
+}
+
+const consolidatedFeats: SectionDef = {
+  id: 'ConsolidatedFeats',
+  label: 'Consolidated feats',
+  emit: ({ build }) => {
+    const counts = new Map<string, number>()
+    for (const v of Object.values(build.featChoices)) {
+      if (!v) continue
+      counts.set(v, (counts.get(v) ?? 0) + 1)
+    }
+    if (counts.size === 0) return []
+    const out = ['[b]Consolidated Feats[/b]:']
+    Array.from(counts.entries()).sort(([a], [b]) => a.localeCompare(b)).forEach(([n, c]) => {
+      out.push(`  ${n}${c > 1 ? ` x${c}` : ''}`)
+    })
+    return out
+  },
+}
+
+const simpleGear: SectionDef = {
+  id: 'SimpleGear',
+  label: 'Gear (simple)',
+  emit: ({ build }) => {
+    const entries = Object.entries(build.gear).filter(([, v]) => v)
+    if (entries.length === 0) return []
+    return [
+      '[b]Gear (simple)[/b]:',
+      ...entries.sort(([a], [b]) => a.localeCompare(b)).map(([slot, item]) => `  ${slot}: ${item}`),
+    ]
+  },
+}
+
+const alternateGearLayouts: SectionDef = {
+  id: 'AlternateGearLayouts',
+  label: 'Alternate gear layouts',
+  emit: ({ build }) => {
+    const sets = Object.entries(build.namedGearSets ?? {})
+    if (sets.length === 0) return []
+    const out = ['[b]Alternate Gear Layouts[/b]:']
+    for (const [name, slots] of sets) {
+      out.push(`  ${name}:`)
+      Object.entries(slots).sort(([a], [b]) => a.localeCompare(b)).forEach(([s, it]) => {
+        if (it) out.push(`    ${s}: ${it}`)
+      })
+    }
+    return out
+  },
+}
+
 /**
  * V2 SectionOrder default. Mirrors ForumExportDlg.cpp:194-278.
  */
@@ -300,6 +374,8 @@ export const DEFAULT_SECTIONS: SectionDef[] = [
   saves,
   energyResistances,
   featSelections,
+  grantedFeats,
+  consolidatedFeats,
   skills,
   stances,
   enhancements,
@@ -307,9 +383,12 @@ export const DEFAULT_SECTIONS: SectionDef[] = [
   reaperTrees,
   spellPowers,
   spells,
+  slas,
   weaponDamage,
   tacticalDCs,
   gear,
+  simpleGear,
+  alternateGearLayouts,
   notes,
 ]
 

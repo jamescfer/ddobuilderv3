@@ -249,6 +249,8 @@ export interface Stance {
   Description?: string
   Group?: string
   AutoControlled?: boolean
+  /** V2 IncompatibleStance — list of stance names mutually exclusive with this one. */
+  IncompatibleStance?: string | string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -469,6 +471,31 @@ export interface CharacterBuild {
   spellMetamagics: Record<string, Record<string, string[]>>
   /** Clickie key (slot:itemName:effectIndex) → remaining charges. */
   clickieCharges: Record<string, number>
+
+  // ── Audit-fix additions (V2 system parity) ────────────────────────────────
+  /** Guild level 0–200 (V2 Character::GuildLevel). */
+  guildLevel: number
+  /** Whether guild-level buffs are applied to the build (V2 Character::ApplyGuildBuffs). */
+  applyGuildBuffs: boolean
+  /**
+   * Quest completion records keyed by quest name. Boolean is preserved for
+   * back-compat; the new `questDifficulty` map records the difficulty tier
+   * the quest was completed on (V2 CompletedQuest.h).
+   */
+  questDifficulty: Record<string, QuestDifficulty>
+  /** SLA charge counters keyed by SLA name (V2 SLACharge effect). */
+  slaCharges: Record<string, number>
+  /**
+   * Alternate-feat selections: slotKey → alternate-feat name. V2 stores this
+   * on TrainedFeat to allow free in-game feat swap.
+   */
+  alternateFeats: Record<string, string>
+  /**
+   * Named attack chains for DPS sim (V2 AttackChain). Each chain is an
+   * ordered list of attack-action names from `Attacks.xml` (modeled in V3 as
+   * free-text labels for now; the Combat panel may consume these).
+   */
+  attackChains: Record<string, string[]>
 }
 
 export interface SentientGemState {
@@ -477,6 +504,11 @@ export interface SentientGemState {
   majorAugment: string
   minorAugment: string
 }
+
+/** Quest difficulty tiers — mirrors V2 CompletedQuest::Difficulty. */
+export type QuestDifficulty =
+  | 'Casual' | 'Normal' | 'Hard' | 'Elite' | 'Reaper1' | 'Reaper2' | 'Reaper3'
+  | 'Reaper4' | 'Reaper5' | 'Reaper6' | 'Reaper7' | 'Reaper8' | 'Reaper9' | 'Reaper10'
 
 // ---------------------------------------------------------------------------
 // V2 Character → Life → Build hierarchy
@@ -562,6 +594,12 @@ export function emptyBuild(): CharacterBuild {
     trainedSpells: {},
     spellMetamagics: {},
     clickieCharges: {},
+    guildLevel: 0,
+    applyGuildBuffs: false,
+    questDifficulty: {},
+    slaCharges: {},
+    alternateFeats: {},
+    attackChains: {},
   }
 }
 
