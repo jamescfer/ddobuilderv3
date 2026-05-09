@@ -52,7 +52,8 @@ export default function TomesPanel() {
                   }}
                 >
                   <option value={0}>None</option>
-                  {[1, 2, 3, 4].map(n => (
+                  {/* V2 parity: skill tomes are capped at +7 in client storage. */}
+                  {[1, 2, 3, 4, 5, 6, 7].map(n => (
                     <option key={n} value={n}>+{n}</option>
                   ))}
                 </select>

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer } from 'react'
 import type { CharacterBuild, Ability, FiligreeSlot, QuestDifficulty } from '../types/ddo'
 import { emptyBuild, migrateSentientGem } from '../types/ddo'
+import { aggregateLevelClasses, getLevelClasses, HEROIC_CAP } from '../lib/levelProgression'
 
 type Action =
   | { type: 'SET_NAME'; name: string }
@@ -8,12 +9,15 @@ type Action =
   | { type: 'SET_ALIGNMENT'; alignment: string }
   | { type: 'SET_CLASS'; index: 0 | 1 | 2; name: string }
   | { type: 'SET_CLASS_LEVELS'; index: 0 | 1 | 2; levels: number }
+  | { type: 'SET_LEVEL_CLASS'; level: number; name: string }
+  | { type: 'SET_LEVEL_CLASSES'; levels: string[] }
   | { type: 'SET_EPIC_LEVELS'; levels: number }
   | { type: 'SET_LEGENDARY_LEVELS'; levels: number }
   | { type: 'SET_ABILITY'; ability: Ability; score: number }
   | { type: 'SET_ABILITY_LEVELUP'; level: 4 | 8 | 12 | 16 | 20 | 24 | 28 | 32 | 36 | 40; ability: Ability }
   | { type: 'SET_FEAT'; slotKey: string; featName: string }
   | { type: 'SET_SKILL_RANK'; skill: string; rank: number }
+  | { type: 'SET_SKILL_RANK_AT_LEVEL'; level: number; skill: string; rank: number }
   | { type: 'SET_GEAR'; slot: string; itemName: string }
   | { type: 'CLEAR_GEAR'; slot: string }
   | { type: 'SET_AUGMENT'; key: string; augmentName: string }
@@ -79,15 +83,26 @@ function migrateFiligreeSlots(raw: unknown, count: number): FiligreeSlot[] {
   return arr.slice(0, count)
 }
 
+function migrateLevelClasses(raw: CharacterBuild): string[] {
+  const explicit = (raw as unknown as { levelClasses?: unknown }).levelClasses
+  if (Array.isArray(explicit) && explicit.every(v => typeof v === 'string')) {
+    return (explicit as string[]).slice(0, HEROIC_CAP)
+  }
+  // Derive from existing aggregate totals so legacy saves continue to render.
+  return getLevelClasses(raw)
+}
+
 function migrateLoad(raw: CharacterBuild): CharacterBuild {
   return {
     ...raw,
+    levelClasses: migrateLevelClasses(raw),
     epicLevels: raw.epicLevels ?? 10,
     enhancementChoices: raw.enhancementChoices ?? {},
     enhancementSelections: raw.enhancementSelections ?? {},
     enhancementPinned: raw.enhancementPinned ?? [],
     legendaryLevels: raw.legendaryLevels ?? 4,
     skillRanks: raw.skillRanks ?? {},
+    skillRanksByLevel: (raw as unknown as { skillRanksByLevel?: Record<number, Record<string, number>> }).skillRanksByLevel ?? {},
     gear: raw.gear ?? {},
     augmentChoices: raw.augmentChoices ?? {},
     pastLives: raw.pastLives ?? {},
@@ -134,15 +149,67 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
     case 'SET_ALIGNMENT':
       return { ...state, alignment: action.alignment }
     case 'SET_CLASS': {
+      // Renaming a slot: replace every per-level entry that matched the old
+      // class name so the aggregate and per-level views stay consistent.
+      const oldName = state.classes[action.index]?.name ?? ''
       const classes = [...state.classes] as CharacterBuild['classes']
       classes[action.index] = { ...classes[action.index], name: action.name }
-      return { ...state, classes }
+      let levelClasses = state.levelClasses ? [...state.levelClasses] : getLevelClasses(state)
+      if (oldName && oldName !== action.name) {
+        levelClasses = levelClasses.map(c => (c === oldName ? action.name : c))
+      }
+      // If the slot was just cleared, remove its levels from the per-level array
+      if (oldName && !action.name) {
+        levelClasses = levelClasses.map(c => (c === oldName ? '' : c))
+      }
+      return { ...state, classes, levelClasses }
     }
     case 'SET_CLASS_LEVELS': {
       const classes = [...state.classes] as CharacterBuild['classes']
-      classes[action.index] = { ...classes[action.index], levels: action.levels }
-      const totalLevel = classes.reduce((s, c) => s + c.levels, 0)
-      return { ...state, classes, totalLevel }
+      const oldLevels = classes[action.index]?.levels ?? 0
+      const targetLevels = Math.max(0, Math.min(HEROIC_CAP, action.levels))
+      classes[action.index] = { ...classes[action.index], levels: targetLevels }
+      const className = classes[action.index].name
+      // Reconcile levelClasses: append/strip entries of `className` to match the
+      // new total. We append at the end (as the user added more of this class
+      // without picking specific levels); we remove from the end on shrinkage.
+      let levelClasses = state.levelClasses ? [...state.levelClasses] : getLevelClasses(state)
+      if (className && targetLevels !== oldLevels) {
+        const delta = targetLevels - oldLevels
+        if (delta > 0) {
+          // Pad to make room then fill empty slots from the front, falling back to append.
+          while (levelClasses.length < HEROIC_CAP) levelClasses.push('')
+          let added = 0
+          for (let i = 0; i < levelClasses.length && added < delta; i++) {
+            if (!levelClasses[i]) { levelClasses[i] = className; added++ }
+          }
+          while (added < delta) { levelClasses.push(className); added++ }
+        } else if (delta < 0) {
+          let toRemove = -delta
+          for (let i = levelClasses.length - 1; i >= 0 && toRemove > 0; i--) {
+            if (levelClasses[i] === className) { levelClasses[i] = ''; toRemove-- }
+          }
+        }
+      }
+      const totalLevel = levelClasses.filter(Boolean).length
+      // Trim trailing empty slots beyond the heroic cap so the array stays tidy.
+      while (levelClasses.length > HEROIC_CAP) levelClasses.pop()
+      return { ...state, classes, levelClasses, totalLevel }
+    }
+    case 'SET_LEVEL_CLASS': {
+      const lc = state.levelClasses ? [...state.levelClasses] : getLevelClasses(state)
+      while (lc.length <= action.level) lc.push('')
+      lc[action.level] = action.name
+      const trimmed = lc.slice(0, HEROIC_CAP)
+      const classes = aggregateLevelClasses(trimmed)
+      const totalLevel = trimmed.filter(Boolean).length
+      return { ...state, levelClasses: trimmed, classes, totalLevel }
+    }
+    case 'SET_LEVEL_CLASSES': {
+      const lc = action.levels.slice(0, HEROIC_CAP)
+      const classes = aggregateLevelClasses(lc)
+      const totalLevel = lc.filter(Boolean).length
+      return { ...state, levelClasses: lc, classes, totalLevel }
     }
     case 'SET_EPIC_LEVELS':
       return { ...state, epicLevels: Math.max(0, Math.min(10, action.levels)) }
@@ -156,6 +223,20 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       return { ...state, featChoices: { ...state.featChoices, [action.slotKey]: action.featName } }
     case 'SET_SKILL_RANK':
       return { ...state, skillRanks: { ...state.skillRanks, [action.skill]: action.rank } }
+    case 'SET_SKILL_RANK_AT_LEVEL': {
+      // V2 parity: this action *only* mutates the per-level view. The legacy
+      // total view (state.skillRanks) is left untouched so callers that
+      // dispatch both SET_SKILL_RANK and SET_SKILL_RANK_AT_LEVEL together can
+      // keep them consistent without one stomping the other.
+      const byLevel = { ...(state.skillRanksByLevel ?? {}) }
+      const lvl = action.level | 0
+      const at = { ...(byLevel[lvl] ?? {}) }
+      if (action.rank <= 0) delete at[action.skill]
+      else at[action.skill] = action.rank
+      if (Object.keys(at).length === 0) delete byLevel[lvl]
+      else byLevel[lvl] = at
+      return { ...state, skillRanksByLevel: byLevel }
+    }
     case 'SET_GEAR':
       return {
         ...state,

@@ -1,13 +1,30 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { BuildClass, CharacterBuild, DDOClass, Feat, Race, Requirement, RequiresOneOf } from '../../types/ddo'
+import type { CharacterBuild, DDOClass, Feat, Race, Requirement } from '../../types/ddo'
+import {
+  buildSnapshotAtCharacterLevel,
+  characterLevelForClassLevel,
+} from '../../lib/levelProgression'
+import { meetsRequirements as sharedMeetsRequirements } from '../../lib/requirements'
 import DdoIcon from '../DdoIcon'
 import styles from './FeatSlots.module.css'
 
 interface SlotEntry {
   key: string
+  /**
+   * Display & ordering level. For race/class/epic/legendary slots this is the
+   * resolved character level (V2 parity); for the universal heroic slots it is
+   * the character level the slot is awarded at.
+   */
   level: number
+  /**
+   * V2 parity: the *class-internal* level at which the slot is granted (e.g.
+   * Fighter Bonus Feat at class level 4). For race/universal slots this
+   * equals `level`; for class slots it differs from `level` if the class is
+   * not taken at every character level.
+   */
+  classLevel: number
   featType: string
   className: string
   featUpdateList?: string[]   // whitelist from class XML FeatUpdateList
@@ -30,17 +47,16 @@ function toArray<T>(v: T | T[] | undefined): T[] {
 }
 
 function buildSlots(
-  classes: { name: string; levels: number }[],
+  build: CharacterBuild,
   allClasses: DDOClass[],
   allRaces: Race[],
-  currentRace: string,
-  epicLevels: number,
-  legendaryLevels: number,
 ): SlotEntry[] {
   const slots: SlotEntry[] = []
+  const epicLevels = build.epicLevels ?? 0
+  const legendaryLevels = build.legendaryLevels ?? 0
 
   // 1. Race feat slots (e.g. Human Bonus Feat at char level 1)
-  const race = allRaces.find(r => r.Name === currentRace)
+  const race = allRaces.find(r => r.Name === build.race)
   toArray(race?.FeatSlot).forEach((fs, idx) => {
     const featUpdateList = fs.FeatUpdateList
       ? toArray(fs.FeatUpdateList).filter(Boolean)
@@ -48,40 +64,44 @@ function buildSlots(
     slots.push({
       key: `race-${fs.Level}-${fs.FeatType}-${idx}`,
       level: fs.Level,
+      classLevel: fs.Level,
       featType: fs.FeatType,
-      className: currentRace,
+      className: build.race,
       featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
     })
   })
 
-  // 2. Universal standard feats (heroic levels 1-20 only)
+  // 2. Universal standard feats (heroic levels 1, 3, 6, 9, 12, 15, 18)
   const universalLevels = [1, 3, 6, 9, 12, 15, 18]
   universalLevels.forEach(lvl => {
-    slots.push({ key: `heroic-${lvl}`, level: lvl, featType: 'Heroic', className: 'Universal' })
+    slots.push({ key: `heroic-${lvl}`, level: lvl, classLevel: lvl, featType: 'Heroic', className: 'Universal' })
   })
 
-  // 3. Class-specific heroic feat slots
-  for (const bc of classes) {
+  // 3. Class-specific heroic feat slots — position at the *character level*
+  //    where the Nth level of that class is taken (V2 parity).
+  for (const bc of build.classes) {
     if (!bc.name || bc.levels === 0) continue
     const cls = allClasses.find(c => c.Name === bc.name)
     if (!cls?.FeatSlot) continue
     toArray(cls.FeatSlot).forEach((fs, idx) => {
-      if (fs.Level <= bc.levels) {
-        const featUpdateList = fs.FeatUpdateList
-          ? toArray(fs.FeatUpdateList).filter(Boolean)
-          : undefined
-        slots.push({
-          key: `${bc.name}-${fs.Level}-${fs.FeatType}-${idx}`,
-          level: fs.Level,
-          featType: fs.FeatType,
-          className: bc.name,
-          featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
-        })
-      }
+      if (fs.Level > bc.levels) return
+      const charLevel = characterLevelForClassLevel(build, bc.name, fs.Level)
+      if (!charLevel) return
+      const featUpdateList = fs.FeatUpdateList
+        ? toArray(fs.FeatUpdateList).filter(Boolean)
+        : undefined
+      slots.push({
+        key: `${bc.name}-${fs.Level}-${fs.FeatType}-${idx}`,
+        level: charLevel,
+        classLevel: fs.Level,
+        featType: fs.FeatType,
+        className: bc.name,
+        featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
+      })
     })
   }
 
-  // 4. Epic feat slots — read from Epic.class.xml; epic class level N → character level 20+N
+  // 4. Epic feat slots — Epic.class.xml; epic class level N → character level 20+N
   if (epicLevels > 0) {
     const epicClass = allClasses.find(c => c.Name === 'Epic')
     toArray(epicClass?.FeatSlot).forEach((fs, idx) => {
@@ -92,6 +112,7 @@ function buildSlots(
         slots.push({
           key: `epic-${fs.Level}-${fs.FeatType}-${idx}`,
           level: 20 + fs.Level,
+          classLevel: fs.Level,
           featType: fs.FeatType,
           className: 'Epic',
           featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
@@ -100,7 +121,7 @@ function buildSlots(
     })
   }
 
-  // 5. Legendary feat slots — read from Legendary.class.xml; legendary class level N → character level 30+N
+  // 5. Legendary feat slots — Legendary.class.xml; legendary class level N → character level 30+N
   if (legendaryLevels > 0) {
     const legendaryClass = allClasses.find(c => c.Name === 'Legendary')
     toArray(legendaryClass?.FeatSlot).forEach((fs, idx) => {
@@ -111,6 +132,7 @@ function buildSlots(
         slots.push({
           key: `legendary-${fs.Level}-${fs.FeatType}-${idx}`,
           level: 30 + fs.Level,
+          classLevel: fs.Level,
           featType: fs.FeatType,
           className: 'Legendary',
           featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
@@ -123,104 +145,6 @@ function buildSlots(
   return slots
 }
 
-// ---------------------------------------------------------------------------
-// BAB helpers — parse class BAB array (e.g. "0 1 2 3 ... 20")
-// ---------------------------------------------------------------------------
-function classBABAtLevel(cls: DDOClass | undefined, levels: number): number {
-  if (!cls?.BAB) return Math.floor(levels * 0.75)
-  const arr = String(cls.BAB).trim().split(/\s+/).map(Number)
-  // BAB array is 0-indexed from level 0: arr[0]=0, arr[1]=1, etc.
-  return arr[levels] ?? arr[arr.length - 1] ?? Math.floor(levels * 0.75)
-}
-
-function totalBAB(classes: BuildClass[], allClasses: DDOClass[]): number {
-  return classes.reduce((sum, bc) => {
-    if (!bc.name || !bc.levels) return sum
-    const cls = allClasses.find(c => c.Name === bc.name)
-    return sum + classBABAtLevel(cls, bc.levels)
-  }, 0)
-}
-
-// ---------------------------------------------------------------------------
-// Prerequisite checking
-// ---------------------------------------------------------------------------
-function meetsSingleRequirement(req: Requirement, build: CharacterBuild, allClasses: DDOClass[]): boolean {
-  const item = Array.isArray(req.Item) ? req.Item[0] : req.Item ?? ''
-  const value = req.Value ?? 0
-
-  switch (req.Type) {
-    case 'Ability': {
-      const score = build.baseAbilities[item as keyof typeof build.baseAbilities]
-      return score !== undefined && score >= value
-    }
-    case 'BAB':
-      return totalBAB(build.classes, allClasses) >= value
-    case 'Feat': {
-      const chosen = Object.values(build.featChoices)
-      return chosen.includes(item)
-    }
-    case 'Race':
-      return build.race === item
-    case 'Class':
-      return build.classes.some(c => c.name === item && c.levels > 0)
-    case 'ClassLevel': {
-      const bc = build.classes.find(c => c.name === item)
-      return (bc?.levels ?? 0) >= value
-    }
-    case 'ClassMinLevel': {
-      const bc = build.classes.find(c => c.name === item)
-      return (bc?.levels ?? 0) >= value
-    }
-    case 'BaseClassMinLevel': {
-      // Class with name == item, OR any class whose BaseClass == item
-      let total = 0
-      for (const bc of build.classes) {
-        if (!bc.name || bc.levels === 0) continue
-        if (bc.name === item) {
-          total += bc.levels
-        } else {
-          const cls = allClasses.find(c => c.Name === bc.name)
-          if (cls?.BaseClass === item) total += bc.levels
-        }
-      }
-      return total >= value
-    }
-    case 'Level':
-      return build.totalLevel >= value
-    case 'Skill':
-    case 'StartingWorld':
-      return true
-    default:
-      return true
-  }
-}
-
-function meetsOneOfGroup(group: RequiresOneOf, build: CharacterBuild, allClasses: DDOClass[]): boolean {
-  const reqs = Array.isArray(group.Requirement) ? group.Requirement : [group.Requirement]
-  return reqs.some(r => meetsSingleRequirement(r, build, allClasses))
-}
-
-function meetsRequirements(feat: Feat, build: CharacterBuild, allClasses: DDOClass[]): boolean {
-  const reqs = feat.Requirements
-  if (!reqs) return true
-
-  if (reqs.Requirement) {
-    const list = Array.isArray(reqs.Requirement) ? reqs.Requirement : [reqs.Requirement]
-    if (!list.every(r => meetsSingleRequirement(r, build, allClasses))) return false
-  }
-
-  if (reqs.RequiresOneOf) {
-    const groups = Array.isArray(reqs.RequiresOneOf) ? reqs.RequiresOneOf : [reqs.RequiresOneOf]
-    if (!groups.every(g => meetsOneOfGroup(g, build, allClasses))) return false
-  }
-
-  if (reqs.RequiresNoneOf) {
-    const groups = Array.isArray(reqs.RequiresNoneOf) ? reqs.RequiresNoneOf : [reqs.RequiresNoneOf]
-    if (groups.some(g => meetsOneOfGroup(g, build, allClasses))) return false
-  }
-
-  return true
-}
 
 // ---------------------------------------------------------------------------
 // Prerequisite label formatting
@@ -235,9 +159,12 @@ function formatReq(req: Requirement): string {
     case 'Race': return `Race: ${item}`
     case 'Class': return `Class: ${item}`
     case 'ClassLevel': return `${item} ${val}+`
-    case 'ClassMinLevel': return `Any class ${val}+`
+    case 'ClassMinLevel': return item ? `${item} ${val}+` : `Any class ${val}+`
     case 'BaseClassMinLevel': return `${item} ${val}+`
     case 'Level': return `Level ${val}+`
+    case 'SpecificLevel': return `Level ${val}`
+    case 'Skill': return `${item} ${val}+ ranks`
+    case 'Stance': return `Stance: ${item}`
     default: return ''
   }
 }
@@ -262,26 +189,24 @@ function formatPrerequisites(feat: Feat): string {
 }
 
 // ---------------------------------------------------------------------------
-// Build snapshot at a specific slot's level (V2 behavior)
+// Build snapshot at a specific slot's level (V2 parity)
 // ---------------------------------------------------------------------------
-// Returns a "view" of the build as it looked when the character was about to
-// choose the feat in `slot`.  Three things are adjusted:
-//   1. totalLevel is capped to the slot's ordering level.
-//   2. Each class's levels are scaled proportionally so they add up to at
-//      most totalLevel at that point.  For a class-specific slot the owning
-//      class is pinned to exactly slot.level so prerequisites that require
-//      "N levels of X" are checked against the right value.
-//   3. featChoices only contains feats from slots whose level < slot.level,
-//      so a feat trained at level 9 doesn't satisfy a prerequisite for a
-//      level 4 slot.
+// Returns the build "as it looked" right before the character was about to
+// gain feats at this slot. Class levels come from levelClasses[0..slot.level-1]
+// — exact, not proportional. Feat choices include only those trained at an
+// earlier character-level slot.
 function buildSnapshotForSlot(
   slot: SlotEntry,
   slots: SlotEntry[],
   build: CharacterBuild,
 ): CharacterBuild {
-  const snapLevel = Math.min(slot.level, build.totalLevel || slot.level)
+  // Class levels: snapshot the per-level array up to (and including) this slot's
+  // character level. For class-specific slots the slot level *is* the level the
+  // owning class hits the relevant class-level, so the included entry is correct.
+  const snap = buildSnapshotAtCharacterLevel(build, slot.level)
 
-  // --- feat choices: only from slots that come before this one ---
+  // Feat choices: only feats trained in a strictly-earlier slot count. Same-
+  // level slots (e.g. two heroic feats at level 1) cannot satisfy each other.
   const featChoices: Record<string, string> = {}
   for (const [key, value] of Object.entries(build.featChoices)) {
     if (!value || key === slot.key) continue
@@ -292,21 +217,7 @@ function buildSnapshotForSlot(
     }
   }
 
-  // --- class levels: proportional scale, owner class pinned to slot.level ---
-  const totalFinal = build.totalLevel || 1
-  const scaledClasses = build.classes.map(bc => {
-    if (!bc.name || bc.levels === 0) return bc
-    if (bc.name === slot.className) {
-      // Class-specific slot: this class is exactly at slot.level here
-      return { name: bc.name, levels: Math.min(bc.levels, slot.level) }
-    }
-    return {
-      name: bc.name,
-      levels: Math.floor(bc.levels * snapLevel / totalFinal),
-    }
-  }) as [BuildClass, BuildClass, BuildClass]
-
-  return { ...build, totalLevel: snapLevel, featChoices, classes: scaledClasses }
+  return { ...snap, featChoices }
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +234,7 @@ function getOptions(
   feats: Feat[],
   build: CharacterBuild,
   allClasses: DDOClass[],
+  race?: Race,
 ): FeatOption[] {
   // Snapshot of the build state just before this slot is chosen
   const snap = buildSnapshotForSlot(slot, slots, build)
@@ -351,7 +263,7 @@ function getOptions(
       const featGroups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
       return slotMatchesFeat(slot.featType, featGroups)
     })
-    .map(f => ({ feat: f, prereqsMet: meetsRequirements(f, snap, allClasses) }))
+    .map(f => ({ feat: f, prereqsMet: sharedMeetsRequirements(f.Requirements, { build: snap, allClasses, race }) }))
     .sort((a, b) => {
       if (a.prereqsMet !== b.prereqsMet) return a.prereqsMet ? -1 : 1
       return a.feat.Name.localeCompare(b.feat.Name)
@@ -455,18 +367,12 @@ export default function FeatSlots() {
     api.feats().then(setFeats)
   }, [])
 
-  const slots = buildSlots(
-    build.classes,
-    allClasses,
-    allRaces,
-    build.race,
-    build.epicLevels ?? 0,
-    build.legendaryLevels ?? 0,
-  )
+  const slots = buildSlots(build, allClasses, allRaces)
 
   const openSlot = openSlotKey ? slots.find(s => s.key === openSlotKey) : null
+  const currentRace = allRaces.find(r => r.Name === build.race)
   const pickerOptions = openSlot
-    ? getOptions(openSlot, slots, feats, build, allClasses)
+    ? getOptions(openSlot, slots, feats, build, allClasses, currentRace)
     : []
 
   return (

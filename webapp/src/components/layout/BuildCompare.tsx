@@ -72,10 +72,20 @@ const STATS_TO_SHOW: Array<{ label: string; key: string; fmt?: (n: number) => st
   { label: 'Will', key: 'save.Will' },
   { label: 'PRR', key: 'prr' },
   { label: 'MRR', key: 'mrr' },
+  { label: 'Dodge', key: 'dodge', fmt: n => `${n}%` },
+  { label: 'Fortification', key: 'fortification', fmt: n => `${n}%` },
+  { label: 'Concealment', key: 'concealment', fmt: n => `${n}%` },
+  // Offensive
   { label: 'Doublestrike', key: 'melee.doublestrike', fmt: n => `${n}%` },
+  { label: 'Doubleshot', key: 'ranged.doubleshot', fmt: n => `${n}%` },
+  { label: 'Strikethrough', key: 'strikethrough', fmt: n => `${n}%` },
   { label: 'Melee Power', key: 'melee.power' },
   { label: 'Ranged Power', key: 'ranged.power' },
+  // Casting
   { label: 'Spell Points', key: 'spellPoints' },
+  { label: 'Universal Spell Power', key: 'spellPower.Universal' },
+  { label: 'Universal DC', key: 'dc.All' },
+  // Abilities
   { label: 'STR', key: 'ability.Strength' },
   { label: 'DEX', key: 'ability.Dexterity' },
   { label: 'CON', key: 'ability.Constitution' },

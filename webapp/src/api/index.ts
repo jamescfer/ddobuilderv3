@@ -26,6 +26,7 @@ export const api = {
   augments: (params?: { type?: string }) => get<Augment[]>('/augments', params as Record<string, string> | undefined),
   stances: () => get<Stance[]>('/stances'),
   health: () => get<{ status: string; dataDir: string }>('/health'),
+  version: () => get<{ version: string }>('/version'),
   itemSetBonuses: (names: string[]) =>
     names.length === 0
       ? Promise.resolve([] as Array<{ type: string; count: number }>)

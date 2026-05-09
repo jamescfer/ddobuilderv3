@@ -1,18 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, Race } from '../../types/ddo'
+import type { CharacterBuild, DDOClass, Race } from '../../types/ddo'
 import { SKILLS } from '../../lib/gamedata'
+import { getLevelClasses } from '../../lib/levelProgression'
 import styles from './Skills.module.css'
 
 type SkillName = typeof SKILLS[number]['name']
 
 // V2 skills that require class-skill status to train at all.
 const RESTRICTED_SKILLS = new Set<string>(['Disable Device', 'Open Lock'])
-
-function intModifier(score: number): number {
-  return Math.floor((score - 10) / 2)
-}
 
 function getClassSkills(classes: { name: string; levels: number }[], allClasses: DDOClass[]): Set<string> {
   const classSkills = new Set<string>()
@@ -30,28 +27,34 @@ function getClassSkills(classes: { name: string; levels: number }[], allClasses:
  * V2 Class::SkillPoints — per-level skill points for a class.
  * `points = max(1, classBase + raceBonus + intModForLevel)`, ×4 at character level 1.
  *
- * V3 simplification: we use the lowest of base+race+intModBase (no tomes
- * because those don't apply at character creation per V2's
- * AbilityAtLevel(intModForLevel) which excludes tomes at level 1).
+ * V3 walks the per-level class array (V2 m_Levels parity) AND the per-level
+ * INT progression — a build that swaps INT-low / INT-high classes around
+ * gets the INT mod *as it was at that character level*, including level-up
+ * bonuses awarded by then.
  */
 function calcTotalSkillPoints(
-  classes: { name: string; levels: number }[],
+  build: Pick<CharacterBuild, 'classes' | 'levelClasses' | 'totalLevel' | 'baseAbilities' | 'abilityLevelUps'>,
   allClasses: DDOClass[],
-  intMod: number,
+  raceIntBonus: number,
   raceSkillBonus: number,
 ): number {
+  const lc = getLevelClasses(build)
   let total = 0
-  let charLevelIdx = 0   // 0-based character level across all classes
-
-  for (const bc of classes) {
-    if (!bc.name || bc.levels === 0) continue
-    const cls = allClasses.find(c => c.Name === bc.name)
+  for (let i = 0; i < lc.length && i < 20; i++) {
+    const name = lc[i]
+    if (!name) continue
+    const cls = allClasses.find(c => c.Name === name)
     const basePoints = cls?.SkillPoints ?? 2
-
-    for (let i = 0; i < bc.levels && charLevelIdx < 20; i++, charLevelIdx++) {
-      const pts = Math.max(1, basePoints + raceSkillBonus + intMod)
-      total += charLevelIdx === 0 ? pts * 4 : pts
-    }
+    // INT mod at character level i+1 — use racial bonus + level-ups awarded
+    // by then (V2 BreakdownItemSkill::AbilityModAtLevel).
+    const charLvl = i + 1
+    const intScore = (build.baseAbilities.Intelligence ?? 8) + raceIntBonus +
+      Object.entries(build.abilityLevelUps)
+        .filter(([lvl, ab]) => ab === 'Intelligence' && Number(lvl) <= charLvl)
+        .length
+    const intMod = Math.floor((intScore - 10) / 2)
+    const pts = Math.max(1, basePoints + raceSkillBonus + intMod)
+    total += i === 0 ? pts * 4 : pts
   }
   return total
 }
@@ -69,7 +72,6 @@ export default function Skills() {
   // V3 stores trained levels per skill (V2 storage semantics).
   // ranks displayed = trained for class skills, trained/2 for cross-class.
   const trainedLevels = build.skillRanks
-  const intMod = intModifier(build.baseAbilities.Intelligence)
   // V2 caps the rank-cap at character level 20 (heroic only)
   const heroicLevel = Math.min(20, build.totalLevel)
 
@@ -78,6 +80,7 @@ export default function Skills() {
     [allRaces, build.race],
   )
   const raceSkillBonus = race?.SkillPoints ?? 0
+  const raceIntBonus = Number((race as unknown as { Intelligence?: number } | undefined)?.Intelligence ?? 0) || 0
 
   const classSkills = useMemo(
     () => getClassSkills(build.classes, allClasses),
@@ -85,8 +88,8 @@ export default function Skills() {
   )
 
   const totalAvailable = useMemo(
-    () => calcTotalSkillPoints(build.classes, allClasses, intMod, raceSkillBonus),
-    [build.classes, allClasses, intMod, raceSkillBonus],
+    () => calcTotalSkillPoints(build, allClasses, raceIntBonus, raceSkillBonus),
+    [build, allClasses, raceIntBonus, raceSkillBonus],
   )
 
   const totalSpent = useMemo(() => {
@@ -120,6 +123,31 @@ export default function Skills() {
     return (trained / 2).toFixed(1).replace(/\.0$/, '')
   }
 
+  /**
+   * V2 parity: per-character-level rank cap. At character level N, the rank
+   * cap for a class skill is N+3 trained levels; cross-class is half of that.
+   * If the user has already trained `current` ranks across earlier levels, we
+   * find the lowest character-level slot that still has rank-cap headroom.
+   */
+  function nextAllocableLevel(skill: SkillName, current: number, isClass: boolean): number | null {
+    const lc = getLevelClasses(build)
+    for (let i = 0; i < lc.length && i < 20; i++) {
+      const charLvl = i + 1
+      const capForLevel = isClass ? charLvl + 3 : (charLvl + 3) // both stored as trained levels; cross-class .5-rank conversion is a display detail
+      const trainedAtThisLevelOrEarlier = (() => {
+        const byLvl = build.skillRanksByLevel ?? {}
+        let n = 0
+        for (let l = 1; l <= charLvl; l++) n += byLvl[l]?.[skill] ?? 0
+        return n
+      })()
+      // Don't double-count current rank: current already includes everything
+      // distributed; we need the next slot whose total stays within cap.
+      void current
+      if (trainedAtThisLevelOrEarlier < capForLevel) return charLvl
+    }
+    return null
+  }
+
   function adjust(skill: SkillName, delta: 1 | -1) {
     const current = trainedLevels[skill] ?? 0
     const next = current + delta
@@ -127,6 +155,30 @@ export default function Skills() {
     if (next > maxTrained(skill)) return
     if (delta === 1 && remaining < 1) return
     dispatch({ type: 'SET_SKILL_RANK', skill, rank: next })
+
+    // Mirror the legacy total into the per-level array so V2 storage is also
+    // populated. We auto-distribute by appending to the earliest level that
+    // still has rank-cap headroom (V2 Build::AdjustSkillSpend allocates at
+    // the character's *current* level by default). On removal we strip from
+    // the latest level first.
+    const isClass = classSkills.has(skill)
+    if (delta === 1) {
+      const lvl = nextAllocableLevel(skill, current, isClass)
+      if (lvl != null) {
+        const ranksAtLvl = build.skillRanksByLevel?.[lvl]?.[skill] ?? 0
+        dispatch({ type: 'SET_SKILL_RANK_AT_LEVEL', level: lvl, skill, rank: ranksAtLvl + 1 })
+      }
+    } else {
+      // Remove from the latest level that has any rank in this skill.
+      const byLvl = build.skillRanksByLevel ?? {}
+      for (let l = 20; l >= 1; l--) {
+        const cur = byLvl[l]?.[skill] ?? 0
+        if (cur > 0) {
+          dispatch({ type: 'SET_SKILL_RANK_AT_LEVEL', level: l, skill, rank: cur - 1 })
+          break
+        }
+      }
+    }
   }
 
   return (

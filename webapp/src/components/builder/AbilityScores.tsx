@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useCharacter } from '../../context/CharacterContext'
 import type { Ability, Race } from '../../types/ddo'
 import { POINT_BUY_COSTS, totalPointsSpent, pointBuyCost } from '../../types/ddo'
+import { tomeCapAtLevel } from '../../lib/levelProgression'
 import { api } from '../../api'
 import styles from './AbilityScores.module.css'
 
@@ -67,15 +68,9 @@ export default function AbilityScores() {
             const score = baseAbilities[ab]
             const lvlUp = Object.values(build.abilityLevelUps).filter(a => a === ab).length
             const rawTome = build.abilityTomes[ab] ?? 0
-            // V2 caps tome by character level: L1-2→2, L3-6→3, L7-10→4, L11-14→5, L15-18→6, L19-21→7, L22+→8
-            const cap = build.totalLevel <= 2 ? 2
-              : build.totalLevel <= 6 ? 3
-              : build.totalLevel <= 10 ? 4
-              : build.totalLevel <= 14 ? 5
-              : build.totalLevel <= 18 ? 6
-              : build.totalLevel <= 21 ? 7
-              : 999
-            const tomeMod = Math.min(rawTome, cap)
+            // V2 Life::TomeAtLevel — cap is shared across the codebase via levelProgression
+            const totalCharLevel = build.totalLevel + (build.epicLevels ?? 0) + (build.legendaryLevels ?? 0)
+            const tomeMod = Math.min(rawTome, tomeCapAtLevel(Math.max(1, totalCharLevel)))
             const total = score + (races.find(r => r.Name === build.race)?.[ab] ?? 0) + lvlUp + tomeMod
             const mod = Math.floor((total - 10) / 2)
             const canIncrease = score < MAX_SCORE && pointBuyCost(score + 1) - pointBuyCost(score) <= remaining

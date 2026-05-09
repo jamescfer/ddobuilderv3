@@ -3,6 +3,7 @@ import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { DDOClass } from '../../types/ddo'
 import { HEROIC_MAX_LEVEL, EPIC_MAX_LEVELS, LEGENDARY_MAX_LEVELS } from '../../lib/gamedata'
+import { getLevelClasses } from '../../lib/levelProgression'
 import styles from './ClassSelector.module.css'
 
 const HEROIC_LEVELS = HEROIC_MAX_LEVEL
@@ -26,11 +27,8 @@ export default function ClassSelector() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Flatten class assignments into a per-heroic-level array
-  const levelClasses: string[] = build.classes.reduce<string[]>((acc, bc) => {
-    if (!bc.name) return acc
-    return [...acc, ...Array(bc.levels).fill(bc.name)]
-  }, [])
+  // Per-level class array (V2 m_Levels parity); falls back to flatten for legacy data
+  const levelClasses: string[] = getLevelClasses(build)
   while (levelClasses.length < HEROIC_LEVELS) levelClasses.push('')
 
   const usedClassNames = build.classes.map(c => c.name).filter(Boolean) as string[]
@@ -45,34 +43,14 @@ export default function ClassSelector() {
   const grandTotal = levelClasses.filter(Boolean).length + epicLevels + legendaryLevels
 
   function setLevelClass(levelIndex: number, className: string) {
-    const next = [...levelClasses]
-    next[levelIndex] = className
-    const counts: Record<string, number> = {}
-    for (const cls of next) {
-      if (cls) counts[cls] = (counts[cls] ?? 0) + 1
-    }
-    const seen: string[] = []
-    for (const cls of next) {
-      if (cls && !seen.includes(cls) && seen.length < 3) seen.push(cls)
-    }
-    const newClasses = [
-      { name: seen[0] ?? '', levels: counts[seen[0]] ?? 0 },
-      { name: seen[1] ?? '', levels: counts[seen[1]] ?? 0 },
-      { name: seen[2] ?? '', levels: counts[seen[2]] ?? 0 },
-    ]
-    for (let i = 0; i < 3; i++) {
-      dispatch({ type: 'SET_CLASS', index: i as 0 | 1 | 2, name: newClasses[i].name })
-      dispatch({ type: 'SET_CLASS_LEVELS', index: i as 0 | 1 | 2, levels: newClasses[i].levels })
-    }
+    // V2 parity: edit only the per-level slot the user clicked. The reducer
+    // re-derives the `classes` aggregate from the updated array, so order
+    // (e.g. Wizard at L1 then Fighter at L2) is preserved.
+    dispatch({ type: 'SET_LEVEL_CLASS', level: levelIndex, name: className })
   }
 
   function fillAll(className: string) {
-    dispatch({ type: 'SET_CLASS', index: 0, name: className })
-    dispatch({ type: 'SET_CLASS_LEVELS', index: 0, levels: HEROIC_LEVELS })
-    dispatch({ type: 'SET_CLASS', index: 1, name: '' })
-    dispatch({ type: 'SET_CLASS_LEVELS', index: 1, levels: 0 })
-    dispatch({ type: 'SET_CLASS', index: 2, name: '' })
-    dispatch({ type: 'SET_CLASS_LEVELS', index: 2, levels: 0 })
+    dispatch({ type: 'SET_LEVEL_CLASSES', levels: Array.from({ length: HEROIC_LEVELS }, () => className) })
   }
 
   function fillEmpty(className: string) {
@@ -80,18 +58,7 @@ export default function ClassSelector() {
     for (let i = 0; i < HEROIC_LEVELS; i++) {
       if (!next[i]) next[i] = className
     }
-    const counts: Record<string, number> = {}
-    for (const cls of next) {
-      if (cls) counts[cls] = (counts[cls] ?? 0) + 1
-    }
-    const seen: string[] = []
-    for (const cls of next) {
-      if (cls && !seen.includes(cls) && seen.length < 3) seen.push(cls)
-    }
-    for (let i = 0; i < 3; i++) {
-      dispatch({ type: 'SET_CLASS', index: i as 0 | 1 | 2, name: seen[i] ?? '' })
-      dispatch({ type: 'SET_CLASS_LEVELS', index: i as 0 | 1 | 2, levels: counts[seen[i]] ?? 0 })
-    }
+    dispatch({ type: 'SET_LEVEL_CLASSES', levels: next })
   }
 
   const heroicClasses = classes.filter(c => !c.NotHeroic)

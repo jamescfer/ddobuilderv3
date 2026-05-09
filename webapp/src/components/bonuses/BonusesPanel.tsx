@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { DDOClass, Race } from '../../types/ddo'
+import { tomeCapAtLevel } from '../../lib/levelProgression'
 import styles from './BonusesPanel.module.css'
 
 const ABILITIES = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'] as const
@@ -39,7 +40,10 @@ export default function BonusesPanel() {
   }
 
   function tomeMod(ab: Ab): number {
-    return build.abilityTomes?.[ab] ?? 0
+    // V2 Life::TomeAtLevel — tome value is capped by overall character level.
+    const totalLvl = build.totalLevel + (build.epicLevels ?? 0) + (build.legendaryLevels ?? 0)
+    const raw = build.abilityTomes?.[ab] ?? 0
+    return Math.min(raw, tomeCapAtLevel(Math.max(1, totalLvl)))
   }
 
   function totalScore(ab: Ab): number {

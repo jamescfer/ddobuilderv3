@@ -28,6 +28,7 @@ import {
   reaperHpCap, styleBonusHp, effectiveDodgeCap,
   divineGraceCap, halfElfLesserDivineGraceCap,
 } from '../lib/v2Formulas'
+import { getLevelClasses, tomeCapAtLevel } from '../lib/levelProgression'
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -106,16 +107,8 @@ function abMod(score: number): number {
   return Math.floor((score - 10) / 2)
 }
 
-/** V2 Life::TomeAtLevel — caps tome value by character level. */
-function tomeCapAtLevel(level: number): number {
-  if (level <= 2) return 2
-  if (level <= 6) return 3
-  if (level <= 10) return 4
-  if (level <= 14) return 5
-  if (level <= 18) return 6
-  if (level <= 21) return 7
-  return 999
-}
+// tomeCapAtLevel is imported from lib/levelProgression so the rule is shared
+// across the codebase (V2 Life::TomeAtLevel parity).
 
 const MAX_BAB = 25
 
@@ -212,31 +205,93 @@ function accumulateRace(map: StatMap, race: Race): void {
   }
 }
 
+/**
+ * V2 parity: Class HP is `c.HitPoints() * classLevels` for heroic classes; Epic
+ * and Legendary classes contribute half their hit die per level
+ * (BreakdownItemHitpoints.cpp:74-83). The CON-mod component is applied
+ * separately at total-character-level scope (see accumulateClasses below).
+ */
 function accumulateClass(
   map: StatMap,
   cls: DDOClass,
   levels: number,
-  isFirst: boolean,
-  conMod: number,
+  intMod: number,
 ): void {
   const label = `${cls.Name} (${levels} lv)`
+  const isEpicTier = cls.Name === 'Epic' || cls.Name === 'Legendary'
 
-  // V2: per-class BAB is truncated, then summed — must NOT use the EXCLUSIVE 'Base' type
   add(map, 'bab', { value: classBAB(cls, levels), type: 'Stacking', source: label })
   add(map, 'save.Fort',   { value: saveBase(cls.Fortitude, levels), type: 'Base', source: label })
   add(map, 'save.Reflex', { value: saveBase(cls.Reflex,    levels), type: 'Base', source: label })
   add(map, 'save.Will',   { value: saveBase(cls.Will,      levels), type: 'Base', source: label })
 
-  const hpPerLv = (cls.HitPoints ?? 6) + conMod
-  add(map, 'hp', { value: levels * hpPerLv, type: 'Base', source: `${label} (d${cls.HitPoints ?? 6}+CON)` })
+  const hd = cls.HitPoints ?? 6
+  const classHp = isEpicTier
+    ? Math.floor(hd * levels / 2)
+    : hd * levels
+  add(map, 'hp', { value: classHp, type: 'Base', source: `${label} (d${hd}${isEpicTier ? '/2' : ''})` })
 
-  // V2: SpellPointsPerLevel is a 21-entry table indexed by class level
   const sp = spellPointsAtLevel(cls.SpellPointsPerLevel, levels)
   if (sp > 0) add(map, 'spellPoints', { value: sp, type: 'Base', source: label })
 
-  const spp = Math.max(1, cls.SkillPoints ?? 2)
-  const skillPts = isFirst ? spp * 4 + spp * (levels - 1) : spp * levels
-  if (skillPts > 0) add(map, 'skillPoints', { value: skillPts, type: 'Base', source: label })
+  // Skill points are added via the per-level walk below (so the ×4 first-level
+  // bonus applies to the actual class taken at character level 1).
+  void intMod
+}
+
+/**
+ * V2 parity wrapper: walk the per-level array (Build::m_Levels) and feed each
+ * unique class into accumulateClass with its actual level count. Heroic
+ * (1-20), Epic (21-30), Legendary (31-34) tiers are all collapsed into this
+ * single source so multiclass HP/saves/BAB/SP are correct.
+ *
+ * Skill points use the per-character-level rule: ×4 at character level 1,
+ * 1× thereafter, with each level reading the class actually trained then.
+ */
+function accumulateClasses(
+  map: StatMap,
+  build: CharacterBuild,
+  allClasses: DDOClass[],
+  conMod: number,
+  intMod: number,
+): void {
+  const levelClasses = getLevelClasses(build)
+  // Build per-class totals across heroic + epic + legendary slots
+  const counts = new Map<string, number>()
+  for (const c of levelClasses) if (c) counts.set(c, (counts.get(c) ?? 0) + 1)
+  if ((build.epicLevels ?? 0) > 0) counts.set('Epic', build.epicLevels)
+  if ((build.legendaryLevels ?? 0) > 0) counts.set('Legendary', build.legendaryLevels)
+
+  for (const [name, levels] of counts) {
+    const cls = allClasses.find(c => c.Name === name)
+    if (!cls) continue
+    accumulateClass(map, cls, levels, intMod)
+  }
+
+  // Per-character-level skill points: ×4 at level 1, then 1× per level (V2 parity)
+  for (let i = 0; i < levelClasses.length && i < 20; i++) {
+    const name = levelClasses[i]
+    if (!name) continue
+    const cls = allClasses.find(c => c.Name === name)
+    if (!cls) continue
+    const pts = Math.max(1, (cls.SkillPoints ?? 2) + intMod)
+    const total = i === 0 ? pts * 4 : pts
+    add(map, 'skillPoints', {
+      value: total,
+      type: 'Base',
+      source: `${name} (lv ${i + 1})${i === 0 ? ' ×4' : ''}`,
+    })
+  }
+
+  // CON bonus to HP applies per total character level (V2 BreakdownItemHitpoints)
+  const totalChar = (build.totalLevel ?? 0) + (build.epicLevels ?? 0) + (build.legendaryLevels ?? 0)
+  if (totalChar > 0 && conMod !== 0) {
+    add(map, 'hp', {
+      value: conMod * totalChar,
+      type: 'AbilityBonus',
+      source: `Constitution × ${totalChar}`,
+    })
+  }
 }
 
 function accumulateFeat(map: StatMap, feat: Feat, rank: number, source: string, totalLevel = 0, ctx?: EffectContext): void {
@@ -538,18 +593,19 @@ function extractArmorMaxDex(gearItems: Record<string, Item>): number | null {
 // Main hook
 // ---------------------------------------------------------------------------
 
-export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterBuild): BuildStats {
-  const ctx = useCharacter()
-  const build = buildOverride ?? ctx.build
+/**
+ * Pure variant of the stat-aggregation pipeline. Builds the same StatMap
+ * the hook produces but without React. Use from CLI tools and unit tests
+ * to compare V3-computed numbers against V2 (e.g. via the V2 importer).
+ */
+export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): StatMap {
+  const map: StatMap = new Map()
 
-  const statMap = useMemo<StatMap>(() => {
-    const map: StatMap = new Map()
-
-    const {
-      allClasses, allRaces, allFeats, allTrees, gearItems,
-      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-      allWeaponGroups, allSpells, allGuildBuffs,
-    } = input
+  const {
+    allClasses, allRaces, allFeats, allTrees, gearItems,
+    allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+    allWeaponGroups, allSpells, allGuildBuffs,
+  } = input
 
     // ──────────────────────────────────────────────────────────────────────
     // Build the EffectContext used to gate effects via Requirements::Met.
@@ -557,17 +613,21 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
     // race+levelup only — no gear/enhancement bonuses) to avoid cycles.
     // ──────────────────────────────────────────────────────────────────────
     const ctxRace = allRaces.find(r => r.Name === build.race)
+    // V2 parity: per-class totals are derived from the per-level array
+    // (Build::m_Levels) rather than the aggregate triple. This makes
+    // ClassLevels(name) match V2 Build::ClassLevels for any check that
+    // doesn't pass an explicit level cap.
+    const ctxLevelClasses = getLevelClasses(build)
     const ctxClassLevels: Record<string, number> = {}
     const ctxBaseClassLevels: Record<string, number> = {}
-    for (const bc of build.classes) {
-      if (!bc.name || bc.levels <= 0) continue
-      ctxClassLevels[bc.name] = (ctxClassLevels[bc.name] ?? 0) + bc.levels
-      const cls = allClasses.find(c => c.Name === bc.name)
-      const baseClass = cls?.BaseClass ?? bc.name
-      ctxBaseClassLevels[baseClass] = (ctxBaseClassLevels[baseClass] ?? 0) + bc.levels
-      // The class itself counts as its own base
-      if (baseClass !== bc.name) {
-        ctxBaseClassLevels[bc.name] = (ctxBaseClassLevels[bc.name] ?? 0) + bc.levels
+    for (const c of ctxLevelClasses) {
+      if (!c) continue
+      ctxClassLevels[c] = (ctxClassLevels[c] ?? 0) + 1
+      const cls = allClasses.find(cc => cc.Name === c)
+      const baseClass = cls?.BaseClass ?? c
+      ctxBaseClassLevels[baseClass] = (ctxBaseClassLevels[baseClass] ?? 0) + 1
+      if (baseClass !== c) {
+        ctxBaseClassLevels[c] = (ctxBaseClassLevels[c] ?? 0) + 1
       }
     }
     const ctxFeats = new Set<string>()
@@ -610,12 +670,21 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
       ctxAbilityTotals[ab] = base + racial + lv
     }
     const ctxStances = deriveArmorStances(gearItems)
-    // Approximate BAB from class progressions (heroic only). Avoids cycles.
+    // Approximate BAB from class progressions (heroic + tier classes). Avoids cycles.
+    // V2 parity: each class contributes classBAB(levels) where levels is its
+    // total in the per-level array; epic/legendary tiers add their tables.
     let ctxBAB = 0
-    for (const bc of build.classes) {
-      if (!bc.name || bc.levels <= 0) continue
-      const cls = allClasses.find(c => c.Name === bc.name)
-      if (cls) ctxBAB += classBAB(cls, bc.levels)
+    for (const [name, levels] of Object.entries(ctxClassLevels)) {
+      const cls = allClasses.find(c => c.Name === name)
+      if (cls) ctxBAB += classBAB(cls, levels)
+    }
+    if ((build.epicLevels ?? 0) > 0) {
+      const epicCls = allClasses.find(c => c.Name === 'Epic')
+      if (epicCls) ctxBAB += classBAB(epicCls, build.epicLevels)
+    }
+    if ((build.legendaryLevels ?? 0) > 0) {
+      const legCls = allClasses.find(c => c.Name === 'Legendary')
+      if (legCls) ctxBAB += classBAB(legCls, build.legendaryLevels)
     }
     ctxBAB = Math.min(MAX_BAB, ctxBAB)
     const ctxWeaponTypes = new Set<string>()
@@ -690,15 +759,21 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
     const conMod = abMod(quickResolve('ability.Constitution'))
 
     // ── Classes ───────────────────────────────────────────────────────────
-    let isFirst = true
+    const intMod = abMod(quickResolve('ability.Intelligence'))
+    accumulateClasses(map, build, allClasses, conMod, intMod)
+
+    // V2 parity: automatic feats are granted at the character level the
+    // class hits the relevant class-level. We still iterate the aggregate
+    // here because the feat itself is an idempotent grant (rank=1); the
+    // important V2 behavior is that the feat fires only when its class
+    // level has been reached, which `bc.levels` already encodes.
     for (const bc of build.classes) {
       if (!bc.name || bc.levels <= 0) continue
       const cls = allClasses.find(c => c.Name === bc.name)
       if (!cls) continue
-      accumulateClass(map, cls, bc.levels, isFirst, conMod)
-      isFirst = false
 
       for (const autoFeat of toArray(cls.AutomaticFeats)) {
+        if ((autoFeat.Level ?? 1) > bc.levels) continue
         const names = toArray(
           typeof autoFeat.Feats === 'string' ? autoFeat.Feats :
           Array.isArray(autoFeat.Feats) ? autoFeat.Feats : undefined
@@ -1156,17 +1231,22 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
     {
       const styleCount = Math.max(0, Math.round(resolveBonus(map.get('styleFeats') ?? []).total))
       if (styleCount > 0) {
+        // V2 parity: classHitpoints accumulator includes heroic *and* tier
+        // classes, with epic/legendary at half HD per :74-83.
         let nonEpicHD = 0
-        for (const bc of build.classes) {
-          if (!bc.name || bc.levels <= 0) continue
-          const cls = allClasses.find(c => c.Name === bc.name)
+        for (const [name, levels] of Object.entries(ctxClassLevels)) {
+          const cls = allClasses.find(c => c.Name === name)
           if (!cls) continue
           const hd = cls.HitPoints ?? 0
-          if (cls.Name === 'Epic' || cls.Name === 'Legendary') {
-            nonEpicHD += Math.floor((hd * bc.levels) / 2)
-          } else {
-            nonEpicHD += hd * bc.levels
-          }
+          nonEpicHD += hd * levels
+        }
+        const epicCls = allClasses.find(c => c.Name === 'Epic')
+        if ((build.epicLevels ?? 0) > 0 && epicCls) {
+          nonEpicHD += Math.floor(((epicCls.HitPoints ?? 0) * build.epicLevels) / 2)
+        }
+        const legCls = allClasses.find(c => c.Name === 'Legendary')
+        if ((build.legendaryLevels ?? 0) > 0 && legCls) {
+          nonEpicHD += Math.floor(((legCls.HitPoints ?? 0) * build.legendaryLevels) / 2)
         }
         const styleHP = styleBonusHp(styleCount, nonEpicHD)
         if (styleHP !== 0) {
@@ -1223,14 +1303,47 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
       }
     }
 
-    return map
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    build,
-    input.allClasses, input.allRaces, input.allFeats, input.allTrees,
-    input.allSelfBuffs, input.allAugments, input.allSetBonuses,
-    input.allFiligreeBonuses, input.allFiligrees, input.gearItems,
-  ])
+  return map
+}
+
+/**
+ * Pure variant of useBuildStats — builds the same BuildStats object the
+ * React hook returns, but doesn't read from any context. Lets V2-imported
+ * builds be evaluated head-to-head with V2 in unit tests.
+ */
+export function computeBuildStats(input: BuildStatsInput, build: CharacterBuild): BuildStats {
+  const map = buildStatMap(input, build)
+  const weaponInfo = extractWeaponInfo(input.gearItems)
+  const armorMaxDex = extractArmorMaxDex(input.gearItems)
+  return {
+    resolve: (key: string): ResolvedStat => {
+      const bonuses = map.get(key)
+      return bonuses?.length ? resolveBonus(bonuses) : emptyResolvedStat()
+    },
+    total: (key: string): number => {
+      const bonuses = map.get(key)
+      return bonuses?.length ? resolveBonus(bonuses).total : 0
+    },
+    keys: () => Array.from(map.keys()),
+    weapon: weaponInfo,
+    armorMaxDex,
+  }
+}
+
+export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterBuild): BuildStats {
+  const ctx = useCharacter()
+  const build = buildOverride ?? ctx.build
+
+  const statMap = useMemo<StatMap>(
+    () => buildStatMap(input, build),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      build,
+      input.allClasses, input.allRaces, input.allFeats, input.allTrees,
+      input.allSelfBuffs, input.allAugments, input.allSetBonuses,
+      input.allFiligreeBonuses, input.allFiligrees, input.gearItems,
+    ],
+  )
 
   const weaponInfo = useMemo(() => extractWeaponInfo(input.gearItems), [input.gearItems])
   const armorMaxDex = useMemo(() => extractArmorMaxDex(input.gearItems), [input.gearItems])

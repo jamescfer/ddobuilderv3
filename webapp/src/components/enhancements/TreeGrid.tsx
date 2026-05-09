@@ -1,6 +1,10 @@
 import { useState } from 'react'
-import type { EnhancementSelection, EnhancementTree, EnhancementTreeItem } from '../../types/ddo'
+import type {
+  CharacterBuild, DDOClass, EnhancementSelection, EnhancementTree,
+  EnhancementTreeItem, Race,
+} from '../../types/ddo'
 import DdoIcon from '../DdoIcon'
+import { meetsRequirements } from '../../lib/requirements'
 import styles from './TreeGrid.module.css'
 
 // ---------------------------------------------------------------------------
@@ -171,6 +175,8 @@ function SelectorPicker({ options, onSelect, onClose }: SelectorPickerProps) {
 // ---------------------------------------------------------------------------
 
 interface CellProps {
+  /** V2 parity: the item's <Requirements> are met against the current build. */
+  reqsMet?: boolean
   item: EnhancementTreeItem
   rank: number
   selectedOption: string | undefined
@@ -187,11 +193,12 @@ interface CellProps {
 
 function EnhancementCell({
   item, rank, selectedOption, treeSpent, totalSpent, totalAP,
-  isCore, coreUnlocked = true, pos, onIncrement, onDecrement, onShowSelector,
+  isCore, coreUnlocked = true, reqsMet = true, pos,
+  onIncrement, onDecrement, onShowSelector,
 }: CellProps) {
   const maxRanks = item.Ranks ?? 1
   const minSpent = item.MinSpent ?? 0
-  const locked = treeSpent < minSpent || (isCore && !coreUnlocked)
+  const locked = treeSpent < minSpent || (isCore && !coreUnlocked) || !reqsMet
   const atMax = rank >= maxRanks
   const cost = nextRankCost(item, rank)
   const canAfford = (totalAP - totalSpent) >= cost
@@ -214,6 +221,7 @@ function EnhancementCell({
     `Cost: ${cost} AP${maxRanks > 1 ? ` per rank (${totalCost} total)` : ''}`,
     minSpent > 0 ? `Requires ${minSpent} AP spent in tree` : '',
     isCore && !coreUnlocked ? 'Requires previous core enhancement' : '',
+    !reqsMet ? 'Build does not meet item prerequisites' : '',
     hasSelector && !selectedOption ? 'Click to choose an option' : '',
   ].filter(Boolean).join('\n')
 
@@ -303,11 +311,20 @@ interface TreeGridProps {
   totalAP?: number
   onChoicesChange: (updated: TreeChoices) => void
   onSelectionsChange: (updated: TreeSelections) => void
+  /**
+   * Optional V2-parity requirement context. When supplied, each tree-item's
+   * <Requirements> are evaluated against the build and items with unmet
+   * prerequisites are visually locked (TrainedEnhancement::IsAvailable).
+   */
+  build?: CharacterBuild
+  allClasses?: DDOClass[]
+  race?: Race
 }
 
 export default function TreeGrid({
   tree, choices, selections, totalSpentAllTrees, totalAP = 80,
   onChoicesChange, onSelectionsChange,
+  build, allClasses, race,
 }: TreeGridProps) {
   const [selectorTarget, setSelectorTarget] = useState<string | null>(null)
 
@@ -428,6 +445,11 @@ export default function TreeGrid({
       {items.map(item => {
         const isCore = (item.YPosition ?? 0) === CORE_Y
         const pos = itemPos(item, layout)
+        // V2 parity: evaluate per-item Requirements when build is provided.
+        // Items without a Requirements block are always met.
+        const reqsMet = build && allClasses
+          ? meetsRequirements(item.Requirements, { build, allClasses, race })
+          : true
         return (
           <EnhancementCell
             key={item.Name}
@@ -439,6 +461,7 @@ export default function TreeGrid({
             totalAP={totalAP}
             isCore={isCore}
             coreUnlocked={isCore ? coreIsUnlocked(item) : true}
+            reqsMet={reqsMet}
             pos={pos}
             onIncrement={() => handleIncrement(item)}
             onDecrement={() => handleDecrement(item)}

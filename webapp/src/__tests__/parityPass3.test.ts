@@ -67,14 +67,22 @@ describe('Parity pass 3 — buildAutomaticFeatGroups', () => {
     expect(groups.find(g => g.source === 'Human')?.feats).toEqual(['Skilled'])
   })
 
-  it('emits class auto-feats up to current class level', () => {
-    const build = { ...emptyBuild(), classes: [
-      { name: 'Fighter', levels: 1 }, { name: '', levels: 0 }, { name: '', levels: 0 },
-    ] as [{ name: string; levels: number }, { name: string; levels: number }, { name: string; levels: number }] }
+  it('emits class auto-feats up to current class level (V2 parity: includes character level)', () => {
+    const build = {
+      ...emptyBuild(),
+      classes: [
+        { name: 'Fighter', levels: 1 }, { name: '', levels: 0 }, { name: '', levels: 0 },
+      ] as [{ name: string; levels: number }, { name: string; levels: number }, { name: string; levels: number }],
+      levelClasses: ['Fighter'],
+      totalLevel: 1,
+    }
     const groups = buildAutomaticFeatGroups(build, [fighter], [human])
-    const lvl1 = groups.find(g => g.source === 'Fighter Lv 1')
-    expect(lvl1?.feats).toEqual(['Tower Shield Proficiency'])
-    expect(groups.find(g => g.source === 'Fighter Lv 2')).toBeUndefined()
+    const lvl1 = groups.find(g => g.feats.includes('Tower Shield Proficiency'))
+    expect(lvl1).toBeDefined()
+    expect(lvl1?.charLevel).toBe(1)
+    expect(lvl1?.source).toContain('Fighter')
+    // Class level 2 hasn't been reached, so no Bonus Combat Feat group.
+    expect(groups.find(g => g.feats.includes('Bonus Combat Feat'))).toBeUndefined()
   })
 
   it('emits Completionist when all heroic classes have ≥ 3 past lives', () => {

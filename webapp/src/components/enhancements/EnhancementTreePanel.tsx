@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { EnhancementTree, EnhancementTreeItem } from '../../types/ddo'
+import type { DDOClass, EnhancementTree, EnhancementTreeItem, Race } from '../../types/ddo'
 import TreeGrid, { type TreeChoices, type TreeSelections } from './TreeGrid'
 import DdoIcon from '../DdoIcon'
 import styles from './EnhancementTreePanel.module.css'
@@ -168,6 +168,8 @@ export default function EnhancementTreePanel() {
   const { build, dispatch } = useCharacter()
 
   const [allTrees, setAllTrees] = useState<EnhancementTree[]>([])
+  const [allClasses, setAllClasses] = useState<DDOClass[]>([])
+  const [allRaces, setAllRaces] = useState<Race[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -179,11 +181,19 @@ export default function EnhancementTreePanel() {
 
   useEffect(() => {
     setLoading(true)
-    api.enhancements()
-      .then(data => { setAllTrees(data); setError(null) })
+    Promise.all([
+      api.enhancements(),
+      api.classes().catch(() => [] as DDOClass[]),
+      api.races().catch(() => [] as Race[]),
+    ])
+      .then(([trees, classes, races]) => {
+        setAllTrees(trees); setAllClasses(classes); setAllRaces(races); setError(null)
+      })
       .catch(err => setError(String(err)))
       .finally(() => setLoading(false))
   }, [])
+
+  const currentRace = allRaces.find(r => r.Name === build.race)
 
   // Enhancement trees only (no destiny/reaper)
   const enhTrees = useMemo(() =>
@@ -318,6 +328,9 @@ export default function EnhancementTreePanel() {
                           totalAP={ENH_AP}
                           onChoicesChange={u => handleChoicesChange(tree.Name, u)}
                           onSelectionsChange={u => handleSelectionsChange(tree.Name, u)}
+                          build={build}
+                          allClasses={allClasses}
+                          race={currentRace}
                         />
                       </div>
                     )

@@ -8,10 +8,14 @@ const ABILITIES: Ability[] = ['Strength', 'Dexterity', 'Constitution', 'Intellig
 
 export default function AbilityLevelUps() {
   const { build, dispatch } = useCharacter()
-  const { totalLevel, abilityLevelUps } = build
+  const { abilityLevelUps } = build
 
-  const available = Math.floor(totalLevel / 4)
-  const activeLevels = LEVELUP_LEVELS.filter(l => l <= totalLevel)
+  // V2 parity: ability score increases unlock at every multiple of 4 up to
+  // the character's overall level (heroic + epic + legendary), not just the
+  // heroic cap. Build::DetermineLevelUps awards them at L4/8/.../40.
+  const overallLevel = build.totalLevel + (build.epicLevels ?? 0) + (build.legendaryLevels ?? 0)
+  const available = Math.floor(overallLevel / 4)
+  const activeLevels = LEVELUP_LEVELS.filter(l => l <= overallLevel)
   const assigned = activeLevels.filter(l => abilityLevelUps[l]).length
 
   return (
@@ -24,7 +28,7 @@ export default function AbilityLevelUps() {
       </div>
       <div className="panel-body">
         {available === 0 ? (
-          <p className={styles.placeholder}>Reach level 4 to assign ability score increases.</p>
+          <p className={styles.placeholder}>Reach level 4 to assign ability score increases. Epic (24/28) and legendary (32/36/40) levels unlock more.</p>
         ) : (
           <div className={styles.grid}>
             {activeLevels.map(level => {

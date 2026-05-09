@@ -3,6 +3,7 @@ import type { ReactElement, ChangeEvent } from 'react'
 import type { CharacterBuild } from '../types/ddo'
 import { useCharacter } from '../context/CharacterContext'
 import { isCharacterDocument, flattenDocument } from '../lib/multiLife'
+import { importV2Build } from '../lib/v2Import'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -104,6 +105,14 @@ export function usePersistence(): PersistenceAPI {
       reader.onload = () => {
         try {
           const text = reader.result as string
+          // V2 .DDOBuild XML support — detect by file extension or root tag.
+          const isXml = file.name.toLowerCase().endsWith('.ddobuild') ||
+                        text.trim().startsWith('<')
+          if (isXml) {
+            const result = importV2Build(text)
+            resolve(result.build)
+            return
+          }
           const parsed = JSON.parse(text)
           // V2-format Character document: unwrap to its first build.
           if (isCharacterDocument(parsed)) {
@@ -127,7 +136,7 @@ export function usePersistence(): PersistenceAPI {
           }
           resolve(parsed as CharacterBuild)
         } catch {
-          reject(new Error('Invalid build file: could not parse JSON'))
+          reject(new Error('Invalid build file: could not parse JSON or XML'))
         }
       }
       reader.onerror = () => reject(new Error('Could not read file'))
@@ -242,15 +251,15 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
   const hiddenInput = h('input', {
     ref: fileInputRef,
     type: 'file',
-    accept: '.json,application/json',
+    accept: '.json,application/json,.ddobuild,.DDOBuild,application/xml,text/xml',
     style: { display: 'none' },
     onChange: handleFileChange,
   })
 
   const importBtn = h(
     'button',
-    { type: 'button', onClick: handleImportClick, title: 'Import a character from a JSON file' },
-    'Import JSON',
+    { type: 'button', onClick: handleImportClick, title: 'Import a character from a V3 JSON file or a V2 .DDOBuild XML file' },
+    'Import',
   )
 
   const errorSpan = importError
