@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../api'
+import { useCharacter } from '../../context/CharacterContext'
 import type { GuildBuff } from '../../types/ddo'
 import styles from './GuildBuffsPanel.module.css'
 
 export default function GuildBuffsPanel() {
-  const [guildLevel, setGuildLevel] = useState(0)
+  const { build, dispatch } = useCharacter()
+  const guildLevel = build.guildLevel ?? 0
+  const setGuildLevel = (v: number) => dispatch({ type: 'SET_GUILD_LEVEL', level: v })
   const [buffs, setBuffs] = useState<GuildBuff[]>([])
 
   useEffect(() => {

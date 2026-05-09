@@ -343,6 +343,7 @@ export interface GuildBuff {
   Name: string
   Description?: string
   Level?: number  // minimum guild level to unlock this buff
+  Effect?: Effect | Effect[]
 }
 
 // ---------------------------------------------------------------------------
@@ -437,6 +438,8 @@ export interface CharacterBuild {
   enhancementSelections: Record<string, Record<string, string>>
   /** ordered list of pinned heroic enhancement tree names */
   enhancementPinned: string[]
+  /** Guild level (0–200). Drives which guild buffs are unlocked + applied. */
+  guildLevel?: number
 }
 
 function generateId(): string {
@@ -490,6 +493,7 @@ export function emptyBuild(): CharacterBuild {
     enhancementChoices: {},
     enhancementSelections: {},
     enhancementPinned: [],
+    guildLevel: 0,
   }
 }
 

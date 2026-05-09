@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, Buff } from '../../types/ddo'
+import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, Buff, GuildBuff } from '../../types/ddo'
 import { useBuildStats } from '../../hooks/useBuildStats'
 import type { ResolvedBonus } from '../../lib/bonus'
 import { SKILLS, SCHOOL_DCS, SPELL_POWER_TYPES, SPELL_POWER_LABELS } from '../../lib/gamedata'
@@ -212,6 +212,7 @@ export default function BreakdownsPanel() {
   const [allFiligreeBonuses,setAllFiligreeBonuses]= useState<FiligreeSetBonus[]>([])
   const [allFiligrees,      setAllFiligrees]      = useState<Filigree[]>([])
   const [allItemBuffs,      setAllItemBuffs]      = useState<Buff[]>([])
+  const [allGuildBuffs,     setAllGuildBuffs]     = useState<GuildBuff[]>([])
   const [gearItems,         setGearItems]         = useState<Record<string, Item>>({})
   const [tip, setTip] = useState<TipState | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -228,6 +229,7 @@ export default function BreakdownsPanel() {
     api.filigreeSetBonuses().then(setAllFiligreeBonuses)
     api.filigree().then(setAllFiligrees)
     api.itemBuffs().then(setAllItemBuffs)
+    api.guildbuffs().then(setAllGuildBuffs)
   }, [])
 
   // Resolve gear items whenever equipped slots change
@@ -255,11 +257,11 @@ export default function BreakdownsPanel() {
     () => ({
       allClasses, allRaces, allFeats, allTrees, gearItems,
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-      allItemBuffs,
+      allItemBuffs, allGuildBuffs,
     }),
     [allClasses, allRaces, allFeats, allTrees, gearItems,
      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-     allItemBuffs],
+     allItemBuffs, allGuildBuffs],
   )
   const stats = useBuildStats(statsInput)
 
@@ -535,6 +537,73 @@ export default function BreakdownsPanel() {
       return fixedRow(`Immunity: ${t}`, r.total, '✓', r.bonuses)
     })
 
+  // Metamagic cost reductions — surfaced as 'metamagic.cost.<name>' (slice 1)
+  const metamagicRows: StatRowData[] = stats
+    .keys()
+    .filter(k => k.startsWith('metamagic.cost.'))
+    .map(k => {
+      const t = k.slice('metamagic.cost.'.length)
+      const r = stats.resolve(k)
+      return fixedRow(`${t} Cost`, r.total, sign(r.total), r.bonuses)
+    })
+    .filter(s => s.total !== 0)
+
+  // Spell cost reductions — 'spellCost.<element>' + 'spellCostPct'
+  const spellCostRows: StatRowData[] = []
+  for (const k of stats.keys().filter(kk => kk.startsWith('spellCost.'))) {
+    const t = k.slice('spellCost.'.length)
+    const r = stats.resolve(k)
+    if (r.total !== 0) {
+      spellCostRows.push(fixedRow(`Spell Cost (${t})`, r.total, sign(r.total), r.bonuses))
+    }
+  }
+  {
+    const r = stats.resolve('spellCostPct')
+    if (r.total !== 0) {
+      spellCostRows.push(fixedRow('Spell Cost %', r.total, pct(r.total), r.bonuses))
+    }
+  }
+
+  // Action boost / class extras — surfaced as discrete keys (slice 1)
+  const EXTRAS_KEYS = [
+    { key: 'actionBoost.extra',   label: 'Extra Action Boosts' },
+    { key: 'lohExtra',            label: 'Extra Lay on Hands' },
+    { key: 'lohRegen',            label: 'LoH Regen Rate' },
+    { key: 'rageExtra',           label: 'Extra Rages' },
+    { key: 'smiteExtra',          label: 'Extra Smites' },
+    { key: 'removeDiseaseExtra',  label: 'Extra Remove Disease' },
+    { key: 'wildEmpathyExtra',    label: 'Extra Wild Empathy' },
+    { key: 'fatePoint',           label: 'Fate Points' },
+    { key: 'destinyAP',           label: 'Destiny AP Bonus' },
+    { key: 'reaperAP',            label: 'Reaper AP Bonus' },
+    { key: 'universalAP',         label: 'Universal AP Bonus' },
+  ] as const
+  const extrasRows: StatRowData[] = EXTRAS_KEYS
+    .map(({ key, label }) => statRow(label, key))
+    .filter(s => s.total !== 0)
+
+  // Spell-specific / school / energy caster levels — beyond the per-class view
+  const spellSpecificCLRows: StatRowData[] = []
+  for (const k of stats.keys()) {
+    if (k.startsWith('clSpell.')) {
+      const t = k.slice('clSpell.'.length)
+      const r = stats.resolve(k)
+      if (r.total !== 0) spellSpecificCLRows.push(fixedRow(`CL: ${t}`, r.total, sign(r.total), r.bonuses))
+    } else if (k.startsWith('maxClSpell.')) {
+      const t = k.slice('maxClSpell.'.length)
+      const r = stats.resolve(k)
+      if (r.total !== 0) spellSpecificCLRows.push(fixedRow(`Max CL: ${t}`, r.total, String(r.total), r.bonuses))
+    } else if (k.startsWith('clSchool.')) {
+      const t = k.slice('clSchool.'.length)
+      const r = stats.resolve(k)
+      if (r.total !== 0) spellSpecificCLRows.push(fixedRow(`CL: ${t} school`, r.total, sign(r.total), r.bonuses))
+    } else if (k.startsWith('clEnergy.')) {
+      const t = k.slice('clEnergy.'.length)
+      const r = stats.resolve(k)
+      if (r.total !== 0) spellSpecificCLRows.push(fixedRow(`CL: ${t}`, r.total, sign(r.total), r.bonuses))
+    }
+  }
+
   const skillStats: StatRowData[] = SKILLS.map(({ name }) => {
     const resolved = stats.resolve(`skill.${name}`)
     return {
@@ -674,6 +743,30 @@ export default function BreakdownsPanel() {
             {immunityRows.length > 0 && (
               <Section title="Immunities" defaultOpen={false}>
                 {immunityRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {extrasRows.length > 0 && (
+              <Section title="Class Extras &amp; AP Bonuses" defaultOpen={false}>
+                {extrasRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {spellSpecificCLRows.length > 0 && (
+              <Section title="Spell / School Caster Level" defaultOpen={false}>
+                {spellSpecificCLRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {spellCostRows.length > 0 && (
+              <Section title="Spell Cost Reductions" defaultOpen={false}>
+                {spellCostRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {metamagicRows.length > 0 && (
+              <Section title="Metamagic Costs" defaultOpen={false}>
+                {metamagicRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
               </Section>
             )}
 

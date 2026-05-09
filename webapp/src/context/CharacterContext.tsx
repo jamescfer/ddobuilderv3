@@ -33,6 +33,7 @@ type Action =
   | { type: 'SET_ABILITY_TOME'; ability: Ability; bonus: number }
   | { type: 'SET_SKILL_TOME'; skill: string; bonus: number }
   | { type: 'TOGGLE_BUFF'; buffName: string }
+  | { type: 'SET_GUILD_LEVEL'; level: number }
   | { type: 'TOGGLE_QUEST'; questName: string }
   | { type: 'SET_NOTES'; notes: string }
   | { type: 'SET_SENTIENT_GEM'; gem: string }
@@ -91,6 +92,7 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     sentientGem: raw.sentientGem ?? '',
     namedGearSets: raw.namedGearSets ?? {},
     activeGearSetName: raw.activeGearSetName ?? '',
+    guildLevel: raw.guildLevel ?? 0,
   }
 }
 
@@ -213,6 +215,8 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
         : [...state.activeBuffs, action.buffName]
       return { ...state, activeBuffs: active }
     }
+    case 'SET_GUILD_LEVEL':
+      return { ...state, guildLevel: Math.max(0, Math.min(200, action.level)) }
     case 'TOGGLE_QUEST':
       return { ...state, completedQuests: { ...state.completedQuests, [action.questName]: !state.completedQuests[action.questName] } }
     case 'SET_NOTES':

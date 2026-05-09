@@ -15,7 +15,7 @@ import { SKILLS } from '../lib/gamedata'
 import type {
   Race, DDOClass, Feat, EnhancementTree, EnhancementTreeItem, Item,
   Effect, EnhancementSelection, Augment, SetBonus, FiligreeSetBonus, Filigree,
-  OptionalBuff, FiligreeSlot, Buff,
+  OptionalBuff, FiligreeSlot, Buff, GuildBuff,
 } from '../types/ddo'
 import { parseEffect, resolveItemBuff, buildBuffIndex } from '../lib/effectParser'
 import type { EffectContext } from '../lib/effectParser'
@@ -72,6 +72,8 @@ export interface BuildStatsInput {
   // yet still work. Without it, parseItemBuff falls back to the legacy
   // direct-Type mapping.
   allItemBuffs?: Buff[]
+  /** GuildBuffs.xml — applied based on build.guildLevel. Optional. */
+  allGuildBuffs?: GuildBuff[]
 }
 
 // ---------------------------------------------------------------------------
@@ -447,6 +449,66 @@ function accumulateSelfBuffs(
 }
 
 // ---------------------------------------------------------------------------
+// V2 Build::ApplyGuildBuffs port — apply every guild buff whose Level
+// requirement is met by the build's guild level. Effects use AType=TotalLevel
+// so we pass totalLevel as the level arg.
+// ---------------------------------------------------------------------------
+
+function accumulateGuildBuffs(
+  map: StatMap,
+  guildLevel: number,
+  allGuildBuffs: GuildBuff[],
+  totalLevel: number,
+  ctx?: EffectContext,
+): void {
+  if (guildLevel <= 0) return
+  for (const gb of allGuildBuffs) {
+    if ((gb.Level ?? 0) > guildLevel) continue
+    const source = `Guild Buff: ${gb.Name}`
+    for (const eff of toArray(gb.Effect)) {
+      addParsed(map, parseEffect(eff, 1, source, totalLevel, 0, ctx))
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// V2 Build::ApplyTwistsOfFate port — each twist is the *internal name* of an
+// enhancement item from one of the unlocked destiny trees. Apply the
+// corresponding tree item's Effects at rank 1 (twists grant rank 1 access).
+// ---------------------------------------------------------------------------
+
+function accumulateTwists(
+  map: StatMap,
+  twistChoices: string[],
+  unlockedDestinyTrees: string[],
+  allTrees: EnhancementTree[],
+  ctx?: EffectContext,
+): void {
+  if (!twistChoices?.length) return
+  // Build a lookup of (treeName → itemName → item) once across unlocked trees.
+  const itemsByName = new Map<string, EnhancementTreeItem>()
+  for (const treeName of unlockedDestinyTrees) {
+    const tree = allTrees.find(t => t.Name === treeName)
+    if (!tree?.EnhancementTreeItem) continue
+    for (const item of tree.EnhancementTreeItem) {
+      if (item.Name) itemsByName.set(item.Name, item)
+      // V2 also matches on InternalName when present.
+      const intl = (item as unknown as { InternalName?: string }).InternalName
+      if (intl) itemsByName.set(intl, item)
+    }
+  }
+  for (const twistName of twistChoices) {
+    if (!twistName) continue
+    const item = itemsByName.get(twistName)
+    if (!item) continue
+    const source = `Twist of Fate: ${item.Name}`
+    for (const eff of toArray(item.Effect)) {
+      addParsed(map, parseEffect(eff, 1, source, 0, 0, ctx))
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Weapon info extractor
 // ---------------------------------------------------------------------------
 
@@ -566,6 +628,31 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
     for (const item of Object.values(gearItems)) {
       if (item.Weapon) ctxWeaponTypes.add(item.Weapon)
     }
+
+    // V2 AType=FeatCount uses the number of times a feat has been trained.
+    // Feat slots can repeat (e.g. Improved Critical for different weapon
+    // groups). featChoices is a flat map of slotKey → featName, so we count
+    // duplicates by walking the values.
+    const ctxFeatCounts: Record<string, number> = {}
+    for (const f of Object.values(build.featChoices)) {
+      if (!f) continue
+      ctxFeatCounts[f] = (ctxFeatCounts[f] ?? 0) + 1
+    }
+    // Past lives also stack as feat counts in V2.
+    for (const [src, count] of Object.entries(build.pastLives)) {
+      if (!count) continue
+      ctxFeatCounts[`Past Life: ${src}`] = (ctxFeatCounts[`Past Life: ${src}`] ?? 0) + count
+      ctxFeatCounts[src] = (ctxFeatCounts[src] ?? 0) + count
+    }
+
+    // V2 AType=SetBonusCount needs the equipped count per set bonus name.
+    const ctxSetBonusCounts: Record<string, number> = {}
+    for (const item of Object.values(gearItems)) {
+      for (const name of toArray(item.SetBonus)) {
+        ctxSetBonusCounts[name] = (ctxSetBonusCounts[name] ?? 0) + 1
+      }
+    }
+
     const ctx: EffectContext = {
       race: build.race,
       alignment: build.alignment,
@@ -578,6 +665,8 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       stances: ctxStances,
       bab: ctxBAB,
       weaponTypes: ctxWeaponTypes,
+      featCounts: ctxFeatCounts,
+      setBonusCounts: ctxSetBonusCounts,
     }
 
     // ── Ability base scores ───────────────────────────────────────────────
@@ -688,6 +777,14 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
 
     // ── Self / party buffs ────────────────────────────────────────────────
     accumulateSelfBuffs(map, build.activeBuffs, allSelfBuffs, ctx)
+
+    // ── Guild buffs ───────────────────────────────────────────────────────
+    if (input.allGuildBuffs && (build.guildLevel ?? 0) > 0) {
+      accumulateGuildBuffs(map, build.guildLevel ?? 0, input.allGuildBuffs, build.totalLevel, ctx)
+    }
+
+    // ── Twists of Fate ───────────────────────────────────────────────────
+    accumulateTwists(map, build.twistChoices ?? [], build.unlockedDestinyTrees ?? [], allTrees, ctx)
 
     // ── Skill tomes ───────────────────────────────────────────────────────
     for (const [skill, bonus] of Object.entries(build.skillTomes ?? {})) {
