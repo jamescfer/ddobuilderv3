@@ -247,6 +247,13 @@ function loadItemBuffs() {
   } catch { return [] }
 }
 
+function loadWeaponGroups() {
+  try {
+    const parsed = readXml(path.join(DATA_DIR, 'WeaponGroupings.xml')) as { WeaponGroupings?: { WeaponGroup?: unknown[] } }
+    return (parsed?.WeaponGroupings?.WeaponGroup ?? []) as unknown[]
+  } catch { return [] }
+}
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -374,6 +381,7 @@ app.get('/api/patrons', (_req, res) => res.json(cached('patrons', loadPatrons)))
 app.get('/api/quests', (_req, res) => res.json(cached('quests', loadQuests)))
 app.get('/api/gems', (_req, res) => res.json(cached('gems', loadSentientGems)))
 app.get('/api/itembuffs', (_req, res) => res.json(cached('itembuffs', loadItemBuffs)))
+app.get('/api/weapongroups', (_req, res) => res.json(cached('weapongroups', loadWeaponGroups)))
 
 // ---------------------------------------------------------------------------
 // Auto-update routes

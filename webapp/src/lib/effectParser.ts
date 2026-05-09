@@ -242,6 +242,31 @@ function normalizeSpellElement(raw: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// V2 weapon-effect gating: an Item-filtered weapon effect applies only when
+// the equipped weapon (or its weapon-class memberships) appears in the
+// effect's Item list. "All" or empty Item is universal. When ctx hasn't
+// populated weaponTypes / weaponClassMain, we default to permissive (apply)
+// so legacy callers don't regress.
+// ---------------------------------------------------------------------------
+
+function weaponEffectMatches(items: string[], ctx?: EffectContext): boolean {
+  if (items.length === 0) return true
+  if (items.includes('All')) return true
+  if (!ctx) return true
+  // Match on equipped weapon type names.
+  for (const i of items) {
+    if (ctx.weaponTypes.has(i)) return true
+  }
+  // Match on weapon class (e.g. "Martial", "OneHanded", "Light").
+  if (ctx.weaponClassMain) {
+    for (const i of items) {
+      if (ctx.weaponClassMain.has(i)) return true
+    }
+  }
+  return false
+}
+
+// ---------------------------------------------------------------------------
 // Item array helper
 // ---------------------------------------------------------------------------
 
@@ -650,16 +675,24 @@ export function parseEffect(
     case 'Doubleshot':
       return [make('ranged.doubleshot')]
 
+    // V2 weapon-specific attack/damage effects: gated by Item filter against
+    // the equipped main-hand weapon (or its class memberships). When matched,
+    // they roll into the unified melee.toHit / melee.damage rather than a
+    // per-weapon stat (the panel currently displays melee/ranged unified).
     case 'Weapon_Attack':
+      if (!weaponEffectMatches(items, ctx)) return []
       return [make('melee.toHit')]
 
     case 'Weapon_Damage':
+      if (!weaponEffectMatches(items, ctx)) return []
       return [make('melee.damage')]
 
     case 'Weapon_AttackAndDamage':
+      if (!weaponEffectMatches(items, ctx)) return []
       return [make('melee.toHit'), make('melee.damage')]
 
     case 'Weapon_OtherDamageBonus':
+      if (!weaponEffectMatches(items, ctx)) return []
       return [make('melee.damage')]
 
     case 'SneakAttack':
@@ -1161,40 +1194,114 @@ export function parseEffect(
       return []
 
     // -----------------------------------------------------------------------
-    // Weapon-specific effects (modeled by the weapon breakdown engine, not
-    // the flat-stat aggregator). These touch only equipped weapons that match
-    // Item filters and are emitted into per-weapon breakdown items in V2.
+    // V2 weapon breakdowns. Per-weapon-type / per-class effects are gated by
+    // weaponEffectMatches against ctx.weaponTypes (equipped weapon names) and
+    // ctx.weaponClassMain (equipped weapon's class memberships from
+    // WeaponGroupings.xml + AddGroupWeapon effects). When matched, they emit
+    // into the global weapon.* stat keys (V2 BreakdownItemWeapon family).
     // -----------------------------------------------------------------------
     case 'Weapon_Alacrity':
-    case 'Weapon_AttackAbility':
-    case 'Weapon_BaseDamage':
-    case 'Weapon_CriticalMultiplier':
-    case 'Weapon_CriticalMultiplier19To20':
-    case 'Weapon_CriticalRange':
-    case 'Weapon_DamageAbility':
-    case 'Weapon_Enchantment':
-    case 'Weapon_Keen':
-    case 'Weapon_VorpalRange':
-    case 'Weapon_AttackCritical':
-    case 'Weapon_DamageCritical':
-    case 'Weapon_AttackAndDamageCritical':
-    case 'WeaponOtherDamageBonus':
-    case 'WeaponOtherDamageBonusCritical':
-    case 'WeaponOtherDamageBonusClass':
-    case 'WeaponOtherDamageBonusCriticalClass':
     case 'WeaponAlacrityClass':
-    case 'WeaponAttackAbilityClass':
-    case 'WeaponDamageAbilityClass':
-    case 'WeaponDamageBonusCriticalStat':
-    case 'WeaponDamageBonusStat':
-    case 'WeaponProficiencyClass':
-    case 'WeaponAttackBonusClass':
-    case 'WeaponAttackBonusCriticalClass':
-    case 'WeaponDamageBonusClass':
-    case 'WeaponDamageBonusCriticalClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.alacrity')]
+
+    case 'Weapon_BaseDamage':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.baseDamage')]
+
+    case 'Weapon_CriticalMultiplier':
     case 'WeaponCriticalMultiplierClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.critMult')]
+
+    case 'Weapon_CriticalMultiplier19To20':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.critMult19to20')]
+
+    case 'Weapon_CriticalRange':
     case 'WeaponCriticalRangeClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.threatRange')]
+
+    case 'Weapon_Enchantment':
     case 'Weapon_EnchantmentClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.enchantment')]
+
+    case 'Weapon_Keen':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.keen')]
+
+    case 'Weapon_VorpalRange':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.vorpal')]
+
+    // V2 weapon class attack/damage variants: gate on the weapon class match,
+    // then roll into the unified melee.toHit / melee.damage stats so the
+    // existing combat panel surfaces them without adding per-weapon UI yet.
+    case 'WeaponAttackBonusClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('melee.toHit')]
+    case 'WeaponDamageBonusClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('melee.damage')]
+
+    // V2 weapon ability-replacement effects (e.g. Finesse: use DEX for attack,
+    // Insightful Damage: use INT for damage). Modeled separately as 'weapon.X'
+    // ability flags so a future weapon-breakdown engine can pick them up.
+    case 'Weapon_AttackAbility':
+    case 'WeaponAttackAbilityClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      // Ability name lives in Item; emit as a flag-style stat key per ability.
+      return items
+        .filter(i => i !== 'All')
+        .map(i => make(`weapon.attackAbility.${i}`))
+
+    case 'Weapon_DamageAbility':
+    case 'WeaponDamageAbilityClass':
+    case 'WeaponDamageBonusStat':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return items
+        .filter(i => i !== 'All')
+        .map(i => make(`weapon.damageAbility.${i}`))
+
+    // V2 effects that apply only on a critical hit (contribute to crit damage
+    // but not normal damage). Emit to dedicated stat keys.
+    case 'Weapon_AttackCritical':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.toHitCrit')]
+    case 'Weapon_DamageCritical':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.damageCrit')]
+    case 'Weapon_AttackAndDamageCritical':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.toHitCrit'), make('weapon.damageCrit')]
+    case 'WeaponOtherDamageBonusCritical':
+    case 'WeaponOtherDamageBonusCriticalClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.otherDamageCrit')]
+
+    case 'WeaponOtherDamageBonus':
+    case 'WeaponOtherDamageBonusClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.otherDamage')]
+
+    // V2 effects that grant proficiency in a weapon class (no flat stat).
+    case 'WeaponProficiencyClass':
+      return []
+
+    // V2 stat-substitution variants (DamageBonusStat, etc.) — already covered
+    // by the *Ability cases above.
+    case 'WeaponDamageBonusCriticalStat':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return items
+        .filter(i => i !== 'All')
+        .map(i => make(`weapon.damageAbilityCrit.${i}`))
+
+    // Damage-type variants (e.g. "+5 to all Slashing weapons") — V2 gates on
+    // the equipped weapon's damage-type list. v3 doesn't currently track
+    // per-weapon damage types, so these stay as no-ops until that data is
+    // wired through.
     case 'WeaponAttackBonusDamageType':
     case 'WeaponAttackBonusCriticalDamageType':
     case 'WeaponDamageBonusDamageType':
@@ -1252,7 +1359,7 @@ export function parseEffect(
  *
  * ItemBuff uses `Value1` for the magnitude and `BonusType` for the bonus type.
  */
-export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
+export function parseItemBuff(buff: ItemBuff, source: string, ctx?: EffectContext): ParsedBonus[] {
   const value = buff.Value1 ?? 0
   const items = toStringArray(buff.Item as string | string[] | undefined)
 
@@ -1872,42 +1979,101 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
       return []
 
     // -----------------------------------------------------------------------
-    // Weapon-specific (modeled by the weapon breakdown engine)
+    // V2 weapon breakdowns — same gating as parseEffect: emit weapon.* stat
+    // keys only when the inline buff's Item filter (or the buff name itself)
+    // matches the equipped weapon / weapon class. ctx is optional so
+    // consumers that don't pass it default to permissive emission.
     // -----------------------------------------------------------------------
-    case 'Weapon_Alacrity':
     case 'Weapon_Attack':
-    case 'Weapon_AttackAbility':
-    case 'Weapon_AttackAndDamage':
-    case 'Weapon_AttackAndDamageCritical':
-    case 'Weapon_AttackCritical':
-    case 'Weapon_BaseDamage':
-    case 'Weapon_CriticalMultiplier':
-    case 'Weapon_CriticalMultiplier19To20':
-    case 'Weapon_CriticalRange':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('melee.toHit')]
     case 'Weapon_Damage':
-    case 'Weapon_DamageAbility':
-    case 'Weapon_DamageCritical':
-    case 'Weapon_Enchantment':
-    case 'Weapon_Keen':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('melee.damage')]
+    case 'Weapon_AttackAndDamage':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('melee.toHit'), make('melee.damage')]
     case 'Weapon_OtherDamageBonus':
-    case 'Weapon_VorpalRange':
     case 'WeaponOtherDamageBonus':
-    case 'WeaponOtherDamageBonusCritical':
     case 'WeaponOtherDamageBonusClass':
-    case 'WeaponOtherDamageBonusCriticalClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.otherDamage')]
+    case 'Weapon_Alacrity':
     case 'WeaponAlacrityClass':
-    case 'WeaponAttackAbilityClass':
-    case 'WeaponDamageAbilityClass':
-    case 'WeaponDamageBonusCriticalStat':
-    case 'WeaponDamageBonusStat':
-    case 'WeaponProficiencyClass':
-    case 'WeaponAttackBonusClass':
-    case 'WeaponAttackBonusCriticalClass':
-    case 'WeaponDamageBonusClass':
-    case 'WeaponDamageBonusCriticalClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.alacrity')]
+    case 'Weapon_BaseDamage':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.baseDamage')]
+    case 'Weapon_CriticalMultiplier':
     case 'WeaponCriticalMultiplierClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.critMult')]
+    case 'Weapon_CriticalMultiplier19To20':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.critMult19to20')]
+    case 'Weapon_CriticalRange':
     case 'WeaponCriticalRangeClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.threatRange')]
+    case 'Weapon_Enchantment':
     case 'Weapon_EnchantmentClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.enchantment')]
+    case 'Weapon_Keen':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.keen')]
+    case 'Weapon_VorpalRange':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.vorpal')]
+    case 'Weapon_AttackCritical':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.toHitCrit')]
+    case 'Weapon_DamageCritical':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.damageCrit')]
+    case 'Weapon_AttackAndDamageCritical':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.toHitCrit'), make('weapon.damageCrit')]
+    case 'WeaponOtherDamageBonusCritical':
+    case 'WeaponOtherDamageBonusCriticalClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.otherDamageCrit')]
+    case 'WeaponAttackBonusClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('melee.toHit')]
+    case 'WeaponDamageBonusClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('melee.damage')]
+    case 'Weapon_AttackAbility':
+    case 'WeaponAttackAbilityClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return items
+        .filter(i => i !== 'All')
+        .map(i => make(`weapon.attackAbility.${i}`))
+    case 'Weapon_DamageAbility':
+    case 'WeaponDamageAbilityClass':
+    case 'WeaponDamageBonusStat':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return items
+        .filter(i => i !== 'All')
+        .map(i => make(`weapon.damageAbility.${i}`))
+    case 'WeaponDamageBonusCriticalStat':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return items
+        .filter(i => i !== 'All')
+        .map(i => make(`weapon.damageAbilityCrit.${i}`))
+
+    // V2 weapon class crit-only attack/damage variants.
+    case 'WeaponAttackBonusCriticalClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.toHitCrit')]
+    case 'WeaponDamageBonusCriticalClass':
+      if (!weaponEffectMatches(items, ctx)) return []
+      return [make('weapon.damageCrit')]
+
+    // Damage-type variants — V2 gates on equipped-weapon damage types, which
+    // v3 doesn't track per-weapon yet.
     case 'WeaponAttackBonusDamageType':
     case 'WeaponAttackBonusCriticalDamageType':
     case 'WeaponDamageBonusDamageType':
@@ -2075,16 +2241,16 @@ export function resolveItemBuff(
   source: string,
   ctx?: EffectContext,
 ): ParsedBonus[] {
-  if (!buffIndex) return parseItemBuff(inline, source)
+  if (!buffIndex) return parseItemBuff(inline, source, ctx)
 
   const dbBuff = buffIndex.get(inline.Type)
-  if (!dbBuff) return parseItemBuff(inline, source)
+  if (!dbBuff) return parseItemBuff(inline, source, ctx)
 
   const baseEffects = effectsOf(dbBuff)
   if (baseEffects.length === 0) {
     // Database buff is display-text only (no Effects). Try the legacy
     // direct-Type fallback so the inline Type remains addressable.
-    return parseItemBuff(inline, source)
+    return parseItemBuff(inline, source, ctx)
   }
 
   const effects = applyBuffOverrides(baseEffects, inline, dbBuff)

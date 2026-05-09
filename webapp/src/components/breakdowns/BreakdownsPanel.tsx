@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, Buff, GuildBuff } from '../../types/ddo'
+import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, Buff, GuildBuff, WeaponGroup } from '../../types/ddo'
 import { useBuildStats } from '../../hooks/useBuildStats'
 import type { ResolvedBonus } from '../../lib/bonus'
 import { SKILLS, SCHOOL_DCS, SPELL_POWER_TYPES, SPELL_POWER_LABELS } from '../../lib/gamedata'
@@ -213,6 +213,7 @@ export default function BreakdownsPanel() {
   const [allFiligrees,      setAllFiligrees]      = useState<Filigree[]>([])
   const [allItemBuffs,      setAllItemBuffs]      = useState<Buff[]>([])
   const [allGuildBuffs,     setAllGuildBuffs]     = useState<GuildBuff[]>([])
+  const [allWeaponGroups,   setAllWeaponGroups]   = useState<WeaponGroup[]>([])
   const [gearItems,         setGearItems]         = useState<Record<string, Item>>({})
   const [tip, setTip] = useState<TipState | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -230,6 +231,7 @@ export default function BreakdownsPanel() {
     api.filigree().then(setAllFiligrees)
     api.itemBuffs().then(setAllItemBuffs)
     api.guildbuffs().then(setAllGuildBuffs)
+    api.weaponGroups().then(setAllWeaponGroups)
   }, [])
 
   // Resolve gear items whenever equipped slots change
@@ -257,11 +259,11 @@ export default function BreakdownsPanel() {
     () => ({
       allClasses, allRaces, allFeats, allTrees, gearItems,
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-      allItemBuffs, allGuildBuffs,
+      allItemBuffs, allGuildBuffs, allWeaponGroups,
     }),
     [allClasses, allRaces, allFeats, allTrees, gearItems,
      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-     allItemBuffs, allGuildBuffs],
+     allItemBuffs, allGuildBuffs, allWeaponGroups],
   )
   const stats = useBuildStats(statsInput)
 
@@ -435,13 +437,29 @@ export default function BreakdownsPanel() {
   const baseThreatRange  = weapon?.critThreatRange ?? 1
   const bonusThreatRange = stats.total('weapon.threatRange')
   const totalThreatRange = baseThreatRange + bonusThreatRange
-  const baseCritMult     = weapon?.critMultiplier ?? 2
-  const threatDisplay    = totalThreatRange > 1 ? `${21 - totalThreatRange}–20` : '20'
-  const weaponDiceDisplay = weapon ? `${weapon.diceNum}d${weapon.diceSides}` : '—'
+  const baseCritMult       = weapon?.critMultiplier ?? 2
+  const bonusCritMult      = stats.total('weapon.critMult')
+  const totalCritMult      = baseCritMult + bonusCritMult
+  const threatDisplay      = totalThreatRange > 1 ? `${21 - totalThreatRange}–20` : '20'
+  const weaponDiceDisplay  = weapon ? `${weapon.diceNum}d${weapon.diceSides}` : '—'
   const threatBonuses: ResolvedBonus[] = [
     { value: baseThreatRange, type: 'Base', source: weapon?.name ?? 'Unarmed', active: true },
     ...stats.resolve('weapon.threatRange').bonuses,
   ]
+  const critMultBonuses: ResolvedBonus[] = [
+    { value: baseCritMult, type: 'Base', source: weapon?.name ?? 'Unarmed', active: true },
+    ...stats.resolve('weapon.critMult').bonuses,
+  ]
+
+  // V2 BreakdownItemWeaponVorpalRange: vorpal triggers on natural 20 by default
+  // (range 1 = "20"); each Weapon_VorpalRange bonus widens the threshold (so a
+  // value of 1 makes vorpal trigger on 19-20).
+  const vorpalRangeBonus = stats.total('weapon.vorpal')
+  const vorpalDisplay = vorpalRangeBonus > 0 ? `${20 - vorpalRangeBonus}–20` : '20'
+
+  const enchantTotal = stats.total('weapon.enchantment')
+  const alacrityTotal = stats.total('weapon.alacrity')
+  const baseDamageTotal = stats.total('weapon.baseDamage')
 
   const meleeStats: StatRowData[] = [
     statRow('Melee Power',    'melee.power',        sign),
@@ -449,11 +467,21 @@ export default function BreakdownsPanel() {
       [...stats.resolve('bab').bonuses, ...stats.resolve('melee.toHit').bonuses]),
     statRow('Damage Bonus',   'melee.damage',       sign),
     fixedRow('W Dice',        0, weaponDiceDisplay, [], !weapon),
+    fixedRow('Weapon Enchant', enchantTotal,
+      enchantTotal > 0 ? `+${enchantTotal}` : '—',
+      stats.resolve('weapon.enchantment').bonuses, enchantTotal === 0),
+    fixedRow('Base Damage Mod', baseDamageTotal, sign(baseDamageTotal),
+      stats.resolve('weapon.baseDamage').bonuses, baseDamageTotal === 0),
     fixedRow('Threat Range',  totalThreatRange, threatDisplay, threatBonuses),
-    fixedRow('Crit Multiplier', baseCritMult, `×${baseCritMult}`,
-      [{ value: baseCritMult, type: 'Base', source: weapon?.name ?? 'Unarmed', active: true }]),
+    fixedRow('Crit Multiplier', totalCritMult, `×${totalCritMult}`,
+      critMultBonuses, bonusCritMult === 0),
+    fixedRow('Vorpal Range',  vorpalRangeBonus, vorpalDisplay,
+      stats.resolve('weapon.vorpal').bonuses, vorpalRangeBonus === 0),
+    fixedRow('Attack Speed',  alacrityTotal, pct(alacrityTotal),
+      stats.resolve('weapon.alacrity').bonuses, alacrityTotal === 0),
     statRow('Doublestrike',   'melee.doublestrike', pct),
     statRow('Sneak Atk Dice', 'melee.sneakDice'),
+    statRow('Sneak Atk Dmg',  'melee.sneakDamage', sign),
     statRow('Strikethrough',  'melee.strikethrough', pct),
   ]
 
@@ -463,7 +491,10 @@ export default function BreakdownsPanel() {
       [...stats.resolve('bab').bonuses, ...stats.resolve('ranged.toHit').bonuses]),
     fixedRow('Threat Range',  20, '20',  [{ value: 20, type: 'Base', source: 'Base', active: true }]),
     fixedRow('Crit Multiplier', 2, '×2', [{ value: 2,  type: 'Base', source: 'Base', active: true }]),
+    fixedRow('Attack Speed',  alacrityTotal, pct(alacrityTotal),
+      stats.resolve('weapon.alacrity').bonuses, alacrityTotal === 0),
     statRow('Doubleshot',     'ranged.doubleshot', pct),
+    statRow('Sneak Atk Dmg',  'ranged.sneakDamage', sign),
   ]
 
   const spellStats: StatRowData[] = [

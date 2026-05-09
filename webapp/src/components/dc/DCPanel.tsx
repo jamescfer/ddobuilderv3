@@ -3,7 +3,7 @@ import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type {
   Ability, DDOClass, Race, Feat, EnhancementTree, Item,
-  Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, Buff, GuildBuff,
+  Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, Buff, GuildBuff, WeaponGroup,
 } from '../../types/ddo'
 import { SPELL_SCHOOLS } from '../../lib/gamedata'
 import { useBuildStats } from '../../hooks/useBuildStats'
@@ -85,6 +85,7 @@ export default function DCPanel() {
   const [allFiligrees,       setAllFiligrees]       = useState<Filigree[]>([])
   const [allItemBuffs,       setAllItemBuffs]       = useState<Buff[]>([])
   const [allGuildBuffs,      setAllGuildBuffs]      = useState<GuildBuff[]>([])
+  const [allWeaponGroups,    setAllWeaponGroups]    = useState<WeaponGroup[]>([])
   const [gearItems,          setGearItems]          = useState<Record<string, Item>>({})
 
   useEffect(() => {
@@ -99,6 +100,7 @@ export default function DCPanel() {
     api.filigree().then(setAllFiligrees)
     api.itemBuffs().then(setAllItemBuffs)
     api.guildbuffs().then(setAllGuildBuffs)
+    api.weaponGroups().then(setAllWeaponGroups)
   }, [])
 
   useEffect(() => {
@@ -121,10 +123,10 @@ export default function DCPanel() {
   const statsInput = useMemo(() => ({
     allClasses, allRaces, allFeats, allTrees, gearItems,
     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-    allItemBuffs, allGuildBuffs,
+    allItemBuffs, allGuildBuffs, allWeaponGroups,
   }), [allClasses, allRaces, allFeats, allTrees, gearItems,
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-      allItemBuffs, allGuildBuffs])
+      allItemBuffs, allGuildBuffs, allWeaponGroups])
 
   const stats = useBuildStats(statsInput)
 

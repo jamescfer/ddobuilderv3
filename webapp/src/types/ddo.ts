@@ -347,6 +347,15 @@ export interface GuildBuff {
 }
 
 // ---------------------------------------------------------------------------
+// Weapon group (WeaponGroupings.xml). V2 uses these to gate weapon-class
+// effects (Martial / Simple / OneHanded / TwoHanded / Light / Bows / etc.).
+// ---------------------------------------------------------------------------
+export interface WeaponGroup {
+  Name: string
+  Weapon?: string | string[]
+}
+
+// ---------------------------------------------------------------------------
 // Patron / Favor
 // ---------------------------------------------------------------------------
 export interface Patron {

@@ -15,7 +15,7 @@ import { SKILLS } from '../lib/gamedata'
 import type {
   Race, DDOClass, Feat, EnhancementTree, EnhancementTreeItem, Item,
   Effect, EnhancementSelection, Augment, SetBonus, FiligreeSetBonus, Filigree,
-  OptionalBuff, FiligreeSlot, Buff, GuildBuff,
+  OptionalBuff, FiligreeSlot, Buff, GuildBuff, WeaponGroup,
 } from '../types/ddo'
 import { parseEffect, resolveItemBuff, buildBuffIndex } from '../lib/effectParser'
 import type { EffectContext } from '../lib/effectParser'
@@ -74,6 +74,9 @@ export interface BuildStatsInput {
   allItemBuffs?: Buff[]
   /** GuildBuffs.xml — applied based on build.guildLevel. Optional. */
   allGuildBuffs?: GuildBuff[]
+  /** WeaponGroupings.xml — drives weapon-class membership for V2 weapon
+   * effect gating (Weapon_AlacrityClass, WeaponAttackBonusClass, etc.). */
+  allWeaponGroups?: WeaponGroup[]
 }
 
 // ---------------------------------------------------------------------------
@@ -629,6 +632,38 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       if (item.Weapon) ctxWeaponTypes.add(item.Weapon)
     }
 
+    // V2 weapon-class memberships (WeaponGroupings.xml). For each equipped
+    // weapon name, look up which groups it belongs to (e.g. GreatAxe →
+    // Martial, Two Handed, Axe, etc.) so weapon-class effects can gate.
+    const wgIndex = (() => {
+      const map = new Map<string, Set<string>>()
+      if (!input.allWeaponGroups) return map
+      for (const wg of input.allWeaponGroups) {
+        const weapons = Array.isArray(wg.Weapon) ? wg.Weapon : (wg.Weapon ? [wg.Weapon] : [])
+        for (const w of weapons) {
+          const key = w.replace(/\s+/g, '')  // V2 enum uses no-space form ("GreatAxe")
+          for (const variant of [w, key]) {
+            const set = map.get(variant) ?? new Set<string>()
+            set.add(wg.Name)
+            map.set(variant, set)
+          }
+        }
+      }
+      return map
+    })()
+    function weaponClassesOf(slotKeys: string[]): Set<string> {
+      const out = new Set<string>()
+      for (const sk of slotKeys) {
+        const item = gearItems[sk]
+        if (!item?.Weapon) continue
+        const set = wgIndex.get(item.Weapon)
+        if (set) for (const c of set) out.add(c)
+      }
+      return out
+    }
+    const ctxWeaponClassMain    = weaponClassesOf(['Weapon1', 'MainHand', 'Weapon'])
+    const ctxWeaponClassOffhand = weaponClassesOf(['Weapon2', 'OffHand'])
+
     // V2 AType=FeatCount uses the number of times a feat has been trained.
     // Feat slots can repeat (e.g. Improved Critical for different weapon
     // groups). featChoices is a flat map of slotKey → featName, so we count
@@ -667,6 +702,8 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       weaponTypes: ctxWeaponTypes,
       featCounts: ctxFeatCounts,
       setBonusCounts: ctxSetBonusCounts,
+      weaponClassMain: ctxWeaponClassMain.size > 0 ? ctxWeaponClassMain : undefined,
+      weaponClassOffhand: ctxWeaponClassOffhand.size > 0 ? ctxWeaponClassOffhand : undefined,
     }
 
     // ── Ability base scores ───────────────────────────────────────────────
