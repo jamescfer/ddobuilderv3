@@ -639,6 +639,130 @@ export default function BreakdownsPanel() {
     }
   }
 
+  // ── Weapon Crit & On-Hit (slice 4b parser keys) ──────────────────────────
+  const weaponCritRows: StatRowData[] = []
+  {
+    const keen = stats.resolve('weapon.keen')
+    weaponCritRows.push({
+      label: 'Keen',
+      total: keen.total,
+      display: keen.total > 0 ? '✓' : '—',
+      bonuses: keen.bonuses,
+      dim: keen.total === 0,
+    })
+
+    const cm1920 = stats.resolve('weapon.critMult19to20')
+    weaponCritRows.push({
+      label: 'Crit Mult (19-20)',
+      total: cm1920.total,
+      display: cm1920.total !== 0 ? `×${cm1920.total}` : '—',
+      bonuses: cm1920.bonuses,
+      dim: cm1920.total === 0,
+    })
+
+    const toHitCrit = stats.resolve('weapon.toHitCrit')
+    weaponCritRows.push({
+      label: 'Crit-only To-Hit',
+      total: toHitCrit.total,
+      display: sign(toHitCrit.total),
+      bonuses: toHitCrit.bonuses,
+      dim: toHitCrit.total === 0,
+    })
+
+    const damageCrit = stats.resolve('weapon.damageCrit')
+    weaponCritRows.push({
+      label: 'Crit-only Damage',
+      total: damageCrit.total,
+      display: sign(damageCrit.total),
+      bonuses: damageCrit.bonuses,
+      dim: damageCrit.total === 0,
+    })
+
+    const otherDamage = stats.resolve('weapon.otherDamage')
+    weaponCritRows.push({
+      label: 'On-Hit Damage Bonus',
+      total: otherDamage.total,
+      display: sign(otherDamage.total),
+      bonuses: otherDamage.bonuses,
+      dim: otherDamage.total === 0,
+    })
+
+    const otherDamageCrit = stats.resolve('weapon.otherDamageCrit')
+    weaponCritRows.push({
+      label: 'On-Hit Crit Bonus',
+      total: otherDamageCrit.total,
+      display: sign(otherDamageCrit.total),
+      bonuses: otherDamageCrit.bonuses,
+      dim: otherDamageCrit.total === 0,
+    })
+
+    for (const k of stats.keys()) {
+      if (k.startsWith('weapon.attackAbility.')) {
+        const ab = k.slice('weapon.attackAbility.'.length)
+        const r = stats.resolve(k)
+        weaponCritRows.push({
+          label: `Attack Ability: ${ab}`,
+          total: r.total,
+          display: r.total > 0 ? '✓' : '—',
+          bonuses: r.bonuses,
+          dim: r.total === 0,
+        })
+      } else if (k.startsWith('weapon.damageAbilityCrit.')) {
+        const ab = k.slice('weapon.damageAbilityCrit.'.length)
+        const r = stats.resolve(k)
+        weaponCritRows.push({
+          label: `Crit Damage Ability: ${ab}`,
+          total: r.total,
+          display: r.total > 0 ? '✓' : '—',
+          bonuses: r.bonuses,
+          dim: r.total === 0,
+        })
+      } else if (k.startsWith('weapon.damageAbility.')) {
+        const ab = k.slice('weapon.damageAbility.'.length)
+        const r = stats.resolve(k)
+        weaponCritRows.push({
+          label: `Damage Ability: ${ab}`,
+          total: r.total,
+          display: r.total > 0 ? '✓' : '—',
+          bonuses: r.bonuses,
+          dim: r.total === 0,
+        })
+      }
+    }
+  }
+  const weaponCritVisible = weaponCritRows.filter(r => !r.dim)
+
+  // ── Class Resources (Ki / Rune Arm / Dragonmark) ─────────────────────────
+  const classResourceRows: StatRowData[] = []
+  {
+    const KI_KEYS = [
+      { key: 'ki.critical', label: 'Ki: Critical Bonus' },
+      { key: 'ki.hit',      label: 'Ki: Hit Bonus' },
+      { key: 'ki.max',      label: 'Ki: Max' },
+      { key: 'ki.passive',  label: 'Ki: Passive Regen' },
+    ] as const
+    for (const { key, label } of KI_KEYS) {
+      const r = stats.resolve(key)
+      if (r.total !== 0) {
+        classResourceRows.push(fixedRow(label, r.total, sign(r.total), r.bonuses))
+      }
+    }
+
+    const ra1 = stats.resolve('runeArm.chargeRate')
+    if (ra1.total !== 0) {
+      classResourceRows.push(fixedRow('Rune Arm Charge Rate', ra1.total, sign(ra1.total), ra1.bonuses))
+    }
+    const ra2 = stats.resolve('runeArm.stableCharge')
+    if (ra2.total !== 0) {
+      classResourceRows.push(fixedRow('Rune Arm Stable Charge', ra2.total, sign(ra2.total), ra2.bonuses))
+    }
+
+    const dm = stats.resolve('dragonmark.uses')
+    if (dm.total !== 0) {
+      classResourceRows.push(fixedRow('Dragonmark Uses', dm.total, sign(dm.total), dm.bonuses))
+    }
+  }
+
   const skillStats: StatRowData[] = SKILLS.map(({ name }) => {
     const resolved = stats.resolve(`skill.${name}`)
     return {
@@ -845,6 +969,18 @@ export default function BreakdownsPanel() {
                     </span>
                   </div>
                 ))}
+              </Section>
+            )}
+
+            {weaponCritVisible.length > 0 && (
+              <Section title="Weapon Crit &amp; On-Hit" defaultOpen={false}>
+                {weaponCritRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {classResourceRows.length > 0 && (
+              <Section title="Class Resources" defaultOpen={false}>
+                {classResourceRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
               </Section>
             )}
 
