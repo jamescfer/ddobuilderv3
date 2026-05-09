@@ -994,6 +994,19 @@ export function parseEffect(
       return [make('ki.passive')]
 
     // -----------------------------------------------------------------------
+    // Eldritch Blast pact dice (warlock). V2 BreakdownItemPactDice tracks the
+    // number of d6/d8 dice via Effect_EldritchBlastD6 / Effect_EldritchBlastD8;
+    // the breakdown's final value is rendered as `<count>d<size>`. We map each
+    // contribution as a 'Stacking' bonus to a shared count stat key so they all
+    // sum (V2 sums every contribution unconditionally).
+    // -----------------------------------------------------------------------
+    case 'EldritchBlastD6':
+      return [make('eldritchBlast.d6', 'Stacking')]
+
+    case 'EldritchBlastD8':
+      return [make('eldritchBlast.d8', 'Stacking')]
+
+    // -----------------------------------------------------------------------
     // Songs (bard) — V2 emits these as Music-typed bonuses to the corresponding
     // primary stat key. We carry the V2 stat shape and tag the bonus type as
     // 'Music' so they stack-resolve correctly under the bard exclusive type.
@@ -1917,6 +1930,10 @@ export function parseItemBuff(buff: ItemBuff, source: string, ctx?: EffectContex
     case 'KiHit':                  return [make('ki.hit')]
     case 'KiMaximum':              return [make('ki.max')]
     case 'KiPassive':              return [make('ki.passive')]
+
+    // V2 BreakdownItemPactDice: warlock eldritch blast dice (d6/d8 counts).
+    case 'EldritchBlastD6':        return [make('eldritchBlast.d6', 'Stacking')]
+    case 'EldritchBlastD8':        return [make('eldritchBlast.d8', 'Stacking')]
 
     // -----------------------------------------------------------------------
     // Helpless / damage ability multiplier / divine grace

@@ -7,10 +7,11 @@ import type { ResolvedBonus } from '../../lib/bonus'
 import { SKILLS, SCHOOL_DCS, SPELL_POWER_TYPES, SPELL_POWER_LABELS } from '../../lib/gamedata'
 import {
   MAX_BAB,
-  applyBabCap, applyDodgeCap, applyCasterLevelCap, applyMRRCap,
+  applyBabCap, applyDodgeCap, applyMRRCap,
   effectiveMDB, mitigationPercent, multiplicativeAbsorption,
   TACTICAL_TYPES, TURN_UNDEAD_KEYS, HEAL_AMP_KEYS, THREAT_KEYS, BYPASS_KEYS,
 } from '../../lib/breakdowns'
+import { buildSpellClassIndex } from '../../lib/spells'
 import styles from './BreakdownsPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -503,20 +504,18 @@ export default function BreakdownsPanel() {
     statRow('Sneak Atk Dmg',  'ranged.sneakDamage', sign),
   ]
 
+  // V2 BreakdownItemCasterLevel: per-class effective caster level + cap. Lifted
+  // out of spellStats into a dedicated "Caster Levels" section below so that
+  // the Spellcasting section stays focused on SP / penetration / DCs and the
+  // CL family can grow (energy CL etc.) without crowding it.
+  const casterLevelStats: StatRowData[] = casterClasses.map(({ name }) => {
+    const cl = stats.casterLevelOf(name)
+    const display = cl.capped ? `${cl.total} (capped from ${cl.raw})` : String(cl.total)
+    return fixedRow(`${name} CL`, cl.total, display, cl.bonuses)
+  })
+
   const spellStats: StatRowData[] = [
     fixedRow('Spell Points', spTotal, String(spTotal), stats.resolve('spellPoints').bonuses, spTotal === 0),
-    ...casterClasses.map(({ name, levels }) => {
-      const cl = applyCasterLevelCap({
-        className: name,
-        classLevels: levels,
-        classCl: stats.resolve(`cl.${name}`),
-        allCl: stats.resolve('cl.All'),
-        classMaxCl: stats.resolve(`maxCl.${name}`),
-        allMaxCl: stats.resolve('maxCl.All'),
-      })
-      const display = cl.capped ? `${cl.total} (capped from ${cl.raw})` : String(cl.total)
-      return fixedRow(`${name} CL`, cl.total, display, cl.bonuses)
-    }),
     statRow('Spell Penetration', 'spellPenetration'),
     ...SCHOOL_DCS.map(school => statRow(`${school} DC`, `dc.${school}`)),
   ]
@@ -640,6 +639,48 @@ export default function BreakdownsPanel() {
       if (r.total !== 0) spellSpecificCLRows.push(fixedRow(`CL: ${t}`, r.total, sign(r.total), r.bonuses))
     }
   }
+
+  // ── V2 BreakdownItemEnergyCasterLevel: per-element effective CL ──────────
+  // V2 formula: highest casting class CL + Effect_CasterLevelEnergy (clEnergy.<X>)
+  //             + universal CL bonuses (cl.All).
+  // Hide elements with 0 contribution (no clEnergy.<X> bonuses present).
+  const energyCLRows: StatRowData[] = (() => {
+    // Highest casting class CL across the build's casting classes.
+    let bestClassName: string | null = null
+    let bestClassCL = 0
+    for (const { name } of casterClasses) {
+      const cl = stats.casterLevelOf(name)
+      if (cl.total > bestClassCL) {
+        bestClassCL = cl.total
+        bestClassName = name
+      }
+    }
+    if (!bestClassName) return []
+
+    const rows: StatRowData[] = []
+    for (const energyKey of stats.keys()) {
+      if (!energyKey.startsWith('clEnergy.')) continue
+      const elem = energyKey.slice('clEnergy.'.length)
+      const energyResolved = stats.resolve(energyKey)
+      if (energyResolved.total === 0) continue
+      const total = bestClassCL + energyResolved.total
+      const label = SPELL_POWER_LABELS[elem] ?? elem
+      // V2: per-element CL = class CL (which already includes cl.All) +
+      // clEnergy.<X> bonuses. Surface the class CL summary row + per-element
+      // bonuses in the tooltip.
+      const bonuses: ResolvedBonus[] = [
+        {
+          value: bestClassCL,
+          type: 'Caster Level',
+          source: `${bestClassName} effective CL (incl. universal CL)`,
+          active: true,
+        },
+        ...energyResolved.bonuses,
+      ]
+      rows.push(fixedRow(`${label} CL`, total, String(total), bonuses))
+    }
+    return rows
+  })()
 
   // ── Weapon Crit & On-Hit (slice 4b parser keys) ──────────────────────────
   const weaponCritRows: StatRowData[] = []
@@ -874,11 +915,11 @@ export default function BreakdownsPanel() {
   //   dpsBase       = base * (1 + spellPower / 100)
   //   dpsWithCrit   = dpsBase * (1 + (critPct / 100) * (critMult - 1))
   //
-  // Per-class CL isn't directly available without more wiring, so we use
-  // build.totalLevel as the effective CL (clamped to MaxCasterLevel). This
-  // is an approximation: a 10 Wizard / 10 Fighter shows CL 20 for Magic
-  // Missile rather than 10. Slice E can swap in per-class CL if/when the
-  // panel grows that capability.
+  // V2 BreakdownItemSpellDamage uses the *casting class's* per-class caster
+  // level, not the character's total level. We resolve which class casts each
+  // spell via the Class XML <ClassSpell> entries (buildSpellClassIndex), then
+  // pick the highest CL among the build's classes that know the spell. Spells
+  // no class in the build can cast are hidden (V2 doesn't show them either).
   function num(v: number | string | undefined, fallback = 0): number {
     if (v == null) return fallback
     if (typeof v === 'number') return v
@@ -898,21 +939,43 @@ export default function BreakdownsPanel() {
     spBonuses: ResolvedBonus[]
     critBonuses: ResolvedBonus[]
     cl: number
+    castingClass: string
     damage: string
     powerKey: string
   }
 
+  // Spell -> class names index (memoized: rebuilds only when the class XML
+  // pool changes). A spell may belong to multiple classes (e.g. Magic Missile
+  // is on both the Wizard and Sorcerer lists).
+  const spellClassIndex = useMemo(() => buildSpellClassIndex(allClasses), [allClasses])
+  const buildClassNames = useMemo(
+    () => build.classes.filter(c => c.name && c.levels > 0).map(c => c.name),
+    [build.classes],
+  )
+
   const spellDamageRows: SpellDmgRow[] = []
   {
-    const buildCL = build.totalLevel  // approximation; per-class CL not threaded in panel
     for (const spell of allSpells) {
       const damages = spell.SpellDamage == null
         ? []
         : Array.isArray(spell.SpellDamage) ? spell.SpellDamage : [spell.SpellDamage]
       if (damages.length === 0) continue                                   // utility spell, skip
 
+      // V2 parity: pick the highest-CL casting class in the build that knows
+      // this spell. If none of the build's classes can cast it, hide the row.
+      const knownBy = spellClassIndex.get(spell.Name) ?? []
+      let bestClass = ''
+      let bestCL = -1
+      for (const c of knownBy) {
+        if (!buildClassNames.includes(c)) continue
+        const cl = stats.casterLevelOf(c).total
+        if (cl > bestCL) { bestCL = cl; bestClass = c }
+      }
+      if (bestCL < 0) continue   // no class in the build knows this spell
+
       const maxCL = num(spell.MaxCasterLevel, Infinity)
-      const effCL = Math.min(maxCL, buildCL)
+      const effCL = Math.min(maxCL, bestCL)
+      const castingClass = bestClass
 
       for (const dmg of damages) {
         const rawPower = dmg.SpellPower
@@ -992,6 +1055,7 @@ export default function BreakdownsPanel() {
           spBonuses,
           critBonuses,
           cl: effCL,
+          castingClass,
           damage: dmg.Damage ?? '',
           powerKey,
         })
@@ -1144,6 +1208,12 @@ export default function BreakdownsPanel() {
               {spellStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
             </Section>
 
+            {casterLevelStats.length > 0 && (
+              <Section title="Caster Levels" defaultOpen={casterLevelStats.length > 0}>
+                {casterLevelStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
             <Section title="Combat">
               {miscStats.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
             </Section>
@@ -1259,7 +1329,7 @@ export default function BreakdownsPanel() {
                     {spellDamageBySchool.get(school)!.map(row => {
                       const display = `${Math.floor(row.dpsBase)} (${Math.floor(row.dpsCrit)} w/crit)`
                       const tipBonuses: ResolvedBonus[] = [
-                        { value: row.cl, type: 'CL', source: `Effective caster level (cap ${row.spell.MaxCasterLevel != null ? num(row.spell.MaxCasterLevel, 0) : '—'})`, active: true },
+                        { value: row.cl, type: 'CL', source: `${row.castingClass} caster level (cap ${row.spell.MaxCasterLevel != null ? num(row.spell.MaxCasterLevel, 0) : '—'})`, active: true },
                         { value: 0, type: 'Dice', source: row.diceText, active: true },
                         { value: row.spellPower, type: 'Spell Power', source: `${row.powerKey} + Universal`, active: true },
                         ...row.spBonuses,
@@ -1287,6 +1357,12 @@ export default function BreakdownsPanel() {
                     })}
                   </div>
                 ))}
+              </Section>
+            )}
+
+            {energyCLRows.length > 0 && (
+              <Section title="Energy Caster Levels" defaultOpen={false}>
+                {energyCLRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
               </Section>
             )}
 
