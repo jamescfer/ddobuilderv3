@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, Buff, GuildBuff, WeaponGroup } from '../../types/ddo'
-import { useBuildStats } from '../../hooks/useBuildStats'
+import type { DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff, Buff, GuildBuff, WeaponGroup, Patron, Quest } from '../../types/ddo'
+import { useBuildStats, computePatronFavorTotals, favorRankForTotal } from '../../hooks/useBuildStats'
 import type { ResolvedBonus } from '../../lib/bonus'
 import { SKILLS, SCHOOL_DCS, SPELL_POWER_TYPES, SPELL_POWER_LABELS } from '../../lib/gamedata'
 import {
@@ -216,6 +216,8 @@ export default function BreakdownsPanel() {
   const [allWeaponGroups,   setAllWeaponGroups]   = useState<WeaponGroup[]>([])
   const [gearItems,         setGearItems]         = useState<Record<string, Item>>({})
   const [tip, setTip] = useState<TipState | null>(null)
+  const [allPatrons,        setAllPatrons]        = useState<Patron[]>([])
+  const [allQuests,         setAllQuests]         = useState<Quest[]>([])
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Load static data once
@@ -232,6 +234,8 @@ export default function BreakdownsPanel() {
     api.itemBuffs().then(setAllItemBuffs)
     api.guildbuffs().then(setAllGuildBuffs)
     api.weaponGroups().then(setAllWeaponGroups)
+    api.patrons().then(setAllPatrons)
+    api.quests().then(setAllQuests)
   }, [])
 
   // Resolve gear items whenever equipped slots change
@@ -259,11 +263,11 @@ export default function BreakdownsPanel() {
     () => ({
       allClasses, allRaces, allFeats, allTrees, gearItems,
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-      allItemBuffs, allGuildBuffs, allWeaponGroups,
+      allItemBuffs, allGuildBuffs, allWeaponGroups, allPatrons, allQuests,
     }),
     [allClasses, allRaces, allFeats, allTrees, gearItems,
      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-     allItemBuffs, allGuildBuffs, allWeaponGroups],
+     allItemBuffs, allGuildBuffs, allWeaponGroups, allPatrons, allQuests],
   )
   const stats = useBuildStats(statsInput)
 
@@ -646,6 +650,36 @@ export default function BreakdownsPanel() {
     }
   })
 
+  // Patron favor totals + tier rank for the optional Patron Favor section.
+  // Computed inline so we can render an empty section conditionally.
+  const patronFavorRows: Array<{ name: string; total: number; rank: number; maxTier: number }> = []
+  {
+    const totals = computePatronFavorTotals(build.completedQuests ?? {}, allQuests)
+    for (const patron of allPatrons) {
+      const total = totals.get(patron.Name) ?? 0
+      if (total <= 0) continue
+      const tiersRaw = patron.FavorTiers
+      const tiers: number[] = (() => {
+        if (tiersRaw == null) return []
+        if (typeof tiersRaw === 'string') return tiersRaw.split(/\s+/).map(Number).filter(n => !isNaN(n))
+        if (typeof tiersRaw === 'number') return [tiersRaw]
+        if (typeof tiersRaw === 'object') {
+          const obj = tiersRaw as Record<string, unknown>
+          const text = obj['#text']
+          if (typeof text === 'string') return text.split(/\s+/).map(Number).filter(n => !isNaN(n))
+          if (typeof text === 'number') return [text]
+        }
+        return []
+      })()
+      patronFavorRows.push({
+        name: patron.Name,
+        total,
+        rank: favorRankForTotal(total, tiers),
+        maxTier: tiers.length,
+      })
+    }
+  }
+
   const hasCharacter = build.race || build.classes.some(c => c.name)
 
   return (
@@ -798,6 +832,19 @@ export default function BreakdownsPanel() {
             {metamagicRows.length > 0 && (
               <Section title="Metamagic Costs" defaultOpen={false}>
                 {metamagicRows.map(s => <StatRow key={s.label} stat={s} onTip={setTip} />)}
+              </Section>
+            )}
+
+            {patronFavorRows.length > 0 && (
+              <Section title="Patron Favor" defaultOpen={false}>
+                {patronFavorRows.map(r => (
+                  <div key={r.name} className={styles.row}>
+                    <span className={styles.label}>{r.name}</span>
+                    <span className={styles.value}>
+                      {r.total} (tier {r.rank}/{r.maxTier})
+                    </span>
+                  </div>
+                ))}
               </Section>
             )}
 

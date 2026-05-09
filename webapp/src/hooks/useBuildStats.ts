@@ -15,7 +15,7 @@ import { SKILLS } from '../lib/gamedata'
 import type {
   Race, DDOClass, Feat, EnhancementTree, EnhancementTreeItem, Item,
   Effect, EnhancementSelection, Augment, SetBonus, FiligreeSetBonus, Filigree,
-  OptionalBuff, FiligreeSlot, Buff, GuildBuff, WeaponGroup,
+  OptionalBuff, FiligreeSlot, Buff, GuildBuff, WeaponGroup, Patron, Quest,
 } from '../types/ddo'
 import { parseEffect, resolveItemBuff, buildBuffIndex } from '../lib/effectParser'
 import type { EffectContext } from '../lib/effectParser'
@@ -77,6 +77,10 @@ export interface BuildStatsInput {
   /** WeaponGroupings.xml — drives weapon-class membership for V2 weapon
    * effect gating (Weapon_AlacrityClass, WeaponAttackBonusClass, etc.). */
   allWeaponGroups?: WeaponGroup[]
+  /** Patrons.xml — used to map favor totals to favor-tier feat ranks. */
+  allPatrons?: Patron[]
+  /** Quests.xml — used to sum favor per patron from completed quests. */
+  allQuests?: Quest[]
 }
 
 // ---------------------------------------------------------------------------
@@ -512,6 +516,93 @@ function accumulateTwists(
 }
 
 // ---------------------------------------------------------------------------
+// V2 Patron favor accumulation — sum favor per patron across completed quests,
+// determine the favor-tier rank reached (= number of FavorTiers thresholds the
+// total meets/exceeds), and apply the patron's AssociatedFavorFeat at that
+// rank using accumulateFeat. The favor feat's <Effect> blocks use AType=Stacks
+// with an Amount array indexed by tier rank; accumulateFeat passes rank to
+// parseEffect which selects the right slot.
+// ---------------------------------------------------------------------------
+
+function parsePatronFavorTiers(raw: unknown): number[] {
+  if (raw == null) return []
+  if (typeof raw === 'string') return raw.split(/\s+/).map(Number).filter(n => !isNaN(n))
+  if (typeof raw === 'number') return [raw]
+  if (typeof raw === 'object' && raw !== null) {
+    const obj = raw as Record<string, unknown>
+    const text = obj['#text']
+    if (typeof text === 'string') return text.split(/\s+/).map(Number).filter(n => !isNaN(n))
+    if (typeof text === 'number') return [text]
+  }
+  return []
+}
+
+/**
+ * Compute total favor per patron from `completedQuests` (questName → bool).
+ * Returns a map of patronName → totalFavor (only patrons with > 0 favor).
+ */
+export function computePatronFavorTotals(
+  completedQuests: Record<string, boolean>,
+  allQuests: Quest[],
+): Map<string, number> {
+  const totals = new Map<string, number>()
+  if (!completedQuests || !allQuests?.length) return totals
+  // Build a quick name→quest index for completed lookups
+  const questByName = new Map<string, Quest>()
+  for (const q of allQuests) if (q?.Name) questByName.set(q.Name, q)
+  for (const [name, done] of Object.entries(completedQuests)) {
+    if (!done) continue
+    const q = questByName.get(name)
+    if (!q) continue
+    const patron = q.Patron
+    const favor = typeof q.Favor === 'number' ? q.Favor : 0
+    if (!patron || favor <= 0) continue
+    totals.set(patron, (totals.get(patron) ?? 0) + favor)
+  }
+  return totals
+}
+
+/**
+ * Given a favor total and a patron's tier thresholds, return the rank reached
+ * (= count of thresholds met or exceeded; e.g. tiers [75,150,400,700] with
+ * total 200 → rank 2).
+ */
+export function favorRankForTotal(total: number, tiers: number[]): number {
+  let rank = 0
+  for (const threshold of tiers) {
+    if (total >= threshold) rank++
+    else break
+  }
+  return rank
+}
+
+function accumulateFavor(
+  map: StatMap,
+  completedQuests: Record<string, boolean>,
+  allPatrons: Patron[],
+  allQuests: Quest[],
+  allFeats: Feat[],
+  totalLevel: number,
+  ctx?: EffectContext,
+): void {
+  if (!allPatrons?.length || !allQuests?.length) return
+  const totals = computePatronFavorTotals(completedQuests, allQuests)
+  if (totals.size === 0) return
+  for (const patron of allPatrons) {
+    const total = totals.get(patron.Name) ?? 0
+    if (total <= 0) continue
+    const tiers = parsePatronFavorTiers(patron.FavorTiers)
+    const rank = favorRankForTotal(total, tiers)
+    if (rank <= 0) continue
+    const featName = patron.AssociatedFavorFeat
+    if (!featName) continue
+    const feat = allFeats.find(f => f.Name === featName)
+    if (!feat) continue
+    accumulateFeat(map, feat, rank, `Patron favor: ${patron.Name} (tier ${rank})`, totalLevel, ctx)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Weapon info extractor
 // ---------------------------------------------------------------------------
 
@@ -822,6 +913,19 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
 
     // ── Twists of Fate ───────────────────────────────────────────────────
     accumulateTwists(map, build.twistChoices ?? [], build.unlockedDestinyTrees ?? [], allTrees, ctx)
+
+    // ── Patron favor (V2 Build::ApplyFavorBonuses port) ───────────────────
+    if (input.allPatrons?.length && input.allQuests?.length) {
+      accumulateFavor(
+        map,
+        build.completedQuests ?? {},
+        input.allPatrons,
+        input.allQuests,
+        allFeats,
+        build.totalLevel,
+        ctx,
+      )
+    }
 
     // ── Skill tomes ───────────────────────────────────────────────────────
     for (const [skill, bonus] of Object.entries(build.skillTomes ?? {})) {
