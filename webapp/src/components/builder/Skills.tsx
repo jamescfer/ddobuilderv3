@@ -11,10 +11,6 @@ type SkillName = typeof SKILLS[number]['name']
 // V2 skills that require class-skill status to train at all.
 const RESTRICTED_SKILLS = new Set<string>(['Disable Device', 'Open Lock'])
 
-function intModifier(score: number): number {
-  return Math.floor((score - 10) / 2)
-}
-
 function getClassSkills(classes: { name: string; levels: number }[], allClasses: DDOClass[]): Set<string> {
   const classSkills = new Set<string>()
   for (const bc of classes) {
@@ -31,14 +27,15 @@ function getClassSkills(classes: { name: string; levels: number }[], allClasses:
  * V2 Class::SkillPoints — per-level skill points for a class.
  * `points = max(1, classBase + raceBonus + intModForLevel)`, ×4 at character level 1.
  *
- * V3 walks the per-level class array (V2 m_Levels parity) so the
- * character-level-1 ×4 multiplier uses the class actually taken at level 1
- * — not whichever class happens to be first in the aggregate triple.
+ * V3 walks the per-level class array (V2 m_Levels parity) AND the per-level
+ * INT progression — a build that swaps INT-low / INT-high classes around
+ * gets the INT mod *as it was at that character level*, including level-up
+ * bonuses awarded by then.
  */
 function calcTotalSkillPoints(
-  build: Pick<CharacterBuild, 'classes' | 'levelClasses' | 'totalLevel'>,
+  build: Pick<CharacterBuild, 'classes' | 'levelClasses' | 'totalLevel' | 'baseAbilities' | 'abilityLevelUps'>,
   allClasses: DDOClass[],
-  intMod: number,
+  raceIntBonus: number,
   raceSkillBonus: number,
 ): number {
   const lc = getLevelClasses(build)
@@ -48,6 +45,14 @@ function calcTotalSkillPoints(
     if (!name) continue
     const cls = allClasses.find(c => c.Name === name)
     const basePoints = cls?.SkillPoints ?? 2
+    // INT mod at character level i+1 — use racial bonus + level-ups awarded
+    // by then (V2 BreakdownItemSkill::AbilityModAtLevel).
+    const charLvl = i + 1
+    const intScore = (build.baseAbilities.Intelligence ?? 8) + raceIntBonus +
+      Object.entries(build.abilityLevelUps)
+        .filter(([lvl, ab]) => ab === 'Intelligence' && Number(lvl) <= charLvl)
+        .length
+    const intMod = Math.floor((intScore - 10) / 2)
     const pts = Math.max(1, basePoints + raceSkillBonus + intMod)
     total += i === 0 ? pts * 4 : pts
   }
@@ -67,7 +72,6 @@ export default function Skills() {
   // V3 stores trained levels per skill (V2 storage semantics).
   // ranks displayed = trained for class skills, trained/2 for cross-class.
   const trainedLevels = build.skillRanks
-  const intMod = intModifier(build.baseAbilities.Intelligence)
   // V2 caps the rank-cap at character level 20 (heroic only)
   const heroicLevel = Math.min(20, build.totalLevel)
 
@@ -76,6 +80,7 @@ export default function Skills() {
     [allRaces, build.race],
   )
   const raceSkillBonus = race?.SkillPoints ?? 0
+  const raceIntBonus = Number((race as unknown as { Intelligence?: number } | undefined)?.Intelligence ?? 0) || 0
 
   const classSkills = useMemo(
     () => getClassSkills(build.classes, allClasses),
@@ -83,8 +88,8 @@ export default function Skills() {
   )
 
   const totalAvailable = useMemo(
-    () => calcTotalSkillPoints(build, allClasses, intMod, raceSkillBonus),
-    [build, allClasses, intMod, raceSkillBonus],
+    () => calcTotalSkillPoints(build, allClasses, raceIntBonus, raceSkillBonus),
+    [build, allClasses, raceIntBonus, raceSkillBonus],
   )
 
   const totalSpent = useMemo(() => {

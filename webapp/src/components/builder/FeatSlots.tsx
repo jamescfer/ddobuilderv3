@@ -3,10 +3,12 @@ import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { CharacterBuild, DDOClass, Feat, Race, Requirement, RequiresOneOf } from '../../types/ddo'
 import {
+  abilityAtLevel,
   buildSnapshotAtCharacterLevel,
   characterLevelForClassLevel,
   classLevelsAtLevel,
   getLevelClasses,
+  tomeCapAtLevel,
 } from '../../lib/levelProgression'
 import DdoIcon from '../DdoIcon'
 import styles from './FeatSlots.module.css'
@@ -174,14 +176,21 @@ function totalBAB(build: CharacterBuild, allClasses: DDOClass[]): number {
 // ---------------------------------------------------------------------------
 // Prerequisite checking
 // ---------------------------------------------------------------------------
-function meetsSingleRequirement(req: Requirement, build: CharacterBuild, allClasses: DDOClass[]): boolean {
+function meetsSingleRequirement(req: Requirement, build: CharacterBuild, allClasses: DDOClass[], race?: Race): boolean {
   const item = Array.isArray(req.Item) ? req.Item[0] : req.Item ?? ''
   const value = req.Value ?? 0
 
   switch (req.Type) {
     case 'Ability': {
-      const score = build.baseAbilities[item as keyof typeof build.baseAbilities]
-      return score !== undefined && score >= value
+      // V2 parity: ability score at the snapshot's character level (counts
+      // only level-up bonuses awarded by then, with the tome cap applied
+      // and the racial modifier folded in).
+      const charLvl = Math.max(1, build.totalLevel || 1)
+      const tomeRaw = (build.abilityTomes ?? {})[item as keyof CharacterBuild['abilityTomes']] ?? 0
+      const tome = Math.min(tomeRaw, tomeCapAtLevel(charLvl))
+      const racial = race ? Number((race as unknown as Record<string, unknown>)[item] ?? 0) || 0 : 0
+      const score = abilityAtLevel(build, item as 'Strength', charLvl, racial, tome)
+      return score >= value
     }
     case 'BAB':
       return totalBAB(build, allClasses) >= value
@@ -236,28 +245,28 @@ function meetsSingleRequirement(req: Requirement, build: CharacterBuild, allClas
   }
 }
 
-function meetsOneOfGroup(group: RequiresOneOf, build: CharacterBuild, allClasses: DDOClass[]): boolean {
+function meetsOneOfGroup(group: RequiresOneOf, build: CharacterBuild, allClasses: DDOClass[], race?: Race): boolean {
   const reqs = Array.isArray(group.Requirement) ? group.Requirement : [group.Requirement]
-  return reqs.some(r => meetsSingleRequirement(r, build, allClasses))
+  return reqs.some(r => meetsSingleRequirement(r, build, allClasses, race))
 }
 
-function meetsRequirements(feat: Feat, build: CharacterBuild, allClasses: DDOClass[]): boolean {
+function meetsRequirements(feat: Feat, build: CharacterBuild, allClasses: DDOClass[], race?: Race): boolean {
   const reqs = feat.Requirements
   if (!reqs) return true
 
   if (reqs.Requirement) {
     const list = Array.isArray(reqs.Requirement) ? reqs.Requirement : [reqs.Requirement]
-    if (!list.every(r => meetsSingleRequirement(r, build, allClasses))) return false
+    if (!list.every(r => meetsSingleRequirement(r, build, allClasses, race))) return false
   }
 
   if (reqs.RequiresOneOf) {
     const groups = Array.isArray(reqs.RequiresOneOf) ? reqs.RequiresOneOf : [reqs.RequiresOneOf]
-    if (!groups.every(g => meetsOneOfGroup(g, build, allClasses))) return false
+    if (!groups.every(g => meetsOneOfGroup(g, build, allClasses, race))) return false
   }
 
   if (reqs.RequiresNoneOf) {
     const groups = Array.isArray(reqs.RequiresNoneOf) ? reqs.RequiresNoneOf : [reqs.RequiresNoneOf]
-    if (groups.some(g => meetsOneOfGroup(g, build, allClasses))) return false
+    if (groups.some(g => meetsOneOfGroup(g, build, allClasses, race))) return false
   }
 
   return true
@@ -351,6 +360,7 @@ function getOptions(
   feats: Feat[],
   build: CharacterBuild,
   allClasses: DDOClass[],
+  race?: Race,
 ): FeatOption[] {
   // Snapshot of the build state just before this slot is chosen
   const snap = buildSnapshotForSlot(slot, slots, build)
@@ -379,7 +389,7 @@ function getOptions(
       const featGroups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
       return slotMatchesFeat(slot.featType, featGroups)
     })
-    .map(f => ({ feat: f, prereqsMet: meetsRequirements(f, snap, allClasses) }))
+    .map(f => ({ feat: f, prereqsMet: meetsRequirements(f, snap, allClasses, race) }))
     .sort((a, b) => {
       if (a.prereqsMet !== b.prereqsMet) return a.prereqsMet ? -1 : 1
       return a.feat.Name.localeCompare(b.feat.Name)
@@ -486,8 +496,9 @@ export default function FeatSlots() {
   const slots = buildSlots(build, allClasses, allRaces)
 
   const openSlot = openSlotKey ? slots.find(s => s.key === openSlotKey) : null
+  const currentRace = allRaces.find(r => r.Name === build.race)
   const pickerOptions = openSlot
-    ? getOptions(openSlot, slots, feats, build, allClasses)
+    ? getOptions(openSlot, slots, feats, build, allClasses, currentRace)
     : []
 
   return (

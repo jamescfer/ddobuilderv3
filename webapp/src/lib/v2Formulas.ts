@@ -3,6 +3,43 @@
 // cites the V2 source it mirrors.
 
 /**
+ * V2 BreakdownItemHitpoints.cpp:88-105 — fate-point HP bonus (level 20+).
+ * +2 HP per fate point at character level 20 or higher; 0 otherwise.
+ */
+export function fatePointHpBonus(charLevel: number, fatePoints: number): number {
+  if (charLevel < 20 || fatePoints <= 0) return 0
+  return 2 * fatePoints
+}
+
+/**
+ * V2 BreakdownItemHitpoints.cpp:107-122 — negative-level HP penalty.
+ * −5 HP per negative level (always non-positive).
+ */
+export function negativeLevelHpPenalty(negLevels: number): number {
+  if (negLevels <= 0) return 0
+  return -5 * negLevels
+}
+
+/**
+ * V2 BreakdownItemSpellPoints.cpp:55-72 — fate-point SP bonus.
+ * +1 SP per fate point at character level 20+; 0 otherwise.
+ */
+export function fatePointSpBonus(charLevel: number, fatePoints: number): number {
+  if (charLevel < 20 || fatePoints <= 0) return 0
+  return fatePoints
+}
+
+/**
+ * V2 BreakdownItemSave.cpp:117-131 + BreakdownItemSkill.cpp:152-166 — saves
+ * and skills both lose 1 per negative level. Returns the absolute penalty
+ * (caller subtracts it).
+ */
+export function negativeLevelSavePenalty(negLevels: number): number {
+  return Math.max(0, negLevels)
+}
+
+
+/**
  * V2 BreakdownItemHitpoints.cpp:174-181 — reaper HP cap by character level.
  * Returns the cap (Infinity above level 25).
  */

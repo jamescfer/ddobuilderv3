@@ -423,8 +423,17 @@ export interface CharacterBuild {
   abilityLevelUps: Partial<Record<4 | 8 | 12 | 16 | 20 | 24 | 28 | 32 | 36 | 40, Ability>>
   purchasedPoints: number
   featChoices: Record<string, string>
-  /** skill name → ranks allocated */
+  /** skill name → ranks allocated (legacy total view) */
   skillRanks: Record<string, number>
+  /**
+   * V2 parity: per-character-level skill rank allocation. Outer key is
+   * character level (1–20 heroic), inner key is skill name, value is the
+   * number of trained levels allocated *at that character level*. The total
+   * `skillRanks` is the sum across all character levels but storing the
+   * per-level breakdown lets us enforce per-level rank caps and matches V2
+   * Build::AdjustSkillSpend.
+   */
+  skillRanksByLevel?: Record<number, Record<string, number>>
   /** slot name → equipped item name */
   gear: Record<string, string>
   /** augment key (slot:augmentType:index) → augment name */
@@ -580,6 +589,7 @@ export function emptyBuild(): CharacterBuild {
     purchasedPoints: 0,
     featChoices: {},
     skillRanks: {},
+    skillRanksByLevel: {},
     gear: {},
     augmentChoices: {},
     pastLives: {},

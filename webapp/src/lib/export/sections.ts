@@ -438,6 +438,69 @@ const simpleGear: SectionDef = {
   },
 }
 
+/**
+ * V2 ForumExportDlg.cpp FES_SpecialFeats — feats acquired through past lives,
+ * favor, etc. (V2 stores them on Life::specialFeats). V3 keeps them in
+ * `Life.specialFeats`; for backwards compatibility this section also reads
+ * the legacy build-level `specialFeats` field if it ever existed.
+ */
+const specialFeats: SectionDef = {
+  id: 'SpecialFeats',
+  label: 'Special feats',
+  emit: ({ build }) => {
+    const list = (build as unknown as { specialFeats?: string[] }).specialFeats ?? []
+    if (list.length === 0) return []
+    return [
+      '[b]Special Feats[/b]:',
+      ...list.sort().map(f => `  ${f}`),
+    ]
+  },
+}
+
+/**
+ * V2 ForumExportDlg.cpp FES_FeatSelectionsNoSkills — same as FES_FeatSelections
+ * but with skill-feat slots filtered out. We reuse `featSelections` and drop
+ * any slot whose feat name starts with "Skill:".
+ */
+const featSelectionsNoSkills: SectionDef = {
+  id: 'FeatSelectionsNoSkills',
+  label: 'Feat selections (no skills)',
+  emit: ({ build }) => {
+    const entries = Object.entries(build.featChoices)
+      .filter(([, v]) => v && !/^Skill:|^Skill /i.test(v))
+    if (entries.length === 0) return []
+    const lines = ['[b]Feats (no skills)[/b]:']
+    entries.sort(([a], [b]) => {
+      const al = parseInt(a.match(/^(\d+)/)?.[1] ?? '0', 10)
+      const bl = parseInt(b.match(/^(\d+)/)?.[1] ?? '0', 10)
+      return al - bl
+    })
+    for (const [slot, feat] of entries) lines.push(`  ${slot}: ${feat}`)
+    return lines
+  },
+}
+
+/**
+ * V2 ForumExportDlg.cpp FES_Bonuses — dump every accumulated stat with a
+ * non-zero total. Useful as a "what's contributing to my numbers" debug
+ * export.
+ */
+const bonusesDump: SectionDef = {
+  id: 'Bonuses',
+  label: 'Bonuses',
+  emit: ({ stats }) => {
+    if (!stats) return []
+    const keys = stats.keys().sort()
+    const rows: string[] = []
+    for (const k of keys) {
+      const total = stats.total(k)
+      if (total === 0) continue
+      rows.push(`  ${k}: ${total >= 0 ? '+' : ''}${total}`)
+    }
+    return rows.length > 0 ? ['[b]Accumulated Bonuses[/b]:', ...rows] : []
+  },
+}
+
 const alternateGearLayouts: SectionDef = {
   id: 'AlternateGearLayouts',
   label: 'Alternate gear layouts',
@@ -461,14 +524,17 @@ const alternateGearLayouts: SectionDef = {
 export const DEFAULT_SECTIONS: SectionDef[] = [
   characterHeader,
   pastLives,
+  specialFeats,            // V2 FES_SpecialFeats parity
   abilityScores,
   saves,
   energyResistances,
   featSelections,
+  featSelectionsNoSkills,  // V2 FES_FeatSelectionsNoSkills parity
   grantedFeats,
   automaticFeats,
   consolidatedFeats,
   skills,
+  bonusesDump,             // V2 FES_Bonuses parity
   stances,
   selfAndPartyBuffs,
   enhancements,

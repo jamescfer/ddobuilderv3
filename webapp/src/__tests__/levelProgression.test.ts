@@ -8,11 +8,14 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  abilityAtLevel,
   aggregateLevelClasses,
+  allAbilitiesAtLevel,
   buildSnapshotAtCharacterLevel,
   characterLevelForClassLevel,
   classLevelsAtLevel,
   getLevelClasses,
+  tomeCapAtLevel,
 } from '../lib/levelProgression'
 import { emptyBuild } from '../types/ddo'
 import type { CharacterBuild, DDOClass } from '../types/ddo'
@@ -99,6 +102,44 @@ describe('buildSnapshotAtCharacterLevel', () => {
     expect(snap.classes.find(c => c.name === 'Wizard')?.levels).toBe(1)
     // Fighter shouldn't appear in the truncated aggregate at all
     expect(snap.classes.find(c => c.name === 'Fighter')?.levels ?? 0).toBe(0)
+  })
+})
+
+describe('abilityAtLevel + tomeCapAtLevel', () => {
+  it('counts only level-up bonuses awarded by the snapshot character level', () => {
+    const b = emptyBuild()
+    b.baseAbilities.Strength = 16
+    b.abilityLevelUps = { 4: 'Strength', 8: 'Strength', 12: 'Strength' }
+    expect(abilityAtLevel(b, 'Strength', 1)).toBe(16)
+    expect(abilityAtLevel(b, 'Strength', 4)).toBe(17)
+    expect(abilityAtLevel(b, 'Strength', 8)).toBe(18)
+    expect(abilityAtLevel(b, 'Strength', 11)).toBe(18)
+    expect(abilityAtLevel(b, 'Strength', 12)).toBe(19)
+  })
+
+  it('folds racial and tome bonuses into the score', () => {
+    const b = emptyBuild()
+    b.baseAbilities.Constitution = 14
+    expect(abilityAtLevel(b, 'Constitution', 1, /* race */ 2, /* tome */ 1)).toBe(17)
+  })
+
+  it('caps tome value by character level', () => {
+    expect(tomeCapAtLevel(1)).toBe(2)
+    expect(tomeCapAtLevel(3)).toBe(3)
+    expect(tomeCapAtLevel(7)).toBe(4)
+    expect(tomeCapAtLevel(15)).toBe(6)
+    expect(tomeCapAtLevel(20)).toBe(7)
+    expect(tomeCapAtLevel(34)).toBeGreaterThan(7)
+  })
+
+  it('allAbilitiesAtLevel returns one entry per ability with race+tome+lvlups', () => {
+    const b = emptyBuild()
+    b.baseAbilities.Wisdom = 14
+    b.abilityTomes = { Wisdom: 5 }
+    b.abilityLevelUps = { 4: 'Wisdom' }
+    const at4 = allAbilitiesAtLevel(b, 4, { Wisdom: 2 })
+    // 14 base + 2 race + 1 levelup + min(5, tomeCap@4=3) = 20
+    expect(at4.Wisdom).toBe(20)
   })
 })
 

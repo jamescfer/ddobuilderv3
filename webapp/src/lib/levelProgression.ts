@@ -9,7 +9,7 @@
 // V3 carries `build.levelClasses: string[]` as the authoritative array.
 // Older saves omit it; in that case we deterministically flatten the
 // totals in declaration order so existing data still works.
-import type { BuildClass, CharacterBuild, DDOClass } from '../types/ddo'
+import type { Ability, BuildClass, CharacterBuild, DDOClass } from '../types/ddo'
 
 export const HEROIC_CAP = 20
 export const EPIC_CAP = 10
@@ -129,4 +129,59 @@ export function buildSnapshotAtCharacterLevel(
     classes,
     totalLevel: lc.filter(Boolean).length,
   }
+}
+
+const ABILITIES: readonly Ability[] = [
+  'Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma',
+] as const
+
+/**
+ * V2 parity: Build::AbilityAtLevel — ability score at character level N,
+ * counting only level-up bonuses awarded at multiples of 4 ≤ N. Tomes are
+ * applied subject to the V2 tome-cap-at-level rule (caller should use
+ * `tomeCapAtLevel` before passing in `tomeBonus`). Race bonus is folded in.
+ */
+export function abilityAtLevel(
+  build: Pick<CharacterBuild, 'baseAbilities' | 'abilityLevelUps'>,
+  ability: Ability,
+  charLevel: number,
+  raceBonus: number = 0,
+  tomeBonus: number = 0,
+): number {
+  const base = build.baseAbilities[ability] ?? 8
+  const lvlUps = Object.entries(build.abilityLevelUps)
+    .filter(([lvl, ab]) => ab === ability && Number(lvl) <= charLevel)
+    .length
+  return base + raceBonus + lvlUps + tomeBonus
+}
+
+/**
+ * V2 parity: Life::TomeAtLevel — tome cap by character level.
+ * 2 @ ≤2, 3 @ 3-6, 4 @ 7-10, 5 @ 11-14, 6 @ 15-18, 7 @ 19-21, no cap above.
+ */
+export function tomeCapAtLevel(charLevel: number): number {
+  if (charLevel <= 2) return 2
+  if (charLevel <= 6) return 3
+  if (charLevel <= 10) return 4
+  if (charLevel <= 14) return 5
+  if (charLevel <= 18) return 6
+  if (charLevel <= 21) return 7
+  return 999
+}
+
+/** Returns each ability's score at the given character level (V2 parity). */
+export function allAbilitiesAtLevel(
+  build: Pick<CharacterBuild, 'baseAbilities' | 'abilityLevelUps' | 'abilityTomes'>,
+  charLevel: number,
+  race?: { Strength?: number; Dexterity?: number; Constitution?: number; Intelligence?: number; Wisdom?: number; Charisma?: number },
+): Record<Ability, number> {
+  const out = {} as Record<Ability, number>
+  const tomeCap = tomeCapAtLevel(charLevel)
+  for (const ab of ABILITIES) {
+    const racialRaw = race ? Number(race[ab] ?? 0) || 0 : 0
+    const tomeRaw = build.abilityTomes?.[ab] ?? 0
+    const tome = Math.min(tomeRaw, tomeCap)
+    out[ab] = abilityAtLevel(build, ab, charLevel, racialRaw, tome)
+  }
+  return out
 }

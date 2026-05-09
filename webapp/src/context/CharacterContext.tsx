@@ -17,6 +17,7 @@ type Action =
   | { type: 'SET_ABILITY_LEVELUP'; level: 4 | 8 | 12 | 16 | 20 | 24 | 28 | 32 | 36 | 40; ability: Ability }
   | { type: 'SET_FEAT'; slotKey: string; featName: string }
   | { type: 'SET_SKILL_RANK'; skill: string; rank: number }
+  | { type: 'SET_SKILL_RANK_AT_LEVEL'; level: number; skill: string; rank: number }
   | { type: 'SET_GEAR'; slot: string; itemName: string }
   | { type: 'CLEAR_GEAR'; slot: string }
   | { type: 'SET_AUGMENT'; key: string; augmentName: string }
@@ -101,6 +102,7 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     enhancementPinned: raw.enhancementPinned ?? [],
     legendaryLevels: raw.legendaryLevels ?? 4,
     skillRanks: raw.skillRanks ?? {},
+    skillRanksByLevel: (raw as unknown as { skillRanksByLevel?: Record<number, Record<string, number>> }).skillRanksByLevel ?? {},
     gear: raw.gear ?? {},
     augmentChoices: raw.augmentChoices ?? {},
     pastLives: raw.pastLives ?? {},
@@ -221,6 +223,26 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       return { ...state, featChoices: { ...state.featChoices, [action.slotKey]: action.featName } }
     case 'SET_SKILL_RANK':
       return { ...state, skillRanks: { ...state.skillRanks, [action.skill]: action.rank } }
+    case 'SET_SKILL_RANK_AT_LEVEL': {
+      const byLevel = { ...(state.skillRanksByLevel ?? {}) }
+      const lvl = action.level | 0
+      const at = { ...(byLevel[lvl] ?? {}) }
+      if (action.rank <= 0) delete at[action.skill]
+      else at[action.skill] = action.rank
+      if (Object.keys(at).length === 0) delete byLevel[lvl]
+      else byLevel[lvl] = at
+      // Re-derive the legacy total view so consumers that read skillRanks see it.
+      const totals: Record<string, number> = { ...state.skillRanks }
+      // Wipe any per-level-derived rank from totals, then re-sum.
+      for (const skill of Object.keys(totals)) {
+        let sum = 0
+        for (const lv of Object.keys(byLevel)) {
+          sum += byLevel[lv as unknown as number][skill] ?? 0
+        }
+        if (sum > 0) totals[skill] = sum
+      }
+      return { ...state, skillRanksByLevel: byLevel, skillRanks: totals }
+    }
     case 'SET_GEAR':
       return {
         ...state,
