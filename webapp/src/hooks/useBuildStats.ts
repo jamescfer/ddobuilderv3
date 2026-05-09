@@ -24,6 +24,10 @@ import { resolveBonus, emptyResolvedStat } from '../lib/bonus'
 import type { RawBonus, ResolvedStat } from '../lib/bonus'
 import { deriveWeaponClasses } from '../lib/weapons/groups'
 import type { WeaponGroupSpec } from '../lib/weapons/groups'
+import {
+  reaperHpCap, styleBonusHp, effectiveDodgeCap,
+  divineGraceCap, halfElfLesserDivineGraceCap,
+} from '../lib/v2Formulas'
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -289,6 +293,15 @@ function accumulateGear(map: StatMap, gearItems: Record<string, Item>): void {
     }
     if (item.ShieldBonus) {
       add(map, 'ac', { value: item.ShieldBonus, type: 'Shield', source })
+    }
+    // V2 BreakdownItemAC.cpp:71-82 + BreakdownItemDodge.cpp:55-63: tower
+    // shield items contribute their MaximumDexterityBonus to the dedicated
+    // mdbShields breakdown, which caps DEX-to-AC and dodge when a tower
+    // shield is equipped.
+    const armorType = item.Armor
+    const isTowerShield = armorType === 'TowerShield' || armorType === 'Tower Shield'
+    if (isTowerShield && typeof item.MaximumDexterityBonus === 'number') {
+      add(map, 'mdbShields', { value: item.MaximumDexterityBonus, type: 'Equipment', source })
     }
     // V2 armor check penalty: armor and shield clamped to ≤0, accumulated separately.
     if (item.ArmorCheckPenalty != null && item.ArmorCheckPenalty < 0) {
@@ -807,15 +820,12 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
     if (wisMod !== 0)     add(map, 'save.Will',   { value: wisMod,     type: 'Ability mod', source: 'Wisdom' })
 
     // V2 Divine Grace: Paladin (auto at level 2) and Sacred Fist add CHA mod to all saves,
-    // capped at 2 + 3*levels of the relevant class.
+    // capped at 2 + 3*levels of the relevant class. (BreakdownItemSave.cpp:484-510)
     {
       const palLevels = build.classes.filter(c => c.name === 'Paladin').reduce((s, c) => s + c.levels, 0)
       const sfLevels  = build.classes.filter(c => c.name === 'Sacred Fist').reduce((s, c) => s + c.levels, 0)
-      if (chaMod > 0 && (palLevels >= 2 || sfLevels >= 2)) {
-        const cap = Math.max(
-          palLevels >= 2 ? 2 + 3 * palLevels : 0,
-          sfLevels  >= 2 ? 2 + 3 * sfLevels  : 0,
-        )
+      const cap = divineGraceCap(palLevels, sfLevels)
+      if (chaMod > 0 && cap > 0) {
         const bonus = Math.min(chaMod, cap)
         if (bonus > 0) {
           const src = `Divine Grace (Charisma, capped @ ${cap})`
@@ -839,12 +849,30 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
     // Initiative
     if (dexMod !== 0) add(map, 'initiative', { value: dexMod, type: 'Ability mod', source: 'Dexterity' })
 
-    // AC: base 10 + DEX mod (capped by armor max-dex if armor equipped)
+    // AC: base 10 + DEX mod, capped by armor MDB and (when tower shield
+    // equipped) by tower-shield MDB. V2 BreakdownItemAC.cpp:62-82 applies
+    // both caps in sequence; whichever yields the lowest dex bonus wins.
     add(map, 'ac', { value: 10, type: 'Base', source: 'Base AC' })
     const armorMaxDex = extractArmorMaxDex(gearItems)
-    const effectiveDexForAC = armorMaxDex != null ? Math.min(dexMod, armorMaxDex) : dexMod
+    let effectiveDexForAC = dexMod
+    let dexCapLabel: string | null = null
+    if (armorMaxDex != null && effectiveDexForAC > armorMaxDex) {
+      effectiveDexForAC = armorMaxDex
+      dexCapLabel = `MDB ${armorMaxDex}`
+    }
+    if (armorStances.has('Tower Shield')) {
+      const mdbShieldsTotal = resolveBonus(map.get('mdbShields') ?? []).total
+      if (effectiveDexForAC > mdbShieldsTotal) {
+        effectiveDexForAC = mdbShieldsTotal
+        dexCapLabel = `Tower Shield MDB ${mdbShieldsTotal}`
+      }
+    }
     if (effectiveDexForAC !== 0) {
-      add(map, 'ac', { value: effectiveDexForAC, type: 'Ability mod', source: armorMaxDex != null ? `Dexterity (capped at ${armorMaxDex})` : 'Dexterity' })
+      add(map, 'ac', {
+        value: effectiveDexForAC,
+        type: 'Ability mod',
+        source: dexCapLabel != null ? `Dexterity (capped at ${dexCapLabel})` : 'Dexterity',
+      })
     }
 
     // HP: CON mod correction if gear changed CON
@@ -917,6 +945,9 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
     const armorACP  = Math.min(0, resolveBonus(map.get('armorCheckPenalty') ?? []).total)
     const shieldACP = Math.min(0, resolveBonus(map.get('armorCheckPenaltyShield') ?? []).total)
 
+    // V2 BreakdownItemSkill.cpp:152-166 — every skill takes -1 per neg level.
+    const negLevels = Math.max(0, Math.round(resolveBonus(map.get('negativeLevel') ?? []).total))
+
     for (const { name: skill, ability } of SKILLS) {
       const abilMod = abilModMap[ability] ?? 0
       if (abilMod !== 0) {
@@ -950,6 +981,13 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
             source: acpMult > 1 ? `Armor check penalty (Shield) ×${acpMult}` : 'Armor check penalty (Shield)',
           })
         }
+      }
+      if (negLevels > 0) {
+        add(map, `skill.${skill}`, {
+          value: -negLevels,
+          type: 'Stacking',
+          source: `Negative levels (-1 × ${negLevels})`,
+        })
       }
     }
 
@@ -1036,6 +1074,151 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
               source: `Favored Soul/Sorcerer SP multiplier (×${(1 + factor).toFixed(2)})`,
             })
           }
+        }
+      }
+    }
+
+    // ── Phase 2.5: corrections that depend on resolved subtotals ─────────
+    // Re-uses the local `negLevels` from the skills block scope.
+
+    // V2 BreakdownItemSave.cpp:117-131 — saves take -1 per negative level.
+    if (negLevels > 0) {
+      const negSrc = `Negative levels (-1 × ${negLevels})`
+      add(map, 'save.Fort',   { value: -negLevels, type: 'Stacking', source: negSrc })
+      add(map, 'save.Reflex', { value: -negLevels, type: 'Stacking', source: negSrc })
+      add(map, 'save.Will',   { value: -negLevels, type: 'Stacking', source: negSrc })
+    }
+
+    // V2 BreakdownItemHitpoints.cpp:107-122 — HP takes -5 per negative level.
+    if (negLevels > 0) {
+      add(map, 'hp', {
+        value: -5 * negLevels,
+        type: 'Stacking',
+        source: `Negative levels (-5 × ${negLevels})`,
+      })
+    }
+
+    // V2 fate points (BreakdownItemHitpoints.cpp:88-105 +2 HP each;
+    // BreakdownItemSpellPoints.cpp:55-72 +1 SP each) — only at level 20+.
+    if (build.totalLevel >= 20) {
+      const fatePoints = Math.max(0, Math.round(resolveBonus(map.get('fatePoint') ?? []).total))
+      if (fatePoints > 0) {
+        add(map, 'hp', {
+          value: 2 * fatePoints,
+          type: 'Stacking',
+          source: `Fate Points bonus (+2 × ${fatePoints})`,
+        })
+        add(map, 'spellPoints', {
+          value: fatePoints,
+          type: 'Stacking',
+          source: `Fate Points bonus (+1 × ${fatePoints})`,
+        })
+      }
+    }
+
+    // V2 BreakdownItemSave.cpp:513-565 — Half-Elf Lesser Divine Grace.
+    // Trigger feat: "Half-Elf Dilettante: Paladin". Cap = 2 + count of
+    // "Improved Dilettante: Paladin" selections trained across the three
+    // Half-Elf "Improved Dilettante I/II/III" enhancements (each +1).
+    {
+      const hasFeat = ctxFeats.has('Half-Elf Dilettante: Paladin')
+      if (hasFeat && chaMod > 0) {
+        let improvedCount = 0
+        const halfElfTreeNames = ['Half-Elf', 'Half Elf']
+        const dilettanteEnhNames = [
+          'Half-Elf: Improved Dilettante I',
+          'Half-Elf: Improved Dilettante II',
+          'Half-Elf: Improved Dilettante III',
+        ]
+        for (const treeName of halfElfTreeNames) {
+          const sels = build.enhancementSelections[treeName] ?? {}
+          const choices = build.enhancementChoices[treeName] ?? {}
+          for (const enhName of dilettanteEnhNames) {
+            if ((choices[enhName] ?? 0) > 0 && sels[enhName] === 'Improved Dilettante: Paladin') {
+              improvedCount += 1
+            }
+          }
+        }
+        const cap = halfElfLesserDivineGraceCap(improvedCount)
+        const bonus = Math.min(chaMod, cap)
+        if (bonus > 0) {
+          const src = `Lesser Divine Grace (Charisma, capped @ ${cap})`
+          add(map, 'save.Fort',   { value: bonus, type: 'Divine', source: src })
+          add(map, 'save.Reflex', { value: bonus, type: 'Divine', source: src })
+          add(map, 'save.Will',   { value: bonus, type: 'Divine', source: src })
+        }
+      }
+    }
+
+    // V2 BreakdownItemHitpoints.cpp:139-152 — fighting style bonus is a
+    // *count* of style feats, then HP += 0.25 × min(4, count) × non-epic
+    // class HD (Epic and Legendary classes contribute half-HD per :74-83).
+    {
+      const styleCount = Math.max(0, Math.round(resolveBonus(map.get('styleFeats') ?? []).total))
+      if (styleCount > 0) {
+        let nonEpicHD = 0
+        for (const bc of build.classes) {
+          if (!bc.name || bc.levels <= 0) continue
+          const cls = allClasses.find(c => c.Name === bc.name)
+          if (!cls) continue
+          const hd = cls.HitPoints ?? 0
+          if (cls.Name === 'Epic' || cls.Name === 'Legendary') {
+            nonEpicHD += Math.floor((hd * bc.levels) / 2)
+          } else {
+            nonEpicHD += hd * bc.levels
+          }
+        }
+        const styleHP = styleBonusHp(styleCount, nonEpicHD)
+        if (styleHP !== 0) {
+          add(map, 'hp', {
+            value: styleHP,
+            type: 'Stacking',
+            source: `Combat Style (${Math.min(4, styleCount)} × 25% × ${nonEpicHD} HD)`,
+          })
+        }
+      }
+    }
+
+    // V2 BreakdownItemHitpoints.cpp:168-194 — reaper-typed HP is summed,
+    // then capped by character level: 50/100/200/400/800 at level
+    // ≤5/≤10/≤15/≤20/≤25 (no cap above). Apply via a corrective bonus.
+    {
+      const hpBonuses = map.get('hp') ?? []
+      const reaperSum = hpBonuses.filter(b => b.type === 'Reaper').reduce((s, b) => s + b.value, 0)
+      if (reaperSum > 0) {
+        const cap = reaperHpCap(build.totalLevel)
+        if (reaperSum > cap) {
+          add(map, 'hp', {
+            value: cap - reaperSum,
+            type: 'Stacking',
+            source: `Reaper HP cap (level ${build.totalLevel} max ${cap})`,
+          })
+        }
+      }
+    }
+
+    // V2 BreakdownItemDodge.cpp:31-65 — dodge total is capped by
+    // dodgeCap; additionally by armor MDB when not Cloth Armor and by
+    // tower-shield MDB when Tower Shield active. Apply as a Stacking
+    // corrective so the breakdown still shows individual contributors.
+    {
+      const dodgeRaw = resolveBonus(map.get('dodge') ?? []).total
+      if (dodgeRaw > 0) {
+        const cap = effectiveDodgeCap({
+          dodgeCap:    resolveBonus(map.get('dodgeCap') ?? []).total,
+          hasDodgeCap: (map.get('dodgeCap') ?? []).length > 0,
+          mdb:         resolveBonus(map.get('mdb') ?? []).total,
+          hasMdb:      (map.get('mdb') ?? []).length > 0,
+          mdbShields:  resolveBonus(map.get('mdbShields') ?? []).total,
+          isClothArmor: armorStances.has('Cloth Armor'),
+          isTowerShield: armorStances.has('Tower Shield'),
+        })
+        if (isFinite(cap) && dodgeRaw > cap) {
+          add(map, 'dodge', {
+            value: cap - dodgeRaw,
+            type: 'Stacking',
+            source: `Dodge capped at ${cap}`,
+          })
         }
       }
     }
