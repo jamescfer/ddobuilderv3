@@ -1516,6 +1516,22 @@ export function useBuildStats(input: BuildStatsInput): BuildStats {
       }
     }
 
+    // V2 BreakdownItemSpellPoints: Fate Points add SP at character level
+    // 20+ (epic). V2 BreakdownItemSpellPoints.cpp:54-72 looks up the
+    // Breakdown_FatePoints total and adds it as a "Fate Points bonus" entry.
+    // Effect_FatePoint contributions are already accumulated into the
+    // 'fatePoint' stat via parseEffect; we mirror them into spellPoints.
+    if (build.totalLevel >= 20) {
+      const fp = resolveBonus(map.get('fatePoint') ?? []).total
+      if (fp > 0) {
+        add(map, 'spellPoints', {
+          value: fp,
+          type: 'Stacking',
+          source: 'Fate Points bonus',
+        })
+      }
+    }
+
     // V2 BreakdownItemTactical formulas — emit base 10 + level + ability mod
     // contributions for every tactical type, on top of the bonuses already
     // accumulated into tacticalDC.<type> via Effect_TacticalDC.
