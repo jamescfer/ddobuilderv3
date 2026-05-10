@@ -229,7 +229,10 @@ function parseFiligreeSlots(parent: AnyRec, tag: 'Filigree' | 'ArtifactFiligree'
     const fr = f as AnyRec
     slots.push({
       name: asStr(fr.Name ?? fr.SetBonus ?? f),
-      rare: Boolean(fr.Rare ?? fr.IsRare),
+      // <Rare/> is a presence-marker in V2 XML; fast-xml-parser emits '' for
+      // empty self-closing tags, so Boolean() would always be false. Check key
+      // existence instead.
+      rare: 'Rare' in fr || 'IsRare' in fr,
     })
   }
   while (slots.length < count) slots.push({ name: '', rare: false })
@@ -402,8 +405,15 @@ export function importV2Build(xml: string): ImportResult {
     }
   }
 
-  // ── Filigrees (sentient + artifact) ──────────────────────────────────────
-  const sentientNode = getRec(buildNode, 'SentientGem') ?? getRec(buildNode, 'Filigrees') ?? buildNode
+  // ── Sentient gem + filigrees ─────────────────────────────────────────────
+  // V2 stores <Personality>, <Filigree>, and <ArtifactFiligree> inside the
+  // active <EquippedGear> node, not in a separate <SentientGem> wrapper at
+  // build level. Fall back to a build-level wrapper for older formats.
+  const sentientNode = getRec(buildNode, 'SentientGem')
+    ?? (activeGearSet as AnyRec | undefined)
+    ?? getRec(buildNode, 'Filigrees')
+    ?? buildNode
+  out.sentientGem.personality = asStr(sentientNode.Personality)
   out.filigreeSlots = parseFiligreeSlots(sentientNode, 'Filigree', 6)
   out.artifactFiligreeSlots = parseFiligreeSlots(sentientNode, 'ArtifactFiligree', 10)
 
