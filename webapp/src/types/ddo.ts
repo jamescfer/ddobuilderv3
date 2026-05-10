@@ -165,6 +165,7 @@ export interface EnhancementTree {
   IsRacialTree?: boolean
   IsEpicDestiny?: boolean
   IsReaperTree?: boolean
+  IsUniversalTree?: boolean
   Background?: string
   Icon?: string
   Requirements?: Requirements

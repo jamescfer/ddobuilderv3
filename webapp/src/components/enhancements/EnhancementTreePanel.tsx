@@ -43,7 +43,8 @@ function costUpToRank(item: EnhancementTreeItem, rank: number): number {
 
 function computeTreeSpent(tree: EnhancementTree, choices: TreeChoices): number {
   return (tree.EnhancementTreeItem ?? []).reduce((sum, item) => {
-    return sum + costUpToRank(item, choices[item.Name] ?? 0)
+    const key = item.InternalName ?? item.Name
+    return sum + costUpToRank(item, choices[key] ?? choices[item.Name] ?? 0)
   }, 0)
 }
 
@@ -69,7 +70,7 @@ function treeRequiresClassType(tree: EnhancementTree, types: string[]): string |
 }
 
 function isUniversalTree(tree: EnhancementTree): boolean {
-  return !tree.IsRacialTree && !tree.Requirements
+  return tree.IsUniversalTree === true || (!tree.IsRacialTree && !tree.Requirements)
 }
 
 function isEnhancementTree(tree: EnhancementTree): boolean {
@@ -206,6 +207,7 @@ export default function EnhancementTreePanel() {
     const raceName = build.race
     return enhTrees.filter(tree => {
       if (tree.IsRacialTree) return raceName ? treeMatchesName(tree.Name, raceName) : false
+      if (tree.IsUniversalTree === true) return true
       if (isUniversalTree(tree)) return true
       if (classNames.some(cn => treeMatchesName(tree.Name, cn))) return true
       const req = treeRequiresClassType(tree, ['Class', 'BaseClass'])

@@ -46,6 +46,24 @@ function nextRankCost(item: EnhancementTreeItem, currentRank: number): number {
   return costs[currentRank] ?? 1
 }
 
+/**
+ * V2 XML stores enhancements by InternalName (e.g. "ShintaoCore1"), while
+ * manual UI choices historically used the display Name. Using InternalName as
+ * the canonical choice key means V2-imported builds render correctly.
+ * Old saves that used display Name still work via the fallback in getChoiceRank.
+ */
+function itemKey(item: EnhancementTreeItem): string {
+  return item.InternalName ?? item.Name
+}
+
+function getChoiceRank(choices: TreeChoices, item: EnhancementTreeItem): number {
+  return choices[itemKey(item)] ?? choices[item.Name] ?? 0
+}
+
+function getSelection(selections: TreeSelections, item: EnhancementTreeItem): string | undefined {
+  return selections[itemKey(item)] ?? selections[item.Name]
+}
+
 /** Get all options from the first Selector on an item. */
 function getSelectorOptions(item: EnhancementTreeItem): EnhancementSelection[] {
   if (!item.Selector || item.Selector.length === 0) return []
@@ -336,7 +354,7 @@ export default function TreeGrid({
   const layout = computeLayout(items)
 
   const treeSpent = items.reduce((sum, item) => {
-    return sum + costUpToRank(item, choices[item.Name] ?? 0)
+    return sum + costUpToRank(item, getChoiceRank(choices, item))
   }, 0)
 
   const coreItems = items
@@ -347,11 +365,24 @@ export default function TreeGrid({
     const idx = coreItems.findIndex(c => c.Name === item.Name)
     if (idx <= 0) return true
     const prev = coreItems[idx - 1]
-    return (choices[prev.Name] ?? 0) >= (prev.Ranks ?? 1)
+    return getChoiceRank(choices, prev) >= (prev.Ranks ?? 1)
+  }
+
+  function writeChoices(item: EnhancementTreeItem, rank: number): TreeChoices {
+    const key = itemKey(item)
+    const next = { ...choices }
+    if (rank === 0) {
+      delete next[key]
+    } else {
+      next[key] = rank
+    }
+    // Remove any stale display-name entry when InternalName differs.
+    if (key !== item.Name) delete next[item.Name]
+    return next
   }
 
   function handleIncrement(item: EnhancementTreeItem) {
-    const rank = choices[item.Name] ?? 0
+    const rank = getChoiceRank(choices, item)
     const maxRanks = item.Ranks ?? 1
     if (rank >= maxRanks) return
     const minSpent = item.MinSpent ?? 0
@@ -362,26 +393,27 @@ export default function TreeGrid({
     if (isCore && !coreIsUnlocked(item)) return
 
     const options = getSelectorOptions(item)
-    if (options.length > 0 && !selections[item.Name]) {
+    if (options.length > 0 && !getSelection(selections, item)) {
       setSelectorTarget(item.Name)
       return
     }
 
-    onChoicesChange({ ...choices, [item.Name]: rank + 1 })
+    onChoicesChange(writeChoices(item, rank + 1))
   }
 
   function handleDecrement(item: EnhancementTreeItem) {
-    const rank = choices[item.Name] ?? 0
+    const rank = getChoiceRank(choices, item)
     if (rank <= 0) return
     const isCore = (item.YPosition ?? 0) === CORE_Y
     if (isCore) {
       const idx = coreItems.findIndex(c => c.Name === item.Name)
-      if (coreItems.slice(idx + 1).some(c => (choices[c.Name] ?? 0) > 0)) return
+      if (coreItems.slice(idx + 1).some(c => getChoiceRank(choices, c) > 0)) return
     }
     const newRank = rank - 1
-    onChoicesChange({ ...choices, [item.Name]: newRank })
-    if (newRank === 0 && selections[item.Name]) {
+    onChoicesChange(writeChoices(item, newRank))
+    if (newRank === 0 && getSelection(selections, item)) {
       const next = { ...selections }
+      delete next[itemKey(item)]
       delete next[item.Name]
       onSelectionsChange(next)
     }
@@ -390,11 +422,15 @@ export default function TreeGrid({
   function handleSelection(itemName: string, optionName: string) {
     const item = items.find(it => it.Name === itemName)
     if (!item) return
-    onSelectionsChange({ ...selections, [itemName]: optionName })
-    const rank = choices[itemName] ?? 0
+    const key = itemKey(item)
+    // Write under InternalName key; remove any stale display-name entry.
+    const nextSel = { ...selections, [key]: optionName }
+    if (key !== item.Name) delete nextSel[item.Name]
+    onSelectionsChange(nextSel)
+    const rank = getChoiceRank(choices, item)
     const cost = nextRankCost(item, rank)
     if ((totalAP - totalSpentAllTrees) >= cost) {
-      onChoicesChange({ ...choices, [itemName]: rank + 1 })
+      onChoicesChange(writeChoices(item, rank + 1))
     }
   }
 
@@ -454,8 +490,8 @@ export default function TreeGrid({
           <EnhancementCell
             key={item.Name}
             item={item}
-            rank={choices[item.Name] ?? 0}
-            selectedOption={selections[item.Name]}
+            rank={getChoiceRank(choices, item)}
+            selectedOption={getSelection(selections, item)}
             treeSpent={treeSpent}
             totalSpent={totalSpentAllTrees}
             totalAP={totalAP}

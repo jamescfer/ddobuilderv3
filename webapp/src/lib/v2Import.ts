@@ -203,20 +203,16 @@ function parseGear(equippedGearNode: AnyRec): {
     gear[v3Slot] = name
 
     // Each item carries <ItemAugment> children with Type + SelectedAugment.
+    // Key format is `slot:type:arrayIndex` — array index matches the position
+    // in the ItemAugment list, which is what GearPanel uses when rendering.
     const augs = arr(item.ItemAugment as AnyRec | AnyRec[] | undefined)
-    let typeIdx: Record<string, number> = {}
-    for (const a of augs) {
-      const ar = a as AnyRec
+    for (let augIdx = 0; augIdx < augs.length; augIdx++) {
+      const ar = augs[augIdx] as AnyRec
       const type = asStr(ar.Type)
       const augName = asStr(ar.SelectedAugment)
-      if (!type) continue
-      const idx = typeIdx[type] ?? 0
-      typeIdx[type] = idx + 1
-      if (augName) {
-        augmentChoices[`${v3Slot}:${type}:${idx}`] = augName
-      }
+      if (!type || !augName) continue
+      augmentChoices[`${v3Slot}:${type}:${augIdx}`] = augName
     }
-    typeIdx = {}
   }
   return { gear, augmentChoices }
 }
@@ -461,6 +457,15 @@ export function importV2Build(xml: string): ImportResult {
   out.enhancementChoices = enh.choices
   out.enhancementSelections = enh.selections
   out.enhancementPinned = enh.pinned
+
+  // Add trees that were selected in V2 but have 0 AP spent (not in enh.pinned)
+  const enhSelectedTrees = arr(getRec(buildNode, 'Enhancement_SelectedTrees')?.TreeName as string | string[] | undefined)
+    .map(asStr).filter(t => t && t !== 'No selection')
+  for (const treeName of enhSelectedTrees) {
+    if (!out.enhancementPinned.includes(treeName)) {
+      out.enhancementPinned.push(treeName)
+    }
+  }
 
   const dest = parseEnhancements(buildNode, 'DestinySpendInTree')
   out.destinyChoices = dest.choices
