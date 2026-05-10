@@ -56,13 +56,20 @@ function buildSlots(
   const legendaryLevels = build.legendaryLevels ?? 0
 
   // 1. Race feat slots (e.g. Human Bonus Feat at char level 1)
+  // Key uses a per-(level, type) counter so imports can reconstruct it without
+  // needing the global FeatSlot array index. In practice every (level, type)
+  // pair is unique within a race, so the counter is always 0.
   const race = allRaces.find(r => r.Name === build.race)
-  toArray(race?.FeatSlot).forEach((fs, idx) => {
+  const raceFeatTypeCount: Record<string, number> = {}
+  toArray(race?.FeatSlot).forEach(fs => {
+    const counterKey = `${fs.Level}-${fs.FeatType}`
+    const localIdx = raceFeatTypeCount[counterKey] ?? 0
+    raceFeatTypeCount[counterKey] = localIdx + 1
     const featUpdateList = fs.FeatUpdateList
       ? toArray(fs.FeatUpdateList).filter(Boolean)
       : undefined
     slots.push({
-      key: `race-${fs.Level}-${fs.FeatType}-${idx}`,
+      key: `race-${fs.Level}-${fs.FeatType}-${localIdx}`,
       level: fs.Level,
       classLevel: fs.Level,
       featType: fs.FeatType,
@@ -83,15 +90,19 @@ function buildSlots(
     if (!bc.name || bc.levels === 0) continue
     const cls = allClasses.find(c => c.Name === bc.name)
     if (!cls?.FeatSlot) continue
-    toArray(cls.FeatSlot).forEach((fs, idx) => {
+    const classFeatTypeCount: Record<string, number> = {}
+    toArray(cls.FeatSlot).forEach(fs => {
       if (fs.Level > bc.levels) return
       const charLevel = characterLevelForClassLevel(build, bc.name, fs.Level)
       if (!charLevel) return
+      const counterKey = `${fs.Level}-${fs.FeatType}`
+      const localIdx = classFeatTypeCount[counterKey] ?? 0
+      classFeatTypeCount[counterKey] = localIdx + 1
       const featUpdateList = fs.FeatUpdateList
         ? toArray(fs.FeatUpdateList).filter(Boolean)
         : undefined
       slots.push({
-        key: `${bc.name}-${fs.Level}-${fs.FeatType}-${idx}`,
+        key: `${bc.name}-${fs.Level}-${fs.FeatType}-${localIdx}`,
         level: charLevel,
         classLevel: fs.Level,
         featType: fs.FeatType,
@@ -104,13 +115,17 @@ function buildSlots(
   // 4. Epic feat slots — Epic.class.xml; epic class level N → character level 20+N
   if (epicLevels > 0) {
     const epicClass = allClasses.find(c => c.Name === 'Epic')
-    toArray(epicClass?.FeatSlot).forEach((fs, idx) => {
+    const epicFeatTypeCount: Record<string, number> = {}
+    toArray(epicClass?.FeatSlot).forEach(fs => {
       if (fs.Level <= epicLevels) {
+        const counterKey = `${fs.Level}-${fs.FeatType}`
+        const localIdx = epicFeatTypeCount[counterKey] ?? 0
+        epicFeatTypeCount[counterKey] = localIdx + 1
         const featUpdateList = fs.FeatUpdateList
           ? toArray(fs.FeatUpdateList).filter(Boolean)
           : undefined
         slots.push({
-          key: `epic-${fs.Level}-${fs.FeatType}-${idx}`,
+          key: `epic-${fs.Level}-${fs.FeatType}-${localIdx}`,
           level: 20 + fs.Level,
           classLevel: fs.Level,
           featType: fs.FeatType,
@@ -124,13 +139,17 @@ function buildSlots(
   // 5. Legendary feat slots — Legendary.class.xml; legendary class level N → character level 30+N
   if (legendaryLevels > 0) {
     const legendaryClass = allClasses.find(c => c.Name === 'Legendary')
-    toArray(legendaryClass?.FeatSlot).forEach((fs, idx) => {
+    const legendaryFeatTypeCount: Record<string, number> = {}
+    toArray(legendaryClass?.FeatSlot).forEach(fs => {
       if (fs.Level <= legendaryLevels) {
+        const counterKey = `${fs.Level}-${fs.FeatType}`
+        const localIdx = legendaryFeatTypeCount[counterKey] ?? 0
+        legendaryFeatTypeCount[counterKey] = localIdx + 1
         const featUpdateList = fs.FeatUpdateList
           ? toArray(fs.FeatUpdateList).filter(Boolean)
           : undefined
         slots.push({
-          key: `legendary-${fs.Level}-${fs.FeatType}-${idx}`,
+          key: `legendary-${fs.Level}-${fs.FeatType}-${localIdx}`,
           level: 30 + fs.Level,
           classLevel: fs.Level,
           featType: fs.FeatType,

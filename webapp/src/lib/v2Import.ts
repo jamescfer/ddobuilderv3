@@ -50,7 +50,8 @@ const parser = new XMLParser({
     if (name === 'TreeName' && /_SelectedTrees/.test(jpath)) return true
     if (name === 'Filigree' && /SentientGem|Filigrees/.test(jpath)) return true
     if (name === 'ArtifactFiligree' && /SentientGem|Filigrees/.test(jpath)) return true
-    if (name === 'SelfAndPartyBuffs' && /SelfAndPartyBuffs/.test(jpath)) return true
+    // SelfAndPartyBuffs are at Life level, multiple sibling elements
+    if (name === 'SelfAndPartyBuffs') return true
     return false
   },
 })
@@ -128,11 +129,10 @@ interface LevelTrainingV2 {
   className: string
   feats: { name: string; type: string; level: number }[]
   skills: string[]
-  levelUpAbility: string
 }
 
 function parseLevelTraining(lt: AnyRec | undefined): LevelTrainingV2 {
-  if (!lt) return { className: '', feats: [], skills: [], levelUpAbility: '' }
+  if (!lt) return { className: '', feats: [], skills: [] }
   return {
     className: mapClassName(asStr(lt.Class)),
     feats: arr(lt.TrainedFeat as AnyRec | AnyRec[] | undefined).map(f => ({
@@ -141,7 +141,6 @@ function parseLevelTraining(lt: AnyRec | undefined): LevelTrainingV2 {
       level: asNum((f as AnyRec).LevelTrainedAt),
     })),
     skills: arr(lt.TrainedSkill as AnyRec | AnyRec[] | undefined).map(s => asStr((s as AnyRec).Skill)),
-    levelUpAbility: asStr(lt.AbilityLevelUp ?? lt.LevelUpAbility),
   }
 }
 
@@ -240,6 +239,94 @@ function parseFiligreeSlots(parent: AnyRec, tag: 'Filigree' | 'ArtifactFiligree'
 }
 
 // ---------------------------------------------------------------------------
+// Feat slot key construction
+//
+// V3's FeatSlots component generates slot keys as:
+//   heroic-${charLvl}                         universal standard feat
+//   race-${charLvl}-${type}-${localIdx}        race-granted feat
+//   ${className}-${classLevel}-${type}-${localIdx}  class-granted feat
+//   epic-${epicLevel}-${type}-${localIdx}      epic tier feat
+//   legendary-${legLevel}-${type}-${localIdx}  legendary tier feat
+//
+// localIdx is a per-(level, type) counter (always 0 in practice since each
+// class/race has at most one slot per level+type combination).
+//
+// Race feat types taken from the race XML FeatSlot definitions. Any type not
+// in this set and not "Standard" is attributed to the current LevelTraining's
+// class, which matches V3's class-slot key format.
+// ---------------------------------------------------------------------------
+
+const HEROIC_UNIVERSAL_LEVELS = new Set([1, 3, 6, 9, 12, 15, 18])
+
+// All FeatType values that come from race FeatSlot definitions rather than
+// class FeatSlot definitions. Sourced from the race XML files.
+const RACE_FEAT_TYPES = new Set([
+  'Aasimar Bond',
+  'Dark Gift',                         // DarkBargainer
+  'Dragonborn Racial',                  // Dragonborn
+  'Dilettante Feat',                    // Half-Elf
+  'Human Bonus Feat',                   // Human
+  'Purple Dragon Knight Bonus Feat',    // Purple Dragon Knight
+  'Animalistic Aspect',                 // Shifter
+])
+
+/**
+ * Build a V3-compatible feat slot key from V2 LevelTraining data.
+ *
+ * @param charLvl     1-indexed character level of the LevelTraining block
+ * @param className   V2 Class field from the same LevelTraining block
+ * @param featType    V2 Type field from the TrainedFeat
+ * @param heroicSlice per-level heroic class array (index = charLvl-1)
+ * @param counters    mutable per-slot-type counter to assign localIdx
+ */
+function buildFeatSlotKey(
+  charLvl: number,
+  className: string,
+  featType: string,
+  heroicSlice: string[],
+  counters: Record<string, number>,
+): string {
+  // Epic levels (class === "Epic", charLvl 21-30)
+  if (className === 'Epic' && charLvl > 20) {
+    const epicLevel = charLvl - 20
+    const ck = `epic-${epicLevel}-${featType}`
+    const idx = counters[ck] ?? 0
+    counters[ck] = idx + 1
+    return `epic-${epicLevel}-${featType}-${idx}`
+  }
+
+  // Legendary levels (class === "Legendary", charLvl 31-34)
+  if (className === 'Legendary' && charLvl > 30) {
+    const legLevel = charLvl - 30
+    const ck = `legendary-${legLevel}-${featType}`
+    const idx = counters[ck] ?? 0
+    counters[ck] = idx + 1
+    return `legendary-${legLevel}-${featType}-${idx}`
+  }
+
+  // Universal standard heroic feat
+  if (featType === 'Standard' && HEROIC_UNIVERSAL_LEVELS.has(charLvl)) {
+    return `heroic-${charLvl}`
+  }
+
+  // Race-granted feat (type is in the static race feat type set)
+  if (RACE_FEAT_TYPES.has(featType)) {
+    const ck = `race-${charLvl}-${featType}`
+    const idx = counters[ck] ?? 0
+    counters[ck] = idx + 1
+    return `race-${charLvl}-${featType}-${idx}`
+  }
+
+  // Class-granted feat: compute class level as how many times className
+  // appears in heroicSlice up to and including this character level.
+  const classLevel = heroicSlice.slice(0, charLvl).filter(c => c === className).length
+  const ck = `${className}-${classLevel}-${featType}`
+  const idx = counters[ck] ?? 0
+  counters[ck] = idx + 1
+  return `${className}-${classLevel}-${featType}-${idx}`
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -287,7 +374,9 @@ export function importV2Build(xml: string): ImportResult {
     Wisdom: asNum(character.WisTome),
     Charisma: asNum(character.ChaTome),
   }
-  const skillTomesNode = getRec(life, 'SkillTomes')
+
+  // SkillTomes live at the Character level in V2 XML, not inside Life.
+  const skillTomesNode = getRec(character, 'SkillTomes')
   if (skillTomesNode) {
     for (const [k, v] of Object.entries(skillTomesNode)) {
       const n = asNum(v)
@@ -330,20 +419,33 @@ export function importV2Build(xml: string): ImportResult {
   // ── Ability scores (point-buy spend) ─────────────────────────────────────
   out.baseAbilities = parseAbilities(getRec(buildNode, 'AbilitySpend'))
 
-  // ── Feats / skills / level-ups from per-level training ───────────────────
+  // ── Ability level-ups: V2 stores <Level4>, <Level8>, … at Build level ────
+  // (NOT inside LevelTraining as AbilityLevelUp).
+  const ABILITIES = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'] as const
+  for (const lvl of [4, 8, 12, 16, 20, 24, 28, 32, 36, 40] as const) {
+    const val = asStr(buildNode[`Level${lvl}`])
+    if (val && (ABILITIES as readonly string[]).includes(val)) {
+      out.abilityLevelUps[lvl] = val as Ability
+    }
+  }
+
+  // ── Feats / skills from per-level training ────────────────────────────────
   out.featChoices = {}
   out.skillRanks = {}
   out.skillRanksByLevel = {}
 
-  let featSlotIdx = 0
+  // Per-slot-type counter used by buildFeatSlotKey to assign localIdx.
+  const featSlotCounters: Record<string, number> = {}
+
   for (let i = 0; i < levelTrainings.length; i++) {
     const lt = levelTrainings[i]
     const charLvl = i + 1
 
     for (const f of lt.feats) {
-      // V2's slot key isn't directly addressable; use a deterministic v2-* key
-      // so consumers can identify it as imported.
-      const slotKey = `v2-${charLvl}-${f.type}-${featSlotIdx++}`
+      if (!f.name) continue
+      const slotKey = buildFeatSlotKey(
+        charLvl, lt.className, f.type, heroicSlice, featSlotCounters,
+      )
       out.featChoices[slotKey] = f.name
     }
 
@@ -351,13 +453,6 @@ export function importV2Build(xml: string): ImportResult {
       out.skillRanks[skill] = (out.skillRanks[skill] ?? 0) + 1
       const at = (out.skillRanksByLevel[charLvl] ?? (out.skillRanksByLevel[charLvl] = {}))
       at[skill] = (at[skill] ?? 0) + 1
-    }
-
-    if (lt.levelUpAbility && charLvl % 4 === 0 && charLvl <= 40) {
-      const ABILITIES = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'] as const
-      if ((ABILITIES as readonly string[]).includes(lt.levelUpAbility)) {
-        out.abilityLevelUps[charLvl as 4 | 8 | 12 | 16 | 20 | 24 | 28 | 32 | 36 | 40] = lt.levelUpAbility as Ability
-      }
     }
   }
 
@@ -421,8 +516,9 @@ export function importV2Build(xml: string): ImportResult {
   out.activeBuffs = arr(getRec(buildNode, 'ActiveStances')?.Stances as string | string[] | undefined)
     .map(asStr).filter(Boolean)
 
-  // Self & party buffs (V2 SelfAndPartyBuffs may be a Stances-like list)
-  const selfBuffs = arr(buildNode.SelfAndPartyBuffs as string | string[] | undefined).map(asStr).filter(Boolean)
+  // SelfAndPartyBuffs live at the Life level in V2 XML (after </Build>), not
+  // inside the Build node.
+  const selfBuffs = arr(life.SelfAndPartyBuffs as string | string[] | undefined).map(asStr).filter(Boolean)
   for (const b of selfBuffs) {
     if (!out.activeBuffs.includes(b)) out.activeBuffs.push(b)
   }
