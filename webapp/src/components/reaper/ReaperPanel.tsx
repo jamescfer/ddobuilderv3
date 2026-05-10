@@ -40,8 +40,8 @@ function costUpToRank(item: EnhancementTreeItem, rank: number): number {
 
 function computeTreeSpent(tree: EnhancementTree, choices: TreeChoices): number {
   return (tree.EnhancementTreeItem ?? []).reduce((sum, item) => {
-    const rank = choices[item.Name] ?? 0
-    return sum + costUpToRank(item, rank)
+    const key = item.InternalName ?? item.Name
+    return sum + costUpToRank(item, choices[key] ?? choices[item.Name] ?? 0)
   }, 0)
 }
 

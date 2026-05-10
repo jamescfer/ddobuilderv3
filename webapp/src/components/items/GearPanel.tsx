@@ -312,8 +312,13 @@ export default function GearPanel() {
   useEffect(() => {
     for (const slot of ALL_SLOTS) {
       const itemName = gear[slot]
-      if (itemName && itemDetails[slot] === undefined) {
+      if (!itemName) continue
+      const cached = itemDetails[slot]
+      if (cached === undefined) {
         loadItemDetails(slot, itemName)
+      } else if (cached !== null && (cached as Item).Name !== itemName) {
+        // Stale entry from a previous build load — invalidate so next render reloads
+        setItemDetails(prev => { const n = { ...prev }; delete n[slot]; return n })
       }
     }
   }, [gear, itemDetails, loadItemDetails])
@@ -345,7 +350,9 @@ export default function GearPanel() {
 
   function renderSlot(slot: string) {
     const equipped = gear[slot]
-    const detail = equipped ? (itemDetails[slot] ?? null) : null
+    const cachedDetail = equipped ? (itemDetails[slot] ?? null) : null
+    // Only use cached details if they match the equipped item (guard against stale entries during reload)
+    const detail = cachedDetail && (cachedDetail as Item).Name === equipped ? cachedDetail : null
     const augSlots = detail ? toArray(detail.ItemAugment) : []
     const icon = detail?.Icon
 
