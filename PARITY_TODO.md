@@ -20,6 +20,7 @@ the PR number, so this file doubles as a changelog.
 | # | Area | PR |
 |---|---|---|
 | 1 | Per-level class progression (`build.levelClasses`, V2 `m_Levels`) | #53 |
+| 24 | BonusTypes stacking rules driven by `BonusTypes.xml` — `initBonusTypes()` replaces hard-coded `EXCLUSIVE` set; `useStaticBundle` and CLI wire it at startup | #56 |
 | 2 | Feat-slot prerequisite snapshot uses exact per-level state | #53 |
 | 3 | Builder version line in sidebar | #53 |
 | 4 | Shared `lib/requirements.ts` engine (FeatSlots + EnhancementTreePanel both use it) | #53 |
@@ -49,9 +50,9 @@ the PR number, so this file doubles as a changelog.
 
 ### Numerical correctness (fix as user reports specific mismatches)
 
-- ❌ **BonusTypes stacking rules** — `lib/bonus.ts` hard-codes a stacking
-  rule table. With `BonusTypes.xml` now loaded, the engine should look up
-  rules from data instead of code so bug fixes upstream propagate.
+- ✅ **BonusTypes stacking rules** — `lib/bonus.ts` now reads stacking rules
+  from `BonusTypes.xml` via `initBonusTypes()`. The hard-coded fallback
+  remains for environments where the XML is unavailable. (#56)
 - ❌ **AttackRates in Combat panel** — `AttackRates.xml` is loaded but the
   `CombatPanel` DPS sim still uses synthesised attack-per-minute numbers.
 - 🟡 **Save bonus edge cases** — Strong/Weak base progression is correct
