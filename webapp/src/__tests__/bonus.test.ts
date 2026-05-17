@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { resolveBonus, emptyResolvedStat, type RawBonus } from '../lib/bonus'
+import { describe, expect, it, afterEach } from 'vitest'
+import { resolveBonus, emptyResolvedStat, buildExclusiveSet, initBonusTypes, resetBonusTypes, type RawBonus } from '../lib/bonus'
 
 const mk = (value: number, type: string, source = 'src'): RawBonus => ({ value, type, source })
 
@@ -60,5 +60,63 @@ describe('resolveBonus', () => {
     ])
     // 'Penalty' is NOT in the EXCLUSIVE set, so it stacks.
     expect(r.total).toBe(-2)
+  })
+})
+
+describe('buildExclusiveSet', () => {
+  it('marks Highest Only entries as exclusive', () => {
+    const set = buildExclusiveSet([
+      { Name: 'Enhancement', Stacking: 'Highest Only' },
+      { Name: 'Stacking', Stacking: 'Always' },
+      { Name: 'Untyped', Stacking: 'Always' },
+    ])
+    expect(set.has('Enhancement')).toBe(true)
+    expect(set.has('Stacking')).toBe(false)
+    expect(set.has('Untyped')).toBe(false)
+  })
+
+  it('trims trailing spaces from names (XML artifact)', () => {
+    const set = buildExclusiveSet([
+      { Name: 'Competence ', Stacking: 'Highest Only' },
+    ])
+    expect(set.has('Competence')).toBe(true)
+    expect(set.has('Competence ')).toBe(false)
+  })
+
+  it('defaults to Highest Only when Stacking field is absent', () => {
+    const set = buildExclusiveSet([{ Name: 'Mystery' }])
+    expect(set.has('Mystery')).toBe(true)
+  })
+})
+
+describe('initBonusTypes', () => {
+  // Restore the hard-coded fallback after each test so sibling describe blocks
+  // are unaffected by runtime mutation of the module-level exclusive set.
+  afterEach(() => { resetBonusTypes() })
+
+  it('switches a previously stacking type to exclusive', () => {
+    // Pretend a new XML marks 'CustomBonus' as Highest Only.
+    initBonusTypes([
+      { Name: 'CustomBonus', Stacking: 'Highest Only' },
+    ])
+    const r = resolveBonus([
+      mk(3, 'CustomBonus', 'a'),
+      mk(7, 'CustomBonus', 'b'),
+    ])
+    expect(r.total).toBe(7)
+    expect(r.bonuses.find(b => b.source === 'a')?.active).toBe(false)
+  })
+
+  it('switches a previously exclusive type to stacking', () => {
+    // Enhancement is exclusive by default; override to Always.
+    initBonusTypes([
+      { Name: 'Enhancement', Stacking: 'Always' },
+    ])
+    const r = resolveBonus([
+      mk(3, 'Enhancement', 'a'),
+      mk(7, 'Enhancement', 'b'),
+    ])
+    expect(r.total).toBe(10)
+    expect(r.bonuses.every(b => b.active)).toBe(true)
   })
 })

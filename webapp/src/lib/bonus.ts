@@ -7,6 +7,10 @@
 //
 //   STACKING types: every bonus in the group contributes to the total
 //   regardless of magnitude.
+//
+// The exclusive set is initialised from the hard-coded fallback below, but
+// callers should call initBonusTypes() at startup with the BonusTypes.xml
+// data so the engine stays in sync with upstream data changes.
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -27,12 +31,46 @@ export interface ResolvedStat {
   bonuses: ResolvedBonus[]
 }
 
+/** Minimal shape we need from BonusTypes.xml entries. */
+export interface BonusTypeEntry {
+  Name: string
+  Stacking?: string
+}
+
+/**
+ * Builds the exclusive (Highest-Only) set from BonusTypes.xml data.
+ * Names are trimmed to handle trailing-space variants in the XML.
+ */
+export function buildExclusiveSet(specs: BonusTypeEntry[]): Set<string> {
+  const s = new Set<string>()
+  for (const spec of specs) {
+    if ((spec.Stacking ?? 'Highest Only') !== 'Always') {
+      s.add(spec.Name.trim())
+    }
+  }
+  return s
+}
+
+/**
+ * Replace the module-level exclusive set with one derived from BonusTypes.xml.
+ * Call this once at startup (useStaticBundle, CLI scripts) so that any upstream
+ * additions or rule changes propagate automatically.
+ */
+export function initBonusTypes(specs: BonusTypeEntry[]): void {
+  exclusiveTypes = buildExclusiveSet(specs)
+}
+
+/** Restore the hard-coded fallback set. Intended for use in tests only. */
+export function resetBonusTypes(): void {
+  exclusiveTypes = EXCLUSIVE_FALLBACK
+}
+
 // ---------------------------------------------------------------------------
-// Exclusive (non-stacking) bonus types
+// Exclusive (non-stacking) bonus types — hard-coded fallback
 // Only the single highest positive value and single lowest (most negative)
 // negative value per type contribute to the total.
 // ---------------------------------------------------------------------------
-const EXCLUSIVE = new Set([
+const EXCLUSIVE_FALLBACK = new Set([
   'Action Boost',
   'Alchemical',
   'Armor',
@@ -97,6 +135,9 @@ const EXCLUSIVE = new Set([
   'Weapon Enchantment',
 ])
 
+// Module-level exclusive set — replaced by initBonusTypes() when XML is loaded.
+let exclusiveTypes: Set<string> = EXCLUSIVE_FALLBACK
+
 // ---------------------------------------------------------------------------
 // Core resolver
 // ---------------------------------------------------------------------------
@@ -125,7 +166,7 @@ export function resolveBonus(bonuses: RawBonus[]): ResolvedStat {
   let total = 0
 
   for (const [type, group] of byType) {
-    if (EXCLUSIVE.has(type)) {
+    if (exclusiveTypes.has(type)) {
       // -----------------------------------------------------------------------
       // Exclusive type: only highest positive and lowest (most negative)
       // value are active. Treat positives and negatives independently.

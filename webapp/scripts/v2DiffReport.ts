@@ -14,6 +14,7 @@ import { resolve } from 'path'
 import { importV2Build } from '../src/lib/v2Import'
 import { computeBuildStats } from '../src/hooks/useBuildStats'
 import { loadAllCatalogues } from '../src/server/dataLoaders'
+import { initBonusTypes } from '../src/lib/bonus'
 import type { Item } from '../src/types/ddo'
 
 function parseArgs(): { file: string; dataDir: string } {
@@ -63,9 +64,13 @@ function main(): void {
 
   console.log(`# Loading XML catalogues from ${dataDir}…`)
   const cat = loadAllCatalogues(dataDir)
+  if (cat.allBonusTypes.length > 0) {
+    initBonusTypes(cat.allBonusTypes)
+  }
   console.log(`  ${cat.allRaces.length} races, ${cat.allClasses.length} classes, ` +
     `${cat.allFeats.length} feats, ${cat.allTrees.length} trees, ` +
-    `${cat.allItems.length} items, ${cat.allAugments.length} augments`)
+    `${cat.allItems.length} items, ${cat.allAugments.length} augments, ` +
+    `${cat.allBonusTypes.length} bonus types`)
 
   // Resolve gear slot names → item objects
   const gearItems: Record<string, Item> = {}
