@@ -670,6 +670,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       ctxAbilityTotals[ab] = base + racial + lv
     }
     const ctxStances = deriveArmorStances(gearItems)
+    // V2 parity: Monk and Sacred Fist are "Centered" when wearing cloth/no armor.
+    // Centered gates all Monk Ki effects (KiMaximum, KiHit, KiPassive, KiCritical).
+    {
+      const monkLevels = (ctxClassLevels['Monk'] ?? 0) + (ctxClassLevels['Sacred Fist'] ?? 0)
+      if (monkLevels > 0 && ctxStances.has('Cloth Armor')) {
+        ctxStances.add('Centered')
+      }
+    }
     // Approximate BAB from class progressions (heroic + tier classes). Avoids cycles.
     // V2 parity: each class contributes classBAB(levels) where levels is its
     // total in the per-level array; epic/legendary tiers add their tables.
@@ -1221,6 +1229,32 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
           add(map, 'save.Fort',   { value: bonus, type: 'Divine', source: src })
           add(map, 'save.Reflex', { value: bonus, type: 'Divine', source: src })
           add(map, 'save.Will',   { value: bonus, type: 'Divine', source: src })
+        }
+      }
+    }
+
+    // V2 BreakdownItemTurnUndeadLevel.cpp:42-89 — base Turn Undead level from class levels.
+    // Turn level = max(Cleric caster levels, Dark Apostate caster levels,
+    //                  max(0, Paladin levels - 3)).
+    // Added to 'turnUndead.levelBonus' as type 'Base' so the displayed total
+    // includes both the class-derived base and any enhancement bonuses.
+    // Similarly, BreakdownItemTurnUndeadHitDice adds the same base plus CHA mod
+    // to 'turnUndead.diceBonus'.
+    {
+      const clericLevels = ctxClassLevels['Cleric'] ?? 0
+      const darkApostateLevels = ctxClassLevels['Dark Apostate'] ?? 0
+      const paladinLevels = ctxClassLevels['Paladin'] ?? 0
+      const effectiveClericLevels = Math.max(clericLevels, darkApostateLevels)
+      const effectivePaladinContrib = Math.max(0, paladinLevels - 3)
+      const baseLevel = Math.max(effectiveClericLevels, effectivePaladinContrib)
+      if (baseLevel > 0) {
+        const classSource = effectiveClericLevels >= effectivePaladinContrib
+          ? (darkApostateLevels > clericLevels ? 'Dark Apostate levels' : 'Cleric levels')
+          : 'Paladin levels (−3)'
+        add(map, 'turnUndead.levelBonus', { value: baseLevel, type: 'Base', source: classSource })
+        add(map, 'turnUndead.diceBonus',  { value: baseLevel, type: 'Base', source: classSource })
+        if (chaMod !== 0) {
+          add(map, 'turnUndead.diceBonus', { value: chaMod, type: 'Ability mod', source: 'Charisma' })
         }
       }
     }
