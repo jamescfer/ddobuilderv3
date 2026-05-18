@@ -43,6 +43,7 @@ the PR number, so this file doubles as a changelog.
 | 21 | Per-character-level skill rank UI (Per Level grid view) | #55 |
 | 22 | New XML loaders: AttackRates / BonusTypes / Challenges / ItemBuffs / ItemClickies | #55 |
 | 23 | Challenges wired into Favor panel | #55 |
+| 25 | Ki / Turn Undead / Song breakdowns — `BaseClassLevel`/`ClassLevel` AType uses `Amount[classLevel]` (array index) not `Amount[0]*classLevel`; Centered stance derived for cloth-armor Monk; Turn Undead base level from Cleric/Paladin class levels added to `turnUndead.levelBonus` and `turnUndead.diceBonus` | #57 |
 
 ---
 
@@ -71,9 +72,11 @@ the PR number, so this file doubles as a changelog.
   per quest; V3 has a manual slider only.
 - ❌ **Eldritch blast dice scaling** — V2 `BreakdownItemEldritchBlast.cpp`
   has the per-class-level scaling; V3 needs a dedicated breakdown.
-- ❌ **Ki / Turn Undead / Song breakdowns** — sections exist in
-  BreakdownsPanel but several stat keys still resolve to 0 because feats
-  that grant them aren't yet wired through the parser.
+- ✅ **Ki / Turn Undead / Song breakdowns** — `BaseClassLevel`/`ClassLevel`
+  AType now uses `Amount[classLevel]` array index (not multiply). Centered
+  stance added for cloth-armor Monks. Turn Undead base level from
+  Cleric/Dark Apostate/Paladin class levels wired into `turnUndead.levelBonus`
+  and `turnUndead.diceBonus`. (#57)
 - ❌ **Hireling stat passthrough** — V2 has hireling sliders; V3 surfaces
   them in BreakdownsPanel but doesn't drive a hireling sub-build.
 

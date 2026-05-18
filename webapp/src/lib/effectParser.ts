@@ -316,8 +316,15 @@ function resolveValue(
     case 'ClassLevel':
     case 'BaseClassLevel':
     case 'ClassCasterLevel': {
-      const base = getAmountAtRank(effect.Amount, 1)
-      return base * classLevels
+      // V2 Effect.cpp:1214-1256: Amount is indexed by class level from StackSource,
+      // i.e. Amount[classLevel]. For single-entry arrays this clamps to Amount[0].
+      let level = classLevels
+      if (ctx && effect.StackSource) {
+        level = atype === 'BaseClassLevel'
+          ? (ctx.baseClassLevels[effect.StackSource] ?? classLevels)
+          : (ctx.classLevels[effect.StackSource] ?? classLevels)
+      }
+      return getAmountAtRank(effect.Amount, level + 1)
     }
 
     case 'TotalLevel': {
