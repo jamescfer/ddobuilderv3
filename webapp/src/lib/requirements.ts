@@ -53,6 +53,13 @@ export interface RequirementContext {
   race?: Race
   /** Optional pre-built feat name set; defaults to build.featChoices values. */
   feats?: Set<string>
+  /**
+   * V2 parity: map of groupName → claimant InternalName derived from trained
+   * enhancements with ExclusionGroup effects. When provided, Exclusive
+   * requirements are evaluated strictly; when absent, they pass conservatively.
+   * Use computeExclusionGroups() from lib/exclusionGroups.ts to build this.
+   */
+  exclusionGroups?: Record<string, string>
 }
 
 function getFeatSet(ctx: RequirementContext): Set<string> {
@@ -119,6 +126,19 @@ export function meetsSingleRequirement(req: Requirement, ctx: RequirementContext
       return true
     case 'StartingWorld':
       return true
+    case 'Exclusive': {
+      // V2 parity: Build::IsExclusiveEnhancement (Build.cpp:3617-3636).
+      // Exclusive requirement has Item[0]=enhancementInternalName, Item[1]=groupName.
+      // When no exclusionGroups map is provided we pass conservatively to avoid
+      // false negatives in contexts that don't populate the map yet.
+      if (!ctx.exclusionGroups) return true
+      const its = Array.isArray(req.Item) ? req.Item : req.Item ? [req.Item] : []
+      const enhancementId = its[0] ?? ''
+      const groupName = its[its.length - 1] ?? ''  // back() in V2: last element
+      const claimed = ctx.exclusionGroups[groupName]
+      // isUs || !found — V2 logic: passes if we own the group or it's unclaimed
+      return !claimed || claimed === enhancementId
+    }
     default:
       return true
   }
