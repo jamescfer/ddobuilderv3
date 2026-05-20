@@ -44,6 +44,7 @@ the PR number, so this file doubles as a changelog.
 | 22 | New XML loaders: AttackRates / BonusTypes / Challenges / ItemBuffs / ItemClickies | #55 |
 | 23 | Challenges wired into Favor panel | #55 |
 | 25 | Ki / Turn Undead / Song breakdowns — `BaseClassLevel`/`ClassLevel` AType uses `Amount[classLevel]` (array index) not `Amount[0]*classLevel`; Centered stance derived for cloth-armor Monk; Turn Undead base level from Cleric/Paladin class levels added to `turnUndead.levelBonus` and `turnUndead.diceBonus` | #57 |
+| 26 | ExclusionGroup enforcement — `computeExclusionGroups()` derives group→claimant map from trained enhancements; `Exclusive` requirement type in `requirements.ts` now evaluates against that map (passes for owner or unclaimed group, fails for conflicts); conservative pass preserved when map is not provided | #62 |
 
 ---
 
@@ -89,8 +90,12 @@ the PR number, so this file doubles as a changelog.
   charges + recharge are read but charge consumption isn't simulated.
 - ❌ **`Slider` effects with non-stance gating** — most stance-gated
   sliders work; non-stance gates (e.g. enemy-type) are still TODO.
-- ❌ **`ExclusionGroup`** — V2 marks effects exclusive within a named group
-  (e.g. `SDItemDefense`). V3 doesn't enforce these yet.
+- ✅ **`ExclusionGroup`** — `computeExclusionGroups()` in `lib/exclusionGroups.ts`
+  derives a `groupName → InternalName` map from trained enhancements; the
+  `Exclusive` requirement type in `lib/requirements.ts` now evaluates against
+  that map (passes for the owning enhancement or an unclaimed group, fails for
+  conflicting enhancements). Passes conservatively when the map is not supplied
+  to preserve backward compatibility. (#62)
 
 ### UI features
 
@@ -207,5 +212,4 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53, #54, #55 for completed
-items.*
+*Maintained by the parity-pass series. See PRs #53–#62 for completed items.*
