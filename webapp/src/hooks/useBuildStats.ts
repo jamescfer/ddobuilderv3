@@ -897,10 +897,29 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     const wisMod     = abMod(resolveAbility('Wisdom'))
     const chaMod     = abMod(resolveAbility('Charisma'))
 
-    // Saves
-    if (conModFull !== 0) add(map, 'save.Fort',   { value: conModFull, type: 'Ability mod', source: 'Constitution' })
-    if (dexMod !== 0)     add(map, 'save.Reflex', { value: dexMod,     type: 'Ability mod', source: 'Dexterity' })
-    if (wisMod !== 0)     add(map, 'save.Will',   { value: wisMod,     type: 'Ability mod', source: 'Wisdom' })
+    // Saves — V2 BreakdownItemSave.cpp:133-150 (LargestStatBonus).
+    // Default: CON→Fort, DEX→Reflex, WIS→Will. SaveBonusAbility feats (e.g.
+    // Force of Personality → CHA for Will; Insightful Reflexes → INT for Reflex)
+    // substitute a different ability when its modifier is higher.
+    {
+      const saveOpts: Record<string, Array<{ ability: string; mod: number }>> = {
+        Fort:   [{ ability: 'Constitution', mod: conModFull }],
+        Reflex: [{ ability: 'Dexterity',    mod: dexMod }],
+        Will:   [{ ability: 'Wisdom',       mod: wisMod }],
+      }
+      for (const [key, bonuses] of map.entries()) {
+        const m = key.match(/^save\.(Fort|Reflex|Will)\.ability\.(.+)$/)
+        if (m && bonuses.length > 0) {
+          saveOpts[m[1]].push({ ability: m[2], mod: abMod(resolveAbility(m[2])) })
+        }
+      }
+      for (const [saveKey, opts] of Object.entries(saveOpts)) {
+        const best = opts.reduce((a, b) => b.mod > a.mod ? b : a)
+        if (best.mod !== 0) {
+          add(map, `save.${saveKey}`, { value: best.mod, type: 'Ability mod', source: best.ability })
+        }
+      }
+    }
 
     // V2 Divine Grace: Paladin (auto at level 2) and Sacred Fist add CHA mod to all saves,
     // capped at 2 + 3*levels of the relevant class. (BreakdownItemSave.cpp:484-510)
