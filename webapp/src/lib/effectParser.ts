@@ -450,6 +450,31 @@ export function parseEffect(
   }
 
   const resolved = resolveValue(effect, rank, classLevels, treeTotalAP, ctx)
+
+  // SaveBonusAbility has AType=NotNeeded so resolveValue returns null, but
+  // it must still emit markers so Phase 2 in useBuildStats can substitute the
+  // best-modifier ability for each save.
+  // items = [abilityName, saveType, ...]: first item is the ability, the rest
+  // are save types (matches V2 XML structure: <Item>Charisma</Item><Item>Will</Item>).
+  if (effect.Type === 'SaveBonusAbility') {
+    const its = toStringArray(effect.Item)
+    if (its.length >= 2) {
+      const ability = its[0]
+      const saveTypes = its.slice(1)
+      const bt = effect.Bonus ?? 'Enhancement'
+      return saveTypes.flatMap(st => {
+        if (st === 'All') {
+          return (['Fort', 'Reflex', 'Will'] as const).map(k => ({
+            statKey: `save.${k}.ability.${ability}`, value: 1, bonusType: bt, source,
+          }))
+        }
+        const key = st === 'Fortitude' ? 'Fort' : st
+        return [{ statKey: `save.${key}.ability.${ability}`, value: 1, bonusType: bt, source }]
+      })
+    }
+    return []
+  }
+
   if (resolved === null) return []
   const value: number = resolved
 

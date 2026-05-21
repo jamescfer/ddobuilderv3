@@ -45,6 +45,7 @@ the PR number, so this file doubles as a changelog.
 | 23 | Challenges wired into Favor panel | #55 |
 | 25 | Ki / Turn Undead / Song breakdowns — `BaseClassLevel`/`ClassLevel` AType uses `Amount[classLevel]` (array index) not `Amount[0]*classLevel`; Centered stance derived for cloth-armor Monk; Turn Undead base level from Cleric/Paladin class levels added to `turnUndead.levelBonus` and `turnUndead.diceBonus` | #57 |
 | 26 | ExclusionGroup enforcement — `computeExclusionGroups()` derives group→claimant map from trained enhancements; `Exclusive` requirement type in `requirements.ts` now evaluates against that map (passes for owner or unclaimed group, fails for conflicts); conservative pass preserved when map is not provided | #62 |
+| 27 | SaveBonusAbility ability substitution — `parseEffect` now correctly emits `save.{Fort\|Reflex\|Will}.ability.{Ability}` markers for feats like Force of Personality (CHA→Will) and Insightful Reflexes (INT→Reflex); `useBuildStats` Phase 2 picks the highest-modifier ability per save (V2 `LargestStatBonus()` parity) | #63 |
 
 ---
 
@@ -57,10 +58,11 @@ the PR number, so this file doubles as a changelog.
   remains for environments where the XML is unavailable. (#56)
 - ❌ **AttackRates in Combat panel** — `AttackRates.xml` is loaded but the
   `CombatPanel` DPS sim still uses synthesised attack-per-minute numbers.
-- 🟡 **Save bonus edge cases** — Strong/Weak base progression is correct
-  (#53). Missing: full Divine Grace cap (V2 `BreakdownItemSave.cpp:484-510`),
-  Half-Elf Lesser Divine Grace (`BreakdownItemSave.cpp:520-549`),
-  Reaper-only Diehard, Mantle saves.
+- ✅ **Save bonus edge cases** — Divine Grace cap and Half-Elf Lesser Divine
+  Grace (#56); SaveBonusAbility ability substitution (Force of Personality,
+  Insightful Reflexes, Insightful Fortitude, Domain of Strength feats) (#63).
+  "Reaper-only Diehard" and "Mantle saves" do not exist in V2
+  `BreakdownItemSave.cpp` — those TODO entries were inaccurate.
 - ❌ **Spell DC: per-school stacking** — `dc.<school>` stat-key works for
   feat focus, but multi-source DC stacking (Implement, Arcane Augmentation,
   set bonuses) needs verification against V2 `SpellDC.cpp:62-129`.
