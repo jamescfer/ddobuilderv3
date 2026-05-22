@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { emptyBuild } from '../types/ddo'
+import { perLevelRankDisplay, perLevelRankCap } from '../lib/skillDisplay'
 
 // Inline reducer copy — keeps the test independent of CharacterContext's
 // dispatch plumbing while still verifying the V2-parity invariant.
@@ -80,5 +81,44 @@ describe('V2 parity — per-level rank cap (class skill = N+3 trained levels)', 
     const isClass = false
     const display = isClass ? trained : trained / 2
     expect(display).toBe(5)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Parity pass 28 — per-level grid .5-rank display for cross-class skills
+// V2 BreakdownItemSkill shows .5 increments in the per-level view;
+// V3's PerLevelGrid was showing raw trained levels (integers) instead.
+// ---------------------------------------------------------------------------
+
+describe('V2 parity — perLevelRankDisplay (.5 increments for cross-class)', () => {
+  it('class skill: display equals trained levels 1:1', () => {
+    expect(perLevelRankDisplay(0, true)).toBe(0)
+    expect(perLevelRankDisplay(1, true)).toBe(1)
+    expect(perLevelRankDisplay(4, true)).toBe(4)
+    expect(perLevelRankDisplay(23, true)).toBe(23)
+  })
+
+  it('cross-class skill: display is trained / 2 (.5 per trained level)', () => {
+    expect(perLevelRankDisplay(0, false)).toBe(0)
+    expect(perLevelRankDisplay(1, false)).toBe(0.5)
+    expect(perLevelRankDisplay(2, false)).toBe(1.0)
+    expect(perLevelRankDisplay(4, false)).toBe(2.0)
+    expect(perLevelRankDisplay(7, false)).toBe(3.5)
+  })
+})
+
+describe('V2 parity — perLevelRankCap (displayed cap for per-level grid)', () => {
+  it('class skill cap at char level N is N+3 displayed ranks', () => {
+    expect(perLevelRankCap(1, true)).toBe(4)
+    expect(perLevelRankCap(5, true)).toBe(8)
+    expect(perLevelRankCap(20, true)).toBe(23)
+  })
+
+  it('cross-class skill cap at char level N is (N+3)/2 displayed ranks', () => {
+    // V2 parity: at char level 1, cross-class cap = (1+3)/2 = 2.0 displayed ranks
+    expect(perLevelRankCap(1, false)).toBe(2.0)
+    expect(perLevelRankCap(5, false)).toBe(4.0)
+    expect(perLevelRankCap(17, false)).toBe(10.0)
+    expect(perLevelRankCap(20, false)).toBe(11.5)
   })
 })

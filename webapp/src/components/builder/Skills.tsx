@@ -4,6 +4,7 @@ import { useCharacter } from '../../context/CharacterContext'
 import type { CharacterBuild, DDOClass, Race } from '../../types/ddo'
 import { SKILLS } from '../../lib/gamedata'
 import { getLevelClasses } from '../../lib/levelProgression'
+import { perLevelRankDisplay, perLevelRankCap, displayRankToTrained } from '../../lib/skillDisplay'
 import styles from './Skills.module.css'
 
 type SkillName = typeof SKILLS[number]['name']
@@ -359,19 +360,19 @@ function PerLevelGrid({
         {SKILLS.map(({ name: skill }) => {
           const isClass = classSkills.has(skill)
           const restricted = RESTRICTED_SKILLS.has(skill) && !isClass
-          let runningTotal = 0
-          for (const l of levels) runningTotal += byLvl[l]?.[skill] ?? 0
-          const totalDisplay = isClass
-            ? String(runningTotal)
-            : (runningTotal / 2).toFixed(1).replace(/\.0$/, '')
+          let runningTrained = 0
+          for (const l of levels) runningTrained += byLvl[l]?.[skill] ?? 0
+          const totalDisplay = perLevelRankDisplay(runningTrained, isClass)
+            .toFixed(isClass ? 0 : 1).replace(/\.0$/, '')
           return (
             <div key={skill} className={styles.perLevelRow}>
               <div className={styles.perLevelLabel} title={restricted ? `${skill} can only be trained as a class skill.` : skill}>
                 {skill}
               </div>
               {levels.map(l => {
-                const ranks = byLvl[l]?.[skill] ?? 0
-                const cap = isClass ? l + 3 : l + 3
+                const trained = byLvl[l]?.[skill] ?? 0
+                const displayVal = perLevelRankDisplay(trained, isClass)
+                const capDisplay = perLevelRankCap(l, isClass)
                 const locked = restricted
                 return (
                   <div
@@ -380,20 +381,22 @@ function PerLevelGrid({
                   >
                     <input
                       className={styles.perLevelInput}
-                      data-zero={ranks === 0}
+                      data-zero={trained === 0}
                       type="number"
                       min={0}
-                      max={cap}
-                      value={ranks || ''}
+                      max={capDisplay}
+                      step={isClass ? 1 : 0.5}
+                      value={displayVal || ''}
                       placeholder="—"
                       disabled={locked}
                       onChange={e => {
                         const n = Number(e.target.value)
-                        onSet(skill as SkillName, l, isFinite(n) ? n : 0)
+                        const trainedVal = isFinite(n) ? displayRankToTrained(n, isClass) : 0
+                        onSet(skill as SkillName, l, trainedVal)
                       }}
                       title={locked
                         ? `${skill} can only be trained as a class skill.`
-                        : `Level ${l}: rank cap ${isClass ? cap : `${(cap / 2).toFixed(1)} (cross-class)`}`}
+                        : `Level ${l}: rank cap ${capDisplay}${isClass ? '' : ' (cross-class, .5 per pt)'}`}
                     />
                   </div>
                 )

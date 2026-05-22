@@ -46,6 +46,7 @@ the PR number, so this file doubles as a changelog.
 | 25 | Ki / Turn Undead / Song breakdowns — `BaseClassLevel`/`ClassLevel` AType uses `Amount[classLevel]` (array index) not `Amount[0]*classLevel`; Centered stance derived for cloth-armor Monk; Turn Undead base level from Cleric/Paladin class levels added to `turnUndead.levelBonus` and `turnUndead.diceBonus` | #57 |
 | 26 | ExclusionGroup enforcement — `computeExclusionGroups()` derives group→claimant map from trained enhancements; `Exclusive` requirement type in `requirements.ts` now evaluates against that map (passes for owner or unclaimed group, fails for conflicts); conservative pass preserved when map is not provided | #62 |
 | 27 | SaveBonusAbility ability substitution — `parseEffect` now correctly emits `save.{Fort\|Reflex\|Will}.ability.{Ability}` markers for feats like Force of Personality (CHA→Will) and Insightful Reflexes (INT→Reflex); `useBuildStats` Phase 2 picks the highest-modifier ability per save (V2 `LargestStatBonus()` parity) | #63 |
+| 28 | Per-level cross-class skill .5-rank display — `lib/skillDisplay.ts` exports `perLevelRankDisplay`, `perLevelRankCap`, and `displayRankToTrained`; `PerLevelGrid` in `Skills.tsx` now shows 0.5-increment displayed ranks, correct `(N+3)/2` cap, and `step=0.5` inputs for cross-class skills (V2 BreakdownItemSkill parity) | #64 |
 
 ---
 
@@ -69,8 +70,10 @@ the PR number, so this file doubles as a changelog.
 - ❌ **Caster level item bonuses** — V2 `Spell.cpp:174-228` adds class CL,
   school CL, spell CL. V3 reads them from stats but item-set CL bonuses
   aren't all wired.
-- 🟡 **Skill cross-class .5-rank display** — totals correct; per-level grid
-  shows trained levels (not displayed ranks). Need a "show .5 rank" mode.
+- ✅ **Skill cross-class .5-rank display** — `lib/skillDisplay.ts` provides
+  `perLevelRankDisplay` / `perLevelRankCap` / `displayRankToTrained`; the
+  `PerLevelGrid` in `Skills.tsx` now shows 0.5-increment ranks, correct
+  `(N+3)/2` cap, and `step=0.5` inputs for cross-class skills. (#64)
 - ❌ **Reaper points awarded by quest difficulty** — V2 awards Reaper XP
   per quest; V3 has a manual slider only.
 - ❌ **Eldritch blast dice scaling** — V2 `BreakdownItemEldritchBlast.cpp`
@@ -214,4 +217,4 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#62 for completed items.*
+*Maintained by the parity-pass series. See PRs #53–#64 for completed items.*
