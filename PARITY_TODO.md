@@ -47,6 +47,7 @@ the PR number, so this file doubles as a changelog.
 | 26 | ExclusionGroup enforcement — `computeExclusionGroups()` derives group→claimant map from trained enhancements; `Exclusive` requirement type in `requirements.ts` now evaluates against that map (passes for owner or unclaimed group, fails for conflicts); conservative pass preserved when map is not provided | #62 |
 | 27 | SaveBonusAbility ability substitution — `parseEffect` now correctly emits `save.{Fort\|Reflex\|Will}.ability.{Ability}` markers for feats like Force of Personality (CHA→Will) and Insightful Reflexes (INT→Reflex); `useBuildStats` Phase 2 picks the highest-modifier ability per save (V2 `LargestStatBonus()` parity) | #63 |
 | 28 | Per-level cross-class skill .5-rank display — `lib/skillDisplay.ts` exports `perLevelRankDisplay`, `perLevelRankCap`, and `displayRankToTrained`; `PerLevelGrid` in `Skills.tsx` now shows 0.5-increment displayed ranks, correct `(N+3)/2` cap, and `step=0.5` inputs for cross-class skills (V2 BreakdownItemSkill parity) | #64 |
+| 29 | SimpleGear forum export slot order + augments — `simpleGear` section now sorts slots in V2's canonical `Inventory_Arrows..Inventory_Weapon2` enum order and emits augment choices (type: name) per item slot, matching V2 `ForumExportDlg.cpp::ExportGear` | #65 |
 
 ---
 
@@ -119,8 +120,9 @@ the PR number, so this file doubles as a changelog.
 
 ### Forum export
 
-- 🟡 **`SimpleGear`** (FES_SimpleGear) is present but doesn't sort like
-  V2 `ForumExportDlg.cpp:1841`.
+- ✅ **`SimpleGear`** (FES_SimpleGear) — slots now sort in V2's canonical
+  `Inventory_Arrows..Inventory_Weapon2` enum order; augment choices are
+  emitted per item as `type: name` lines, matching V2 `ForumExportDlg.cpp::ExportGear`. (#65)
 - ❌ **`AlternateGearLayouts`** is present but doesn't include the augment
   list per slot.
 - ❌ **Image embedding** — V2 export inserts `[img]` tags for class /
@@ -217,4 +219,4 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#64 for completed items.*
+*Maintained by the parity-pass series. See PRs #53–#65 for completed items.*

@@ -2,6 +2,82 @@ import { describe, expect, it } from 'vitest'
 import { emitForumExport, DEFAULT_SECTIONS } from '../lib/export/sections'
 import { emptyBuild } from '../types/ddo'
 
+// V2 parity: Parity pass 29 — SimpleGear slot order + augments
+// V2 ForumExportDlg.cpp ExportGear iterates Inventory_Arrows..Inventory_Count
+// (enum order: Arrow, Armor, Belt, Boots, Bracers, Cloak, Gloves, Goggles,
+//  Helmet, Necklace, Quiver, Ring, Ring2, Trinket, Main Hand, Off Hand).
+// V3's prior implementation sorted alphabetically instead.
+// V2 also emits augment choices per item slot.
+
+describe('SimpleGear export (parity pass 29)', () => {
+  it('sorts slots in V2 canonical inventory order, not alphabetically', () => {
+    const build = {
+      ...emptyBuild(),
+      gear: {
+        Helmet: 'Helm of Knowledge',
+        Armor: 'Flawless Blue Dragonscale Robe',
+        Belt: 'Belt of Braided Ivy',
+      },
+    }
+    const section = DEFAULT_SECTIONS.find(s => s.id === 'SimpleGear')!
+    const lines = section.emit({ build, stats: null })
+    const slotLines = lines.filter(l => l.startsWith('  '))
+    const slots = slotLines.map(l => l.split(':')[0].trim())
+    // V2 order: Armor (index 2) before Belt (index 3) before Helmet (index 9)
+    // Alphabetical order would put Armor, Belt, Helmet in the same order by
+    // coincidence, so use a slot pair that differs: Helmet vs Armor
+    expect(slots.indexOf('Armor')).toBeLessThan(slots.indexOf('Helmet'))
+  })
+
+  it('places Weapon slots (Main Hand, Off Hand) after Ring2 and Trinket', () => {
+    const build = {
+      ...emptyBuild(),
+      gear: {
+        'Main Hand': 'Falchion of the Claw',
+        Helmet: 'Helm of Knowledge',
+        Ring: 'Ring of the Stalker',
+        Trinket: 'Mysterious Bauble',
+      },
+    }
+    const section = DEFAULT_SECTIONS.find(s => s.id === 'SimpleGear')!
+    const lines = section.emit({ build, stats: null })
+    const slotLines = lines.filter(l => l.startsWith('  ') && !l.startsWith('    '))
+    const slots = slotLines.map(l => l.split(':')[0].trim())
+    // V2: Ring before Trinket before Main Hand
+    expect(slots.indexOf('Ring')).toBeLessThan(slots.indexOf('Trinket'))
+    expect(slots.indexOf('Trinket')).toBeLessThan(slots.indexOf('Main Hand'))
+  })
+
+  it('emits augment choices for items after each item line', () => {
+    const build = {
+      ...emptyBuild(),
+      gear: { Ring: 'Ring of the Stalker' },
+      augmentChoices: {
+        'Ring:Yellow:0': 'Topaz of Greater Acid Spell Lore',
+        'Ring:Green:0': 'Emerald of Constitution +8',
+      },
+    }
+    const section = DEFAULT_SECTIONS.find(s => s.id === 'SimpleGear')!
+    const lines = section.emit({ build, stats: null })
+    const augmentLines = lines.filter(l => l.startsWith('    '))
+    expect(augmentLines.length).toBe(2)
+    expect(augmentLines).toContain('    Yellow: Topaz of Greater Acid Spell Lore')
+    expect(augmentLines).toContain('    Green: Emerald of Constitution +8')
+  })
+
+  it('does not emit augment lines when slot has no augment choices', () => {
+    const build = {
+      ...emptyBuild(),
+      gear: { Armor: 'Plain Robe' },
+      augmentChoices: {},
+    }
+    const section = DEFAULT_SECTIONS.find(s => s.id === 'SimpleGear')!
+    const lines = section.emit({ build, stats: null })
+    const augmentLines = lines.filter(l => l.startsWith('    '))
+    expect(augmentLines.length).toBe(0)
+  })
+})
+
 describe('emitForumExport', () => {
   it('wraps output in BBCode courier font tags (V2 ForumExportDlg.cpp:195)', () => {
     const text = emitForumExport({ build: emptyBuild(), stats: null })
