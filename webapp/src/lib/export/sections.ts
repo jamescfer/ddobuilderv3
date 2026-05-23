@@ -425,16 +425,40 @@ const consolidatedFeats: SectionDef = {
   },
 }
 
+// V2 canonical slot order mirrors InventorySlotTypes.h enum
+// (Inventory_Arrows..Inventory_Weapon2, per ForumExportDlg.cpp:1779).
+const V2_SLOT_ORDER = [
+  'Arrow', 'Armor', 'Belt', 'Boots', 'Bracers', 'Cloak',
+  'Gloves', 'Goggles', 'Helmet', 'Necklace', 'Quiver',
+  'Ring', 'Ring2', 'Trinket', 'Main Hand', 'Off Hand',
+]
+
+function slotSortKey(slot: string): number {
+  const idx = V2_SLOT_ORDER.indexOf(slot)
+  return idx === -1 ? V2_SLOT_ORDER.length : idx
+}
+
 const simpleGear: SectionDef = {
   id: 'SimpleGear',
   label: 'Gear (simple)',
   emit: ({ build }) => {
     const entries = Object.entries(build.gear).filter(([, v]) => v)
     if (entries.length === 0) return []
-    return [
-      '[b]Gear (simple)[/b]:',
-      ...entries.sort(([a], [b]) => a.localeCompare(b)).map(([slot, item]) => `  ${slot}: ${item}`),
-    ]
+    const lines: string[] = ['[b]Gear (simple)[/b]:']
+    const sorted = [...entries].sort(([a], [b]) => slotSortKey(a) - slotSortKey(b))
+    for (const [slot, item] of sorted) {
+      lines.push(`  ${slot}: ${item}`)
+      // V2 ForumExportDlg.cpp:1816-1857: emit augment choices per item
+      const augPrefix = `${slot}:`
+      const augEntries = Object.entries(build.augmentChoices)
+        .filter(([k]) => k.startsWith(augPrefix))
+      for (const [key, augName] of augEntries) {
+        const parts = key.split(':')
+        const augType = parts[1] ?? ''
+        lines.push(`    ${augType}: ${augName}`)
+      }
+    }
+    return lines
   },
 }
 
