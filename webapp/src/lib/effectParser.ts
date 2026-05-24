@@ -1510,6 +1510,18 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
       if (items.length > 0) return items.map(item => make(`dc.${item}`))
       return [make('dc.All')]
 
+    // School-specific DC bonus from items (e.g. "Admiral's Gloves" +2 Equipment Illusion DC).
+    // V2 ItemBuff type SchoolFocus / SchoolFocusNumber → BreakdownItemSpellDC school total.
+    case 'SchoolFocus':
+    case 'SchoolFocusNumber':
+      if (items.length > 0) return items.map(item => make(`dc.${item}`))
+      return [make('dc.All')]
+
+    // Universal DC bonus from items (e.g. "Doctor Gustav's Warped Lenses" +1 Profane).
+    // V2 ItemBuff type SpellFocusNumber → BreakdownItemSpellDC All total.
+    case 'SpellFocusNumber':
+      return [make('dc.All')]
+
     // -----------------------------------------------------------------------
     // Skills — by group type
     // -----------------------------------------------------------------------

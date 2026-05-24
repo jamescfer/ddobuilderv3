@@ -56,15 +56,6 @@ function abilityModifier(score: number): number {
   return Math.floor((score - 10) / 2)
 }
 
-/** Spell Focus / Greater Spell Focus from chosen feats (legacy fallback). */
-function spellFocusBonus(school: SpellSchool, featChoices: Record<string, string>): number {
-  let bonus = 0
-  const values = Object.values(featChoices)
-  if (values.includes(`Spell Focus: ${school}`)) bonus += 1
-  if (values.includes(`Greater Spell Focus: ${school}`)) bonus += 1
-  return bonus
-}
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -173,7 +164,6 @@ export default function DCPanel() {
             cls={activeClassDef}
             classLevel={activeClass.levels}
             stats={stats}
-            featChoices={build.featChoices}
           />
         )}
       </div>
@@ -189,10 +179,9 @@ interface DCTableProps {
   cls: DDOClass
   classLevel: number
   stats: BuildStats
-  featChoices: Record<string, string>
 }
 
-function DCTable({ cls, classLevel, stats, featChoices }: DCTableProps) {
+function DCTable({ cls, classLevel, stats }: DCTableProps) {
   const cap = spellLevelCap(cls, classLevel)
   const spellLevels = Array.from({ length: cap }, (_, i) => i + 1)
 
@@ -210,9 +199,9 @@ function DCTable({ cls, classLevel, stats, featChoices }: DCTableProps) {
   // General DC bonuses (apply to every school)
   const generalDC = stats.total('dc.All') + stats.total('dc.Spell')
 
-  // Per-school bonuses: feat focus + parsed effect bonuses
+  // Per-school bonuses entirely from the stat map (feats, items, enhancements, set bonuses)
   const focusBonuses = new Map<SpellSchool, number>(
-    SPELL_SCHOOLS.map(s => [s, spellFocusBonus(s, featChoices) + stats.total(`dc.${s}`)])
+    SPELL_SCHOOLS.map(s => [s, stats.total(`dc.${s}`)])
   )
 
   const hasFocus = Array.from(focusBonuses.values()).some(v => v > 0) || generalDC !== 0
