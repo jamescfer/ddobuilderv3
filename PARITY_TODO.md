@@ -48,6 +48,7 @@ the PR number, so this file doubles as a changelog.
 | 27 | SaveBonusAbility ability substitution — `parseEffect` now correctly emits `save.{Fort\|Reflex\|Will}.ability.{Ability}` markers for feats like Force of Personality (CHA→Will) and Insightful Reflexes (INT→Reflex); `useBuildStats` Phase 2 picks the highest-modifier ability per save (V2 `LargestStatBonus()` parity) | #63 |
 | 28 | Per-level cross-class skill .5-rank display — `lib/skillDisplay.ts` exports `perLevelRankDisplay`, `perLevelRankCap`, and `displayRankToTrained`; `PerLevelGrid` in `Skills.tsx` now shows 0.5-increment displayed ranks, correct `(N+3)/2` cap, and `step=0.5` inputs for cross-class skills (V2 BreakdownItemSkill parity) | #64 |
 | 29 | SimpleGear forum export slot order + augments — `simpleGear` section now sorts slots in V2's canonical `Inventory_Arrows..Inventory_Weapon2` enum order and emits augment choices (type: name) per item slot, matching V2 `ForumExportDlg.cpp::ExportGear` | #65 |
+| 30 | Spell DC multi-source stacking — `parseItemBuff` now handles `SchoolFocusNumber` (school-specific DC bonus, e.g. "+3 Insightful Enchantment DC") and `SpellFocusNumber` (universal DC bonus, e.g. "+1 Profane all DCs") item buff types; both were silently dropped (default: return []). DCPanel double-count removed: `spellFocusBonus` manual feat-name lookup eliminated; DC bonuses now come solely from `stats.total('dc.*')` (V2 `SpellDC.cpp:119-128` parity). | #66 |
 
 ---
 
@@ -65,9 +66,11 @@ the PR number, so this file doubles as a changelog.
   Insightful Reflexes, Insightful Fortitude, Domain of Strength feats) (#63).
   "Reaper-only Diehard" and "Mantle saves" do not exist in V2
   `BreakdownItemSave.cpp` — those TODO entries were inaccurate.
-- ❌ **Spell DC: per-school stacking** — `dc.<school>` stat-key works for
-  feat focus, but multi-source DC stacking (Implement, Arcane Augmentation,
-  set bonuses) needs verification against V2 `SpellDC.cpp:62-129`.
+- ✅ **Spell DC: per-school stacking** — `SchoolFocusNumber` and
+  `SpellFocusNumber` item buff types now wire to `dc.<school>` and `dc.All`
+  respectively in `parseItemBuff`; DCPanel double-count of Spell Focus feats
+  removed. Multi-source stacking (Feat + Equipment + Insightful + Profane)
+  verified correct via new regression tests. (#66)
 - ❌ **Caster level item bonuses** — V2 `Spell.cpp:174-228` adds class CL,
   school CL, spell CL. V3 reads them from stats but item-set CL bonuses
   aren't all wired.
@@ -219,4 +222,4 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#65 for completed items.*
+*Maintained by the parity-pass series. See PRs #53–#66 for completed items.*
