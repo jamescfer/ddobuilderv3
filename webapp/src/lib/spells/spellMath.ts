@@ -140,6 +140,7 @@ export function computeCasterLevel(
     cl += stats.total(`clSchool.${sch}`)
   }
   cl += stats.total(`clSpell.${spell.Name}`)
+  cl += stats.total('cl.All')
   const max = computeMaxCasterLevel(spell, cls, classLevel, stats)
   return Math.min(cl, max)
 }
@@ -158,6 +159,7 @@ export function computeMaxCasterLevel(
     max += stats.total(`maxClSchool.${sch}`)
   }
   max += stats.total(`maxClSpell.${spell.Name}`)
+  max += stats.total('maxCl.All')
   // V2 also caps at total caster levels (class level acts as a soft floor)
   return Math.max(max, classLevel)
 }

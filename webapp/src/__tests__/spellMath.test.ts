@@ -101,6 +101,20 @@ describe('computeCasterLevel', () => {
     })
     expect(computeCasterLevel(spell, wizard, 10, stats)).toBe(16)
   })
+  it('cl.All (universal equipment bonus) contributes to caster level — V2 Spell.cpp:174 parity', () => {
+    // An item giving "+2 Insightful Caster Levels" with no class/school/spell
+    // restriction emits cl.All. V2 adds this in ActualCasterLevel; V3 must too.
+    const spell: Spell = { Name: 'Fireball', MaxCasterLevel: 30, School: 'Evocation' }
+    const stats = makeStats({ 'cl.All': 2 })
+    expect(computeCasterLevel(spell, wizard, 10, stats)).toBe(12)
+  })
+  it('maxCl.All (universal cap raise) contributes to max caster level', () => {
+    // An item raising the cap universally emits maxCl.All; V2 adds it in MaxCasterLevel.
+    const spell: Spell = { Name: 'Fireball', MaxCasterLevel: 10, School: 'Evocation' }
+    const stats = makeStats({ 'cl.All': 3, 'maxCl.All': 3 })
+    // base cl = 10 + 3(cl.All) = 13; max = 10 + 3(maxCl.All) = 13 (max(13,10)=13)
+    expect(computeCasterLevel(spell, wizard, 10, stats)).toBe(13)
+  })
 })
 
 describe('computeSpellCost', () => {

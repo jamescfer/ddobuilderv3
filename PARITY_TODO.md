@@ -49,6 +49,7 @@ the PR number, so this file doubles as a changelog.
 | 28 | Per-level cross-class skill .5-rank display — `lib/skillDisplay.ts` exports `perLevelRankDisplay`, `perLevelRankCap`, and `displayRankToTrained`; `PerLevelGrid` in `Skills.tsx` now shows 0.5-increment displayed ranks, correct `(N+3)/2` cap, and `step=0.5` inputs for cross-class skills (V2 BreakdownItemSkill parity) | #64 |
 | 29 | SimpleGear forum export slot order + augments — `simpleGear` section now sorts slots in V2's canonical `Inventory_Arrows..Inventory_Weapon2` enum order and emits augment choices (type: name) per item slot, matching V2 `ForumExportDlg.cpp::ExportGear` | #65 |
 | 30 | Spell DC multi-source stacking — `parseItemBuff` now handles `SchoolFocusNumber` (school-specific DC bonus, e.g. "+3 Insightful Enchantment DC") and `SpellFocusNumber` (universal DC bonus, e.g. "+1 Profane all DCs") item buff types; both were silently dropped (default: return []). DCPanel double-count removed: `spellFocusBonus` manual feat-name lookup eliminated; DC bonuses now come solely from `stats.total('dc.*')` (V2 `SpellDC.cpp:119-128` parity). | #66 |
+| 31 | Caster level universal item bonuses — `computeCasterLevel` now adds `cl.All` and `computeMaxCasterLevel` now adds `maxCl.All`; equipment that grants "+N Caster Levels" with no class/school restriction (emits `cl.All` via `parseEffect`/`parseItemBuff`) was previously silently discarded (V2 `Spell.cpp:174-228` parity). | #67 |
 
 ---
 
@@ -71,9 +72,11 @@ the PR number, so this file doubles as a changelog.
   respectively in `parseItemBuff`; DCPanel double-count of Spell Focus feats
   removed. Multi-source stacking (Feat + Equipment + Insightful + Profane)
   verified correct via new regression tests. (#66)
-- ❌ **Caster level item bonuses** — V2 `Spell.cpp:174-228` adds class CL,
-  school CL, spell CL. V3 reads them from stats but item-set CL bonuses
-  aren't all wired.
+- ✅ **Caster level universal item bonuses** — `computeCasterLevel` now adds
+  `cl.All` and `computeMaxCasterLevel` now adds `maxCl.All`; equipment that
+  grants "+N Caster Levels" with no class/school restriction was previously
+  silently discarded. Class/school/spell-specific paths were already correct.
+  (V2 `Spell.cpp:174-228` parity). (#67)
 - ✅ **Skill cross-class .5-rank display** — `lib/skillDisplay.ts` provides
   `perLevelRankDisplay` / `perLevelRankCap` / `displayRankToTrained`; the
   `PerLevelGrid` in `Skills.tsx` now shows 0.5-increment ranks, correct
@@ -222,4 +225,4 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#66 for completed items.*
+*Maintained by the parity-pass series. See PRs #53–#67 for completed items.*
