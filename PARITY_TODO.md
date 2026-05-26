@@ -50,6 +50,7 @@ the PR number, so this file doubles as a changelog.
 | 29 | SimpleGear forum export slot order + augments — `simpleGear` section now sorts slots in V2's canonical `Inventory_Arrows..Inventory_Weapon2` enum order and emits augment choices (type: name) per item slot, matching V2 `ForumExportDlg.cpp::ExportGear` | #65 |
 | 30 | Spell DC multi-source stacking — `parseItemBuff` now handles `SchoolFocusNumber` (school-specific DC bonus, e.g. "+3 Insightful Enchantment DC") and `SpellFocusNumber` (universal DC bonus, e.g. "+1 Profane all DCs") item buff types; both were silently dropped (default: return []). DCPanel double-count removed: `spellFocusBonus` manual feat-name lookup eliminated; DC bonuses now come solely from `stats.total('dc.*')` (V2 `SpellDC.cpp:119-128` parity). | #66 |
 | 31 | Caster level universal item bonuses — `computeCasterLevel` now adds `cl.All` and `computeMaxCasterLevel` now adds `maxCl.All`; equipment that grants "+N Caster Levels" with no class/school restriction (emits `cl.All` via `parseEffect`/`parseItemBuff`) was previously silently discarded (V2 `Spell.cpp:174-228` parity). | #67 |
+| 32 | Eldritch blast dice scaling — `resolveBonus` now tracks `fromGear` on each `RawBonus` and applies "Highest Only" stacking only to gear contributions; feat/enhancement contributions always stack (V2 `BreakdownItem.cpp::m_effects` vs `m_itemEffects` parity). Auto-feats granted multiple times (e.g. `Warlock: Eldritch Blast Damage` ×5 at L4/8/12/16/20) and Pact Damage (×10) now correctly accumulate their full dice totals (6d8 + 10d6 at L20). | #68 |
 
 ---
 
@@ -83,8 +84,11 @@ the PR number, so this file doubles as a changelog.
   `(N+3)/2` cap, and `step=0.5` inputs for cross-class skills. (#64)
 - ❌ **Reaper points awarded by quest difficulty** — V2 awards Reaper XP
   per quest; V3 has a manual slider only.
-- ❌ **Eldritch blast dice scaling** — V2 `BreakdownItemEldritchBlast.cpp`
-  has the per-class-level scaling; V3 needs a dedicated breakdown.
+- ✅ **Eldritch blast dice scaling** — `resolveBonus` now tracks `fromGear` per
+  `RawBonus` and applies "Highest Only" only within gear contributions; feat/
+  enhancement contributions always stack (V2 `BreakdownItem.cpp::m_effects`
+  parity). Repeated auto-feat grants like `Warlock: Eldritch Blast Damage` ×5
+  and `Pact Damage` ×10 now produce correct 6d8 + 10d6 totals at L20. (#68)
 - ✅ **Ki / Turn Undead / Song breakdowns** — `BaseClassLevel`/`ClassLevel`
   AType now uses `Amount[classLevel]` array index (not multiply). Centered
   stance added for cloth-armor Monks. Turn Undead base level from
@@ -225,4 +229,4 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#67 for completed items.*
+*Maintained by the parity-pass series. See PRs #53–#68 for completed items.*
