@@ -92,9 +92,9 @@ function add(map: StatMap, key: string, bonus: RawBonus): void {
   else map.set(key, [bonus])
 }
 
-function addParsed(map: StatMap, bonuses: ReturnType<typeof parseEffect>): void {
+function addParsed(map: StatMap, bonuses: ReturnType<typeof parseEffect>, fromGear = false): void {
   for (const pb of bonuses) {
-    add(map, pb.statKey, { value: pb.value, type: pb.bonusType, source: pb.source })
+    add(map, pb.statKey, { value: pb.value, type: pb.bonusType, source: pb.source, fromGear })
   }
 }
 
@@ -340,14 +340,14 @@ function accumulateGear(map: StatMap, gearItems: Record<string, Item>): void {
   for (const [slot, item] of Object.entries(gearItems)) {
     const source = `${item.Name} (${slot})`
     for (const buff of toArray(item.Buff)) {
-      addParsed(map, parseItemBuff(buff, source))
+      addParsed(map, parseItemBuff(buff, source), true)
     }
     // Armor bonus from armor/shield items — treated as Armor bonus type
     if (item.ArmorBonus) {
-      add(map, 'ac', { value: item.ArmorBonus, type: 'Armor', source })
+      add(map, 'ac', { value: item.ArmorBonus, type: 'Armor', source, fromGear: true })
     }
     if (item.ShieldBonus) {
-      add(map, 'ac', { value: item.ShieldBonus, type: 'Shield', source })
+      add(map, 'ac', { value: item.ShieldBonus, type: 'Shield', source, fromGear: true })
     }
     // V2 BreakdownItemAC.cpp:71-82 + BreakdownItemDodge.cpp:55-63: tower
     // shield items contribute their MaximumDexterityBonus to the dedicated
@@ -356,7 +356,7 @@ function accumulateGear(map: StatMap, gearItems: Record<string, Item>): void {
     const armorType = item.Armor
     const isTowerShield = armorType === 'TowerShield' || armorType === 'Tower Shield'
     if (isTowerShield && typeof item.MaximumDexterityBonus === 'number') {
-      add(map, 'mdbShields', { value: item.MaximumDexterityBonus, type: 'Equipment', source })
+      add(map, 'mdbShields', { value: item.MaximumDexterityBonus, type: 'Equipment', source, fromGear: true })
     }
     // V2 armor check penalty: armor and shield clamped to ≤0, accumulated separately.
     if (item.ArmorCheckPenalty != null && item.ArmorCheckPenalty < 0) {
@@ -367,6 +367,7 @@ function accumulateGear(map: StatMap, gearItems: Record<string, Item>): void {
         value: item.ArmorCheckPenalty,
         type: 'Penalty',
         source: `${item.Name} ACP`,
+        fromGear: true,
       })
     }
   }
@@ -780,6 +781,13 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       const cls = allClasses.find(c => c.Name === bc.name)
       if (!cls) continue
 
+      // V2 parity: m_effects (feat effects) are summed without bonus-type
+      // stacking rules — only m_itemEffects has RemoveNonStacking applied.
+      // Count how many times each auto-feat fires so we pass rank=count
+      // to accumulateFeat, which uses Amount*rank for AType=Simple effects.
+      // This lets repeated grants (e.g. "Warlock: Eldritch Blast Damage" ×5)
+      // stack correctly even when their bonus type is "Highest Only".
+      const autoFeatCounts = new Map<string, number>()
       for (const autoFeat of toArray(cls.AutomaticFeats)) {
         if ((autoFeat.Level ?? 1) > bc.levels) continue
         const names = toArray(
@@ -787,9 +795,12 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
           Array.isArray(autoFeat.Feats) ? autoFeat.Feats : undefined
         )
         for (const featName of names) {
-          const feat = allFeats.find(f => f.Name === featName)
-          if (feat) accumulateFeat(map, feat, 1, `${bc.name}: ${featName}`, build.totalLevel, ctx)
+          autoFeatCounts.set(featName, (autoFeatCounts.get(featName) ?? 0) + 1)
         }
+      }
+      for (const [featName, count] of autoFeatCounts) {
+        const feat = allFeats.find(f => f.Name === featName)
+        if (feat) accumulateFeat(map, feat, count, `${bc.name}: ${featName}${count > 1 ? ` ×${count}` : ''}`, build.totalLevel, ctx)
       }
     }
 

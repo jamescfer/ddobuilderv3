@@ -20,6 +20,10 @@ export interface RawBonus {
   value: number
   type: string    // 'Enhancement', 'Dodge', 'Feat', 'Racial', etc.
   source: string  // human-readable source name
+  // V2 parity: feat/enhancement effects (m_effects) are summed without
+  // bonus-type stacking rules; only item effects (m_itemEffects) have
+  // "Highest Only" applied. Set fromGear=true for item-sourced bonuses.
+  fromGear?: boolean
 }
 
 export interface ResolvedBonus extends RawBonus {
@@ -168,39 +172,45 @@ export function resolveBonus(bonuses: RawBonus[]): ResolvedStat {
   for (const [type, group] of byType) {
     if (exclusiveTypes.has(type)) {
       // -----------------------------------------------------------------------
-      // Exclusive type: only highest positive and lowest (most negative)
-      // value are active. Treat positives and negatives independently.
+      // Exclusive type — V2 parity split:
+      //   Gear contributions (fromGear=true): only highest positive and lowest
+      //   negative are active (standard "Highest Only" item stacking).
+      //   Non-gear contributions (feats / enhancements / race): always stack,
+      //   matching V2's m_effects which bypass RemoveNonStacking entirely.
       // -----------------------------------------------------------------------
+      const gearBonuses = group.filter(b => b.fromGear)
+      const nonGearBonuses = group.filter(b => !b.fromGear)
 
-      // Separate into positives and negatives (zero counts as positive)
-      const positives = group.filter(b => b.value >= 0)
-      const negatives = group.filter(b => b.value < 0)
+      // Within gear: only highest positive and lowest (most negative) are active
+      const gearPositives = gearBonuses.filter(b => b.value >= 0)
+      const gearNegatives = gearBonuses.filter(b => b.value < 0)
 
-      // Find the single winning positive bonus (highest value)
       let bestPositive: RawBonus | undefined
-      for (const b of positives) {
+      for (const b of gearPositives) {
         if (bestPositive === undefined || b.value > bestPositive.value) {
           bestPositive = b
         }
       }
 
-      // Find the single winning negative bonus (most negative = lowest value)
       let bestNegative: RawBonus | undefined
-      for (const b of negatives) {
+      for (const b of gearNegatives) {
         if (bestNegative === undefined || b.value < bestNegative.value) {
           bestNegative = b
         }
       }
 
-      for (const b of group) {
+      for (const b of gearBonuses) {
         const isActive =
           (b.value >= 0 && b === bestPositive) ||
           (b.value < 0 && b === bestNegative)
-
         resolved.push({ ...b, active: isActive })
-        if (isActive) {
-          total += b.value
-        }
+        if (isActive) total += b.value
+      }
+
+      // Non-gear: all stack unconditionally
+      for (const b of nonGearBonuses) {
+        resolved.push({ ...b, active: true })
+        total += b.value
       }
     } else {
       // -----------------------------------------------------------------------
