@@ -497,11 +497,13 @@ export function importV2Build(xml: string): ImportResult {
     out.activeGearSetName = activeGearName || asStr(activeGearSet.Name) || ''
     // Save every gear set as a named-set so the user can switch.
     out.namedGearSets = {}
+    out.namedGearAugments = {}
     for (const set of gearSets) {
       const setName = asStr((set as AnyRec).Name)
       if (!setName) continue
       const parsed = parseGear(set as AnyRec)
       out.namedGearSets[setName] = parsed.gear
+      out.namedGearAugments[setName] = parsed.augmentChoices
     }
   }
 

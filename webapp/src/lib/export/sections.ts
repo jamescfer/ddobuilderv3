@@ -532,11 +532,23 @@ const alternateGearLayouts: SectionDef = {
     const sets = Object.entries(build.namedGearSets ?? {})
     if (sets.length === 0) return []
     const out = ['[b]Alternate Gear Layouts[/b]:']
+    const setAugments = build.namedGearAugments ?? {}
     for (const [name, slots] of sets) {
       out.push(`  ${name}:`)
-      Object.entries(slots).sort(([a], [b]) => a.localeCompare(b)).forEach(([s, it]) => {
-        if (it) out.push(`    ${s}: ${it}`)
-      })
+      const sorted = Object.entries(slots).sort(([a], [b]) => slotSortKey(a) - slotSortKey(b))
+      for (const [slot, item] of sorted) {
+        if (!item) continue
+        out.push(`    ${slot}: ${item}`)
+        // V2 ForumExportDlg.cpp:1816-1857: emit augment choices per item
+        const augPrefix = `${slot}:`
+        const augEntries = Object.entries(setAugments[name] ?? {})
+          .filter(([k]) => k.startsWith(augPrefix))
+        for (const [key, augName] of augEntries) {
+          const parts = key.split(':')
+          const augType = parts[1] ?? ''
+          out.push(`      ${augType}: ${augName}`)
+        }
+      }
     }
     return out
   },

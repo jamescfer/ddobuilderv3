@@ -78,6 +78,64 @@ describe('SimpleGear export (parity pass 29)', () => {
   })
 })
 
+// V2 parity: Parity pass 33 — AlternateGearLayouts slot order + augments
+// V2 AddAlternateGear calls ExportGear for each non-active gear setup, which
+// iterates slots in Inventory_Arrows..Inventory_Count enum order and emits
+// augment choices per item (ForumExportDlg.cpp:1779-1857).
+// V3 sorted slots alphabetically and had no augment data per named gear set.
+describe('AlternateGearLayouts export (parity pass 33)', () => {
+  it('sorts slots in V2 canonical inventory order, not alphabetically', () => {
+    const build = {
+      ...emptyBuild(),
+      namedGearSets: {
+        Raiding: {
+          'Main Hand': 'Falchion of the Claw',
+          Necklace: 'Necklace of Mystic Eidolons',
+        },
+      },
+    }
+    const section = DEFAULT_SECTIONS.find(s => s.id === 'AlternateGearLayouts')!
+    const lines = section.emit({ build, stats: null })
+    const itemLines = lines.filter(l => l.startsWith('    ') && !l.startsWith('      '))
+    const slots = itemLines.map(l => l.trim().split(':')[0].trim())
+    // Alphabetical order puts "Main Hand" (M) before "Necklace" (N).
+    // V2 canonical order: Necklace (index 9) before Main Hand (index 14).
+    expect(slots.indexOf('Necklace')).toBeLessThan(slots.indexOf('Main Hand'))
+  })
+
+  it('emits augment choices per item slot for each named gear set', () => {
+    const build = {
+      ...emptyBuild(),
+      namedGearSets: {
+        Raiding: { Ring: 'Ring of the Stalker' },
+      },
+      namedGearAugments: {
+        Raiding: {
+          'Ring:Yellow:0': 'Topaz of Greater Acid Spell Lore',
+          'Ring:Green:0': 'Emerald of Constitution +8',
+        },
+      },
+    }
+    const section = DEFAULT_SECTIONS.find(s => s.id === 'AlternateGearLayouts')!
+    const lines = section.emit({ build, stats: null })
+    const augLines = lines.filter(l => l.startsWith('      '))
+    expect(augLines.length).toBe(2)
+    expect(augLines).toContain('      Yellow: Topaz of Greater Acid Spell Lore')
+    expect(augLines).toContain('      Green: Emerald of Constitution +8')
+  })
+
+  it('does not emit augment lines when no augments stored for the set', () => {
+    const build = {
+      ...emptyBuild(),
+      namedGearSets: { Raiding: { Armor: 'Plain Robe' } },
+    }
+    const section = DEFAULT_SECTIONS.find(s => s.id === 'AlternateGearLayouts')!
+    const lines = section.emit({ build, stats: null })
+    const augLines = lines.filter(l => l.startsWith('      '))
+    expect(augLines.length).toBe(0)
+  })
+})
+
 describe('emitForumExport', () => {
   it('wraps output in BBCode courier font tags (V2 ForumExportDlg.cpp:195)', () => {
     const text = emitForumExport({ build: emptyBuild(), stats: null })
