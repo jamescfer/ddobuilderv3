@@ -51,6 +51,7 @@ the PR number, so this file doubles as a changelog.
 | 30 | Spell DC multi-source stacking — `parseItemBuff` now handles `SchoolFocusNumber` (school-specific DC bonus, e.g. "+3 Insightful Enchantment DC") and `SpellFocusNumber` (universal DC bonus, e.g. "+1 Profane all DCs") item buff types; both were silently dropped (default: return []). DCPanel double-count removed: `spellFocusBonus` manual feat-name lookup eliminated; DC bonuses now come solely from `stats.total('dc.*')` (V2 `SpellDC.cpp:119-128` parity). | #66 |
 | 31 | Caster level universal item bonuses — `computeCasterLevel` now adds `cl.All` and `computeMaxCasterLevel` now adds `maxCl.All`; equipment that grants "+N Caster Levels" with no class/school restriction (emits `cl.All` via `parseEffect`/`parseItemBuff`) was previously silently discarded (V2 `Spell.cpp:174-228` parity). | #67 |
 | 32 | Eldritch blast dice scaling — `resolveBonus` now tracks `fromGear` on each `RawBonus` and applies "Highest Only" stacking only to gear contributions; feat/enhancement contributions always stack (V2 `BreakdownItem.cpp::m_effects` vs `m_itemEffects` parity). Auto-feats granted multiple times (e.g. `Warlock: Eldritch Blast Damage` ×5 at L4/8/12/16/20) and Pact Damage (×10) now correctly accumulate their full dice totals (6d8 + 10d6 at L20). | #68 |
+| 33 | AlternateGearLayouts forum export — slots now sort in V2 canonical inventory order (not alphabetical); augments stored per named gear set in new `namedGearAugments` field and emitted per item slot matching V2 `ForumExportDlg.cpp::ExportGear`; V2 import populates `namedGearAugments` for each gear set; `SAVE_GEAR_SET`/`LOAD_GEAR_SET` context actions persist and restore augments with each named set. | #69 |
 
 ---
 
@@ -133,8 +134,9 @@ the PR number, so this file doubles as a changelog.
 - ✅ **`SimpleGear`** (FES_SimpleGear) — slots now sort in V2's canonical
   `Inventory_Arrows..Inventory_Weapon2` enum order; augment choices are
   emitted per item as `type: name` lines, matching V2 `ForumExportDlg.cpp::ExportGear`. (#65)
-- ❌ **`AlternateGearLayouts`** is present but doesn't include the augment
-  list per slot.
+- ✅ **`AlternateGearLayouts`** — slots now sort in V2 canonical inventory
+  order; `namedGearAugments` field stores augments per named gear set;
+  forum export emits augments per item slot matching V2 `ExportGear`. (#69)
 - ❌ **Image embedding** — V2 export inserts `[img]` tags for class /
   destiny / racial icons. V3 export is text-only.
 

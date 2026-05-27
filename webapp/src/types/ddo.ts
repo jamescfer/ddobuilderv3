@@ -475,6 +475,8 @@ export interface CharacterBuild {
   sentientGem: SentientGemState
   /** setName → slot → itemName */
   namedGearSets: Record<string, Record<string, string>>
+  /** setName → augmentKey (slot:type:index) → augmentName; mirrors augmentChoices but per named gear set */
+  namedGearAugments?: Record<string, Record<string, string>>
   activeGearSetName: string
   /** heroic enhancement choices: treeName → itemName → rank */
   enhancementChoices: Record<string, Record<string, number>>
@@ -609,6 +611,7 @@ export function emptyBuild(): CharacterBuild {
     notes: '',
     sentientGem: { name: '', personality: '', majorAugment: '', minorAugment: '' },
     namedGearSets: {},
+    namedGearAugments: {},
     activeGearSetName: '',
     enhancementChoices: {},
     enhancementSelections: {},

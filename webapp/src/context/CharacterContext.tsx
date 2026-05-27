@@ -126,6 +126,7 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     notes: raw.notes ?? '',
     sentientGem: migrateSentientGem(raw.sentientGem as unknown),
     namedGearSets: raw.namedGearSets ?? {},
+    namedGearAugments: (raw as unknown as { namedGearAugments?: Record<string, Record<string, string>> }).namedGearAugments ?? {},
     activeGearSetName: raw.activeGearSetName ?? '',
     sliderValues: (raw as unknown as { sliderValues?: Record<string, number> }).sliderValues ?? {},
     trainedSpells: (raw as unknown as { trainedSpells?: Record<string, Record<number, string[]>> }).trainedSpells ?? {},
@@ -453,17 +454,22 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       delete enhancementSelections[action.treeName]
       return { ...state, enhancementChoices, enhancementSelections }
     }
-    case 'SAVE_GEAR_SET':
-      return { ...state, namedGearSets: { ...state.namedGearSets, [action.setName]: { ...state.gear } }, activeGearSetName: action.setName }
+    case 'SAVE_GEAR_SET': {
+      const augments = { ...(state.namedGearAugments ?? {}), [action.setName]: { ...state.augmentChoices } }
+      return { ...state, namedGearSets: { ...state.namedGearSets, [action.setName]: { ...state.gear } }, namedGearAugments: augments, activeGearSetName: action.setName }
+    }
     case 'LOAD_GEAR_SET': {
       const gearSet = state.namedGearSets[action.setName]
       if (!gearSet) return state
-      return { ...state, gear: { ...gearSet }, activeGearSetName: action.setName }
+      const setAugments = (state.namedGearAugments ?? {})[action.setName] ?? {}
+      return { ...state, gear: { ...gearSet }, augmentChoices: { ...setAugments }, activeGearSetName: action.setName }
     }
     case 'DELETE_GEAR_SET': {
       const sets = { ...state.namedGearSets }
       delete sets[action.setName]
-      return { ...state, namedGearSets: sets, activeGearSetName: state.activeGearSetName === action.setName ? '' : state.activeGearSetName }
+      const augs = { ...(state.namedGearAugments ?? {}) }
+      delete augs[action.setName]
+      return { ...state, namedGearSets: sets, namedGearAugments: augs, activeGearSetName: state.activeGearSetName === action.setName ? '' : state.activeGearSetName }
     }
     case 'LOAD_BUILD':
       return migrateLoad(action.build)
