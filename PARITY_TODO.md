@@ -52,6 +52,7 @@ the PR number, so this file doubles as a changelog.
 | 31 | Caster level universal item bonuses — `computeCasterLevel` now adds `cl.All` and `computeMaxCasterLevel` now adds `maxCl.All`; equipment that grants "+N Caster Levels" with no class/school restriction (emits `cl.All` via `parseEffect`/`parseItemBuff`) was previously silently discarded (V2 `Spell.cpp:174-228` parity). | #67 |
 | 32 | Eldritch blast dice scaling — `resolveBonus` now tracks `fromGear` on each `RawBonus` and applies "Highest Only" stacking only to gear contributions; feat/enhancement contributions always stack (V2 `BreakdownItem.cpp::m_effects` vs `m_itemEffects` parity). Auto-feats granted multiple times (e.g. `Warlock: Eldritch Blast Damage` ×5 at L4/8/12/16/20) and Pact Damage (×10) now correctly accumulate their full dice totals (6d8 + 10d6 at L20). | #68 |
 | 33 | AlternateGearLayouts forum export — slots now sort in V2 canonical inventory order (not alphabetical); augments stored per named gear set in new `namedGearAugments` field and emitted per item slot matching V2 `ForumExportDlg.cpp::ExportGear`; V2 import populates `namedGearAugments` for each gear set; `SAVE_GEAR_SET`/`LOAD_GEAR_SET` context actions persist and restore augments with each named set. | #69 |
+| 34 | AttackRates in Combat panel — `lib/combat/attackRate.ts` exports `lookupAttacksPerMinute` (scans backward through the sparse BAB table) and `pickCombatStyleName` (maps TWF/THF/SWF/Shield/Unarmed setup to V2 style strings); `CombatPanel` now fetches `/api/attack-rates` and passes `attacksPerRound = APM / 10` to `buildAttackEntry`, replacing the hardcoded default of 5. | #70 |
 
 ---
 
@@ -62,8 +63,12 @@ the PR number, so this file doubles as a changelog.
 - ✅ **BonusTypes stacking rules** — `lib/bonus.ts` now reads stacking rules
   from `BonusTypes.xml` via `initBonusTypes()`. The hard-coded fallback
   remains for environments where the XML is unavailable. (#56)
-- ❌ **AttackRates in Combat panel** — `AttackRates.xml` is loaded but the
-  `CombatPanel` DPS sim still uses synthesised attack-per-minute numbers.
+- ✅ **AttackRates in Combat panel** — `lib/combat/attackRate.ts` provides
+  `lookupAttacksPerMinute` (backward-scan through sparse BAB table) and
+  `pickCombatStyleName` (maps TWF/THF/SWF/Shield/Unarmed to V2 style strings);
+  `CombatPanel` fetches `/api/attack-rates` and derives `attacksPerRound = APM / 10`
+  (6-second round, 10 rounds/min) from the XML table, replacing the hardcoded
+  default of 5. (#70)
 - ✅ **Save bonus edge cases** — Divine Grace cap and Half-Elf Lesser Divine
   Grace (#56); SaveBonusAbility ability substitution (Force of Personality,
   Insightful Reflexes, Insightful Fortitude, Domain of Strength feats) (#63).
@@ -231,4 +236,4 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#68 for completed items.*
+*Maintained by the parity-pass series. See PRs #53–#70 for completed items.*
