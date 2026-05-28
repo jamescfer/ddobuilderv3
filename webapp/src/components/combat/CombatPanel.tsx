@@ -5,8 +5,10 @@ import type {
   DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus,
   FiligreeSetBonus, Filigree, OptionalBuff,
 } from '../../types/ddo'
+import type { AttackRate } from '../../server/dataLoaders'
 import { useBuildStats } from '../../hooks/useBuildStats'
 import { buildAttackEntry } from '../../lib/combat/attackEntry'
+import { lookupAttacksPerMinute, pickCombatStyleName } from '../../lib/combat/attackRate'
 import styles from './CombatPanel.module.css'
 
 function pickTwfTier(featChoices: Record<string, string>): 0 | 1 | 2 | 3 | 4 {
@@ -35,6 +37,7 @@ export default function CombatPanel() {
   const [allFiligreeBonuses, setAllFiligreeBonuses] = useState<FiligreeSetBonus[]>([])
   const [allFiligrees, setAllFiligrees] = useState<Filigree[]>([])
   const [gearItems, setGearItems] = useState<Record<string, Item>>({})
+  const [allAttackRates, setAllAttackRates] = useState<AttackRate[]>([])
 
   const [foeAC, setFoeAC] = useState(DEFAULT_FOE_AC)
   const [foePRR, setFoePRR] = useState(DEFAULT_FOE_PRR)
@@ -51,6 +54,7 @@ export default function CombatPanel() {
     api.setbonuses().then(setAllSetBonuses)
     api.filigreeSetBonuses().then(setAllFiligreeBonuses)
     api.filigree().then(setAllFiligrees)
+    api.attackRates().then(setAllAttackRates)
   }, [])
 
   useEffect(() => {
@@ -82,13 +86,27 @@ export default function CombatPanel() {
     const ab = stats.weapon.attackModifier as 'Strength' | 'Dexterity'
     const abilityScore = stats.total(`ability.${ab}`)
     const bab = Math.min(25, stats.total('bab'))
+    const twfTier = pickTwfTier(build.featChoices)
+    const twoHanded = stats.weapon.diceNum >= 2
+    const isUnarmed = stats.weapon.name.toLowerCase().includes('handwrap') ||
+      stats.weapon.slot === 'Handwraps'
+    const style = pickCombatStyleName({
+      twfTier,
+      twoHanded,
+      hasOffhand: !!build.gear['Weapon2'],
+      isUnarmed,
+    })
+    const apm = lookupAttacksPerMinute(allAttackRates, style, bab)
+    // attacksPerRound = APM / 10 (6-second round, 10 rounds per minute)
+    const attacksPerRound = apm > 0 ? apm / 10 : undefined
     return buildAttackEntry(stats, stats.weapon, abilityScore, bab, {
       foeAC, foePRR, foeFortification: foeFort,
       helpless,
-      twoWeaponFightingTier: pickTwfTier(build.featChoices),
-      twoHanded: stats.weapon.diceNum >= 2,
+      twoWeaponFightingTier: twfTier,
+      twoHanded,
+      attacksPerRound,
     })
-  }, [stats, foeAC, foePRR, foeFort, helpless, build.featChoices])
+  }, [stats, foeAC, foePRR, foeFort, helpless, build.featChoices, build.gear, allAttackRates])
 
   return (
     <div className="panel">
