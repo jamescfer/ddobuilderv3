@@ -60,6 +60,12 @@ export interface RequirementContext {
    * Use computeExclusionGroups() from lib/exclusionGroups.ts to build this.
    */
   exclusionGroups?: Record<string, string>
+  /**
+   * V2 parity: Requirement.cpp:1062-1072  EvaluateStance.
+   * When provided, Stance requirements are evaluated strictly against this list
+   * (build.activeBuffs). When absent, they pass conservatively.
+   */
+  activeBuffs?: string[]
 }
 
 function getFeatSet(ctx: RequirementContext): Set<string> {
@@ -116,8 +122,11 @@ export function meetsSingleRequirement(req: Requirement, ctx: RequirementContext
       return false
     }
     case 'Stance':
+      // V2 parity: Requirement.cpp:1062 EvaluateStance — build.IsStanceActive().
+      // Evaluate strictly when activeBuffs is provided; pass conservatively otherwise.
+      return ctx.activeBuffs ? ctx.activeBuffs.includes(item) : true
     case 'EnemyType':
-      // Runtime conditions; treat as met for static prerequisite display.
+      // Runtime condition; treat as met for static prerequisite display.
       return true
     case 'Skill':
       // Skill ranks are character-level dependent; we don't track per-level
