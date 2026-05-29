@@ -53,6 +53,7 @@ the PR number, so this file doubles as a changelog.
 | 32 | Eldritch blast dice scaling — `resolveBonus` now tracks `fromGear` on each `RawBonus` and applies "Highest Only" stacking only to gear contributions; feat/enhancement contributions always stack (V2 `BreakdownItem.cpp::m_effects` vs `m_itemEffects` parity). Auto-feats granted multiple times (e.g. `Warlock: Eldritch Blast Damage` ×5 at L4/8/12/16/20) and Pact Damage (×10) now correctly accumulate their full dice totals (6d8 + 10d6 at L20). | #68 |
 | 33 | AlternateGearLayouts forum export — slots now sort in V2 canonical inventory order (not alphabetical); augments stored per named gear set in new `namedGearAugments` field and emitted per item slot matching V2 `ForumExportDlg.cpp::ExportGear`; V2 import populates `namedGearAugments` for each gear set; `SAVE_GEAR_SET`/`LOAD_GEAR_SET` context actions persist and restore augments with each named set. | #69 |
 | 34 | AttackRates in Combat panel — `lib/combat/attackRate.ts` exports `lookupAttacksPerMinute` (scans backward through the sparse BAB table) and `pickCombatStyleName` (maps TWF/THF/SWF/Shield/Unarmed setup to V2 style strings); `CombatPanel` now fetches `/api/attack-rates` and passes `attacksPerRound = APM / 10` to `buildAttackEntry`, replacing the hardcoded default of 5. | #70 |
+| 35 | Stance requirement evaluation against activeBuffs — `RequirementContext` gains an optional `activeBuffs?: string[]` field; the `Stance` case in `meetsSingleRequirement` now checks `ctx.activeBuffs.includes(item)` when the field is provided, and passes conservatively when it is absent (V2 `Requirement.cpp:1062-1072 EvaluateStance` parity). | #71 |
 
 ---
 
@@ -105,9 +106,12 @@ the PR number, so this file doubles as a changelog.
 
 ### Effect parser coverage
 
-- 🟡 **Permissive types**: `Skill`, `Stance`, `EnemyType` accept-by-default
-  in `lib/requirements.ts` for prereq display. They should evaluate against
-  the actual snapshot when sufficient state is tracked.
+- ✅ **Stance requirement evaluation** — `RequirementContext` now accepts
+  `activeBuffs?: string[]`; the `Stance` case in `meetsSingleRequirement`
+  evaluates strictly against that list when provided, passes conservatively
+  when absent (V2 `Requirement.cpp:1062 EvaluateStance` parity). (#71)
+  `Skill` and `EnemyType` remain permissive (runtime-only conditions).
+
 - ❌ **`SLA` (Spell-Like Ability)** effects are partial — caster level +
   charges + recharge are read but charge consumption isn't simulated.
 - ❌ **`Slider` effects with non-stance gating** — most stance-gated
@@ -236,4 +240,4 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#70 for completed items.*
+*Maintained by the parity-pass series. See PRs #53–#71 for completed items.*
