@@ -3,6 +3,7 @@ import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { EnhancementTree, EnhancementTreeItem } from '../../types/ddo'
 import TreeGrid, { type TreeChoices, type TreeSelections } from '../enhancements/TreeGrid'
+import { reaperXpRequired } from '../../lib/v2Formulas'
 import styles from './ReaperPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -135,6 +136,11 @@ export default function ReaperPanel() {
         <span>Reaper Enhancements</span>
         <span className={styles.apTotal}>
           {totalSpentAllTrees} / {reaperAP} REP spent
+          {totalSpentAllTrees > 0 && (
+            <span className={styles.xpRequired}>
+              {' '}— Requires {reaperXpRequired(totalSpentAllTrees)}k Reaper XP
+            </span>
+          )}
         </span>
       </div>
 
@@ -172,6 +178,9 @@ export default function ReaperPanel() {
               </div>
               <div className={styles.reaperNote}>
                 Reaper points are earned by completing content on Reaper difficulty.
+                {totalSpentAllTrees > 0 && (
+                  <> {totalSpentAllTrees} RAPs spent require {reaperXpRequired(totalSpentAllTrees)}k Reaper XP.</>
+                )}
               </div>
             </div>
 
