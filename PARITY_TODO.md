@@ -54,6 +54,7 @@ the PR number, so this file doubles as a changelog.
 | 33 | AlternateGearLayouts forum export — slots now sort in V2 canonical inventory order (not alphabetical); augments stored per named gear set in new `namedGearAugments` field and emitted per item slot matching V2 `ForumExportDlg.cpp::ExportGear`; V2 import populates `namedGearAugments` for each gear set; `SAVE_GEAR_SET`/`LOAD_GEAR_SET` context actions persist and restore augments with each named set. | #69 |
 | 34 | AttackRates in Combat panel — `lib/combat/attackRate.ts` exports `lookupAttacksPerMinute` (scans backward through the sparse BAB table) and `pickCombatStyleName` (maps TWF/THF/SWF/Shield/Unarmed setup to V2 style strings); `CombatPanel` now fetches `/api/attack-rates` and passes `attacksPerRound = APM / 10` to `buildAttackEntry`, replacing the hardcoded default of 5. | #70 |
 | 35 | Stance requirement evaluation against activeBuffs — `RequirementContext` gains an optional `activeBuffs?: string[]` field; the `Stance` case in `meetsSingleRequirement` now checks `ctx.activeBuffs.includes(item)` when the field is provided, and passes conservatively when it is absent (V2 `Requirement.cpp:1062-1072 EvaluateStance` parity). | #71 |
+| 36 | Reaper XP required for n RAPs — `reaperXpRequired(n)` in `lib/v2Formulas.ts` implements V2 `ReaperEnhancementsPane.cpp:248-255` loop (sum of first n odd numbers = n²); `ReaperPanel` now shows "Requires Nk Reaper XP" next to RAPs spent, matching V2's panel title. | #72 |
 
 ---
 
@@ -89,8 +90,10 @@ the PR number, so this file doubles as a changelog.
   `perLevelRankDisplay` / `perLevelRankCap` / `displayRankToTrained`; the
   `PerLevelGrid` in `Skills.tsx` now shows 0.5-increment ranks, correct
   `(N+3)/2` cap, and `step=0.5` inputs for cross-class skills. (#64)
-- ❌ **Reaper points awarded by quest difficulty** — V2 awards Reaper XP
-  per quest; V3 has a manual slider only.
+- ✅ **Reaper points awarded by quest difficulty** — `reaperXpRequired(n)` in
+  `lib/v2Formulas.ts` computes n² (matching V2 `ReaperEnhancementsPane.cpp:248-255`
+  loop: sum of odd numbers 1+3+5+…); `ReaperPanel` now shows "Requires Nk Reaper XP"
+  in the header and budget note, matching V2's panel display. (#72)
 - ✅ **Eldritch blast dice scaling** — `resolveBonus` now tracks `fromGear` per
   `RawBonus` and applies "Highest Only" only within gear contributions; feat/
   enhancement contributions always stack (V2 `BreakdownItem.cpp::m_effects`
@@ -240,4 +243,4 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#71 for completed items.*
+*Maintained by the parity-pass series. See PRs #53–#72 for completed items.*

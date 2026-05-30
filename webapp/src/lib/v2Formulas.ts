@@ -108,3 +108,17 @@ export function divineGraceCap(palLevels: number, sfLevels: number): number {
 export function halfElfLesserDivineGraceCap(improvedDilettantePaladinCount: number): number {
   return 2 + Math.max(0, improvedDilettantePaladinCount)
 }
+
+/**
+ * V2 ReaperEnhancementsPane.cpp:248-255 — Reaper XP required for n RAPs.
+ *
+ * V2 computes: reaperXp += (i * 2 + 1) for i in 0..n-1.
+ * Closed form: sum of first n odd numbers = n².
+ *
+ * Returns the value in thousands (k), matching V2's "Requires Nk Reaper XP"
+ * display. So reaperXpRequired(10) = 100 means 100,000 Reaper XP.
+ */
+export function reaperXpRequired(totalRAPs: number): number {
+  if (totalRAPs <= 0) return 0
+  return totalRAPs * totalRAPs
+}
