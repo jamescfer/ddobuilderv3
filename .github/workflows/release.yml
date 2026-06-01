@@ -219,3 +219,65 @@ jobs:
             --target   main
 
           echo "Release ${{ steps.ver.outputs.tag }} published."
+
+      # ----------------------------------------------------------------
+      # 10. Update the version tracker and commit it back to main.
+      #     VersionTracker.md keeps a running log of every released
+      #     version. A new row is prepended under the marker comment so
+      #     the most recent release is always at the top of the table.
+      #     This commit touches only VersionTracker.md (not VERSION or
+      #     BuildInfo.h), so it does not re-trigger this workflow.
+      # ----------------------------------------------------------------
+      - name: Update version tracker
+        if: steps.check.outputs.skip == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          TRACKER="VersionTracker.md"
+          MARKER="<!-- VERSION_TRACKER:INSERT_BELOW -->"
+          VERSION_STR="${{ steps.ver.outputs.tag }}"
+          VERSION_STR="${VERSION_STR#v}"
+          TAG="${{ steps.ver.outputs.tag }}"
+          DATE_UTC="$(date -u '+%Y-%m-%d %H:%M')"
+          SHA="$(git rev-parse --short HEAD)"
+
+          # Make sure we are working from the latest main.
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+
+          if [ ! -f "$TRACKER" ]; then
+            echo "ERROR: $TRACKER not found on main." >&2
+            exit 1
+          fi
+
+          # Skip if this version is already recorded (idempotent re-runs).
+          if grep -q "| ${VERSION_STR} |" "$TRACKER"; then
+            echo "${VERSION_STR} already present in ${TRACKER} — nothing to do."
+            exit 0
+          fi
+
+          ROW="| ${VERSION_STR} | ${DATE_UTC} | ${TAG} | ${SHA} |"
+
+          # Insert the new row immediately after the marker line.
+          awk -v marker="$MARKER" -v row="$ROW" '
+            { print }
+            $0 == marker { print row }
+          ' "$TRACKER" > "${TRACKER}.tmp"
+          mv "${TRACKER}.tmp" "$TRACKER"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$TRACKER"
+
+          if git diff --cached --quiet; then
+            echo "No tracker changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Version tracker: record ${TAG}"
+          git push origin main
+          echo "Recorded ${TAG} in ${TRACKER}."
