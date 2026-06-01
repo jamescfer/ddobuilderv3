@@ -55,6 +55,7 @@ the PR number, so this file doubles as a changelog.
 | 34 | AttackRates in Combat panel — `lib/combat/attackRate.ts` exports `lookupAttacksPerMinute` (scans backward through the sparse BAB table) and `pickCombatStyleName` (maps TWF/THF/SWF/Shield/Unarmed setup to V2 style strings); `CombatPanel` now fetches `/api/attack-rates` and passes `attacksPerRound = APM / 10` to `buildAttackEntry`, replacing the hardcoded default of 5. | #70 |
 | 35 | Stance requirement evaluation against activeBuffs — `RequirementContext` gains an optional `activeBuffs?: string[]` field; the `Stance` case in `meetsSingleRequirement` now checks `ctx.activeBuffs.includes(item)` when the field is provided, and passes conservatively when it is absent (V2 `Requirement.cpp:1062-1072 EvaluateStance` parity). | #71 |
 | 36 | Reaper XP required for n RAPs — `reaperXpRequired(n)` in `lib/v2Formulas.ts` implements V2 `ReaperEnhancementsPane.cpp:248-255` loop (sum of first n odd numbers = n²); `ReaperPanel` now shows "Requires Nk Reaper XP" next to RAPs spent, matching V2's panel title. | #72 |
+| 37 | Player-toggled stances in effect-context stances — `buildStatMap` now merges `build.activeBuffs` into `ctxStances` so all 1 000+ enhancement effects gated on non-armor stances (Mountain Stance, Favored Weapon, Power Attack, Rage, Two Handed Fighting, Action Boost, …) correctly fire or not based on the player's current stance selection (V2 `Build::IsStanceActive` parity). | #73 |
 
 ---
 
@@ -117,8 +118,11 @@ the PR number, so this file doubles as a changelog.
 
 - ❌ **`SLA` (Spell-Like Ability)** effects are partial — caster level +
   charges + recharge are read but charge consumption isn't simulated.
-- ❌ **`Slider` effects with non-stance gating** — most stance-gated
-  sliders work; non-stance gates (e.g. enemy-type) are still TODO.
+- ✅ **`Slider` effects with stance gating** — `buildStatMap` now merges
+  `build.activeBuffs` into `ctxStances`; all Stance-gated SliderValue effects
+  (e.g. Blessed Purpose / Favored Weapon) now correctly fire. (#73)
+  Non-stance gates (EnemyType, MaterialType, etc.) remain conservative-pass
+  (runtime-only, not tracked in the stat planner — intentional).
 - ✅ **`ExclusionGroup`** — `computeExclusionGroups()` in `lib/exclusionGroups.ts`
   derives a `groupName → InternalName` map from trained enhancements; the
   `Exclusive` requirement type in `lib/requirements.ts` now evaluates against
