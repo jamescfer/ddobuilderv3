@@ -122,3 +122,39 @@ export function reaperXpRequired(totalRAPs: number): number {
   if (totalRAPs <= 0) return 0
   return totalRAPs * totalRAPs
 }
+
+// V2 level constants (DDOBuilder/stdafx.h)
+const MAX_CLASS_LEVEL = 20   // heroic levels 1-20
+const MAX_EPIC_LEVEL = 10    // epic levels 21-30
+const BUILD_START_LEVEL = 34
+
+/**
+ * V2 BreakdownItemDestinyAps.cpp:48-92 — total Destiny (Epic Destiny) points.
+ *
+ * Epic Destiny points are a SINGLE shared pool spent across all selected
+ * destiny trees — there is no per-tree "24" cap. The pool is:
+ *   - 4 per epic level (character levels 20-30, capped at 10 levels → 40)
+ *   - 4 per legendary level (character levels 30-40, capped at 10 → 40)
+ *   - floor(fatePoints / 3) inherent bonus
+ *
+ * `charLevel` is the 1-based character level (V2 Build::Level()). Mirrors the
+ * V2 control flow exactly, including the BUILD_START_LEVEL special case.
+ */
+export function destinyPointPool(charLevel: number, fatePoints = 0): number {
+  let pool = Math.floor(Math.max(0, fatePoints) / 3)
+  let level = charLevel
+  if (level >= MAX_CLASS_LEVEL) {
+    level -= MAX_CLASS_LEVEL
+    const epicLevels = Math.min(level + 1, 10)
+    pool += epicLevels * 4
+    if (level >= MAX_EPIC_LEVEL) {
+      level -= MAX_EPIC_LEVEL
+      let legendaryLevels = Math.min(level + 1, 10)
+      if (charLevel === BUILD_START_LEVEL) {
+        legendaryLevels = BUILD_START_LEVEL - MAX_CLASS_LEVEL - MAX_EPIC_LEVEL
+      }
+      pool += legendaryLevels * 4
+    }
+  }
+  return pool
+}

@@ -100,4 +100,18 @@ describe('parseEffect — stat aggregation basics', () => {
     expect(withStance).toHaveLength(1)
     expect(withStance[0].statKey).toBe('prr')
   })
+
+  // These two feed the Epic Destiny point pool (V2 BreakdownItemDestinyAps):
+  // fate points contribute floor(total/3) and DestinyAPBonus adds directly.
+  it('FatePoint emits the fatePoint stat', () => {
+    const out = parseEffect(mk('FatePoint', { Amount: 1 }), 1, 'Epic Past Life', 0, 0, ctx)
+    expect(out[0].statKey).toBe('fatePoint')
+    expect(out[0].value).toBe(1)
+  })
+
+  it('DestinyAPBonus emits the destinyAP stat', () => {
+    const out = parseEffect(mk('DestinyAPBonus', { Amount: 4 }), 1, 'Epic Completionist', 0, 0, ctx)
+    expect(out[0].statKey).toBe('destinyAP')
+    expect(out[0].value).toBe(4)
+  })
 })
