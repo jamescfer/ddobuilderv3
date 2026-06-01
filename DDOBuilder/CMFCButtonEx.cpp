@@ -65,7 +65,8 @@ void CMFCButtonEx::OnDraw(CDC* pDC, const CRect& rect, UINT uiState)
     }
 
     // ---- Text + image layout --------------------------------------------
-    double dScaleFactor = GetDPIMultiplier(GetSafeHwnd(), true);
+    // Upstream 2.0.0.81: pass false so DPI scaling is not double-applied.
+    double dScaleFactor = GetDPIMultiplier(GetSafeHwnd(), false);
     CRect rectText = rect;
     CRect rectImage = rect;
     rectText.DeflateRect(2, 2);

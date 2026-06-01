@@ -192,6 +192,7 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
         "Spook,"
         "Strimtom, "
         "Stoner81, "
+        "Synalon, "
         "TandyFW, "
         "Terraism, "
         "tevwoods, "
