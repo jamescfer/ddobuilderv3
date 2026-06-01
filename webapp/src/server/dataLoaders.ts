@@ -111,14 +111,27 @@ export function loadEnhancementTrees(dataDir: string): EnhancementTree[] {
     try {
       const parsed = readXml(path.join(dir, f)) as { Enhancements?: { EnhancementTree?: unknown[] } }
       const trees = (parsed?.Enhancements?.EnhancementTree ?? []) as Record<string, unknown>[]
-      return trees.map(tree => ({
-        ...tree,
-        // self-closing tags arrive as "" — normalise to explicit booleans
-        IsReaperTree: 'IsReaperTree' in tree ? true : undefined,
-        IsEpicDestiny: 'IsEpicDestiny' in tree ? true : undefined,
-        IsRacialTree: 'IsRacialTree' in tree ? true : undefined,
-        IsUniversalTree: 'IsUniversalTree' in tree ? true : undefined,
-      })) as EnhancementTree[]
+      return trees.map(tree => {
+        // self-closing item flags (<Tier5/>, <Clickie/>) arrive as "" — normalise
+        // to explicit booleans so consumers can test them truthily.
+        const items = tree.EnhancementTreeItem
+        const normItems = Array.isArray(items)
+          ? (items as Record<string, unknown>[]).map(it => ({
+              ...it,
+              Tier5: 'Tier5' in it ? true : undefined,
+              Clickie: 'Clickie' in it ? true : undefined,
+            }))
+          : items
+        return {
+          ...tree,
+          EnhancementTreeItem: normItems,
+          // self-closing tags arrive as "" — normalise to explicit booleans
+          IsReaperTree: 'IsReaperTree' in tree ? true : undefined,
+          IsEpicDestiny: 'IsEpicDestiny' in tree ? true : undefined,
+          IsRacialTree: 'IsRacialTree' in tree ? true : undefined,
+          IsUniversalTree: 'IsUniversalTree' in tree ? true : undefined,
+        }
+      }) as EnhancementTree[]
     } catch { return [] }
   })
 }

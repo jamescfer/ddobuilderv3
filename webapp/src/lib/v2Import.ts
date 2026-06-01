@@ -469,9 +469,7 @@ export function importV2Build(xml: string): ImportResult {
 
   const dest = parseEnhancements(buildNode, 'DestinySpendInTree')
   out.destinyChoices = dest.choices
-  // V3 destinyChoices doesn't carry a separate "selections" map; merge into
-  // the choice map's existing structure isn't possible without changing types,
-  // so we drop selections here. The active destiny is set below.
+  out.destinySelections = dest.selections
 
   const reap = parseEnhancements(buildNode, 'ReaperSpendInTree')
   out.reaperChoices = reap.choices

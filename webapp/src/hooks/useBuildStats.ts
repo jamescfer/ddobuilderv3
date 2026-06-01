@@ -651,7 +651,11 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
         if (rank > 0) ctxEnhancements.add(name)
       }
     }
-    for (const choices of Object.values(build.destinyChoices)) {
+    // Only the 3 selected destiny trees contribute (V2: you can only spend in
+    // selected trees; deselecting a tree removes its effects).
+    const selectedDestinySet = new Set((build.selectedDestinyTrees ?? []).filter(Boolean))
+    for (const [treeName, choices] of Object.entries(build.destinyChoices)) {
+      if (!selectedDestinySet.has(treeName)) continue
       for (const [name, rank] of Object.entries(choices)) {
         if (rank > 0) ctxEnhancements.add(name)
       }
@@ -835,10 +839,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     }
 
     // ── Epic destiny ──────────────────────────────────────────────────────
+    // Only the selected destiny trees apply, and selector picks (destinySelections)
+    // feed the chosen option's effects — V2 parity.
     for (const [treeName, choices] of Object.entries(build.destinyChoices)) {
+      if (!selectedDestinySet.has(treeName)) continue
       const tree = allTrees.find(t => t.Name === treeName)
       if (!tree) continue
-      accumulateEnhancementTree(map, tree, choices, {}, build.totalLevel, ctx)
+      const selections = build.destinySelections?.[treeName] ?? {}
+      accumulateEnhancementTree(map, tree, choices, selections, build.totalLevel, ctx)
     }
 
     // ── Reaper ────────────────────────────────────────────────────────────

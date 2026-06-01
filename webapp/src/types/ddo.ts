@@ -154,6 +154,8 @@ export interface EnhancementTreeItem {
   ArrowRight?: boolean
   ArrowUp?: boolean
   Clickie?: boolean
+  /** Tier-5 enhancement: only one selected destiny tree may train Tier-5s. */
+  Tier5?: boolean
   Requirements?: Requirements
   Selector?: { EnhancementSelection: EnhancementSelection[] }[]
   Effect?: Effect | Effect[]
@@ -447,6 +449,8 @@ export interface CharacterBuild {
   artifactFiligreeSlots: FiligreeSlot[]
   /** epic destiny tree choices: treeName → itemName → ranks */
   destinyChoices: Record<string, Record<string, number>>
+  /** epic destiny selector picks: treeName → itemName → chosen option */
+  destinySelections: Record<string, Record<string, string>>
   /** reaper enhancement choices: treeName → itemName → ranks */
   reaperChoices: Record<string, Record<string, number>>
   /** which of the 3 selected destiny trees is the active (primary) destiny */
@@ -599,6 +603,7 @@ export function emptyBuild(): CharacterBuild {
     filigreeSlots: Array.from({ length: 6 }, () => ({ name: '', rare: false })),
     artifactFiligreeSlots: Array.from({ length: 10 }, () => ({ name: '', rare: false })),
     destinyChoices: {},
+    destinySelections: {},
     reaperChoices: {},
     activeEpicDestiny: '',
     selectedDestinyTrees: ['', '', ''],

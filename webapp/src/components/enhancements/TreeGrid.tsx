@@ -203,6 +203,8 @@ interface CellProps {
   totalAP: number
   isCore: boolean
   coreUnlocked?: boolean
+  /** V2 Tier-5 lock: this is a Tier-5 item and another tree already holds one. */
+  tier5Blocked?: boolean
   pos: { left: number; top: number }
   onIncrement: () => void
   onDecrement: () => void
@@ -211,12 +213,14 @@ interface CellProps {
 
 function EnhancementCell({
   item, rank, selectedOption, treeSpent, totalSpent, totalAP,
-  isCore, coreUnlocked = true, reqsMet = true, pos,
+  isCore, coreUnlocked = true, reqsMet = true, tier5Blocked = false, pos,
   onIncrement, onDecrement, onShowSelector,
 }: CellProps) {
   const maxRanks = item.Ranks ?? 1
   const minSpent = item.MinSpent ?? 0
-  const locked = treeSpent < minSpent || (isCore && !coreUnlocked) || !reqsMet
+  // A Tier-5 item already trained here can still be reduced, so only block when
+  // nothing is trained yet (rank 0).
+  const locked = treeSpent < minSpent || (isCore && !coreUnlocked) || !reqsMet || (tier5Blocked && rank === 0)
   const atMax = rank >= maxRanks
   const cost = nextRankCost(item, rank)
   const canAfford = (totalAP - totalSpent) >= cost
@@ -240,6 +244,7 @@ function EnhancementCell({
     minSpent > 0 ? `Requires ${minSpent} AP spent in tree` : '',
     isCore && !coreUnlocked ? 'Requires previous core enhancement' : '',
     !reqsMet ? 'Build does not meet item prerequisites' : '',
+    tier5Blocked && rank === 0 ? 'Tier-5 is locked to another destiny tree' : '',
     hasSelector && !selectedOption ? 'Click to choose an option' : '',
   ].filter(Boolean).join('\n')
 
@@ -327,6 +332,9 @@ interface TreeGridProps {
   selections: TreeSelections
   totalSpentAllTrees: number
   totalAP?: number
+  /** V2 Tier-5 lock: another destiny tree already holds a trained Tier-5, so
+   *  this tree's Tier-5 items cannot be trained. */
+  tier5Locked?: boolean
   onChoicesChange: (updated: TreeChoices) => void
   onSelectionsChange: (updated: TreeSelections) => void
   /**
@@ -340,7 +348,7 @@ interface TreeGridProps {
 }
 
 export default function TreeGrid({
-  tree, choices, selections, totalSpentAllTrees, totalAP = 80,
+  tree, choices, selections, totalSpentAllTrees, totalAP = 80, tier5Locked = false,
   onChoicesChange, onSelectionsChange,
   build, allClasses, race,
 }: TreeGridProps) {
@@ -498,6 +506,7 @@ export default function TreeGrid({
             isCore={isCore}
             coreUnlocked={isCore ? coreIsUnlocked(item) : true}
             reqsMet={reqsMet}
+            tier5Blocked={tier5Locked && item.Tier5 === true}
             pos={pos}
             onIncrement={() => handleIncrement(item)}
             onDecrement={() => handleDecrement(item)}
