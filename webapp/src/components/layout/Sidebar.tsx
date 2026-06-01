@@ -145,7 +145,13 @@ export default function Sidebar({ activeItem, onNavigate, isOpen, onClose, saveB
   useEffect(() => {
     let cancelled = false
     api.version()
-      .then(v => { if (!cancelled && v?.version) setVersion(v.version) })
+      .then(v => {
+        // Only adopt a real version from the server; never let a missing/
+        // 'unknown' response clobber the build-time version baked in by Vite.
+        if (!cancelled && v?.version && v.version !== 'unknown') {
+          setVersion(v.version)
+        }
+      })
       .catch(() => { /* keep build-time version */ })
     return () => { cancelled = true }
   }, [])
