@@ -671,6 +671,11 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       ctxAbilityTotals[ab] = base + racial + lv
     }
     const ctxStances = deriveArmorStances(gearItems)
+    // V2 parity: Build::IsStanceActive checks both armor-derived stances AND
+    // player-toggled stances.  Merge activeBuffs so that effects gated on e.g.
+    // "Mountain Stance", "Favored Weapon", "Power Attack", "Rage", etc. fire
+    // correctly when the player has toggled them on in the Stances panel.
+    for (const s of build.activeBuffs) ctxStances.add(s)
     // V2 parity: Monk and Sacred Fist are "Centered" when wearing cloth/no armor.
     // Centered gates all Monk Ki effects (KiMaximum, KiHit, KiPassive, KiCritical).
     {
