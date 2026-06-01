@@ -79,10 +79,22 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.get('/api/version', (_req, res) => {
+  // The VERSION file lives at the repo root. __dirname differs between dev
+  // (ts-node from webapp/) and prod (compiled to webapp/dist-server/), and the
+  // process cwd may also vary, so try the candidate locations in order.
+  const candidates = [
+    path.resolve(__dirname, '..', 'VERSION'),        // dev: webapp/../VERSION
+    path.resolve(__dirname, '..', '..', 'VERSION'),  // prod: webapp/dist-server/../../VERSION
+    path.resolve(process.cwd(), '..', 'VERSION'),    // launched from webapp/
+    path.resolve(process.cwd(), 'VERSION'),          // launched from repo root
+  ]
   let version = 'unknown'
-  try {
-    version = fs.readFileSync(path.resolve(__dirname, '..', 'VERSION'), 'utf-8').trim()
-  } catch { /* fall through */ }
+  for (const file of candidates) {
+    try {
+      const v = fs.readFileSync(file, 'utf-8').trim()
+      if (v) { version = v; break }
+    } catch { /* try next candidate */ }
+  }
   res.json({ version })
 })
 
