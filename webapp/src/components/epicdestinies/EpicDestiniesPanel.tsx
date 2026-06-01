@@ -1,8 +1,10 @@
 import { useEffect, useState, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { EnhancementTree, EnhancementTreeItem } from '../../types/ddo'
+import type { EnhancementTree, EnhancementTreeItem, Item } from '../../types/ddo'
 import TreeGrid, { type TreeChoices, type TreeSelections } from '../enhancements/TreeGrid'
+import { useStaticBundle } from '../../hooks/useStaticBundle'
+import { useBuildStats } from '../../hooks/useBuildStats'
 import { destinyPointPool } from '../../lib/v2Formulas'
 import styles from './EpicDestiniesPanel.module.css'
 
@@ -58,23 +60,50 @@ function computeTreeSpent(tree: EnhancementTree, choices: TreeChoices): number {
 export default function EpicDestiniesPanel() {
   const { build, dispatch } = useCharacter()
 
-  const [allTrees, setAllTrees] = useState<EnhancementTree[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [viewingSlot, setViewingSlot] = useState<0 | 1 | 2>(0)
   const [destinySelections, setDestinySelections] = useState<Record<string, TreeSelections>>({})
   const [unlockedOpen, setUnlockedOpen] = useState(true)
+  const [gearItems, setGearItems] = useState<Record<string, Item>>({})
 
+  // Static data + full build stats. Stats give us the aggregated fate-point and
+  // destiny-AP-bonus effect totals (FatePoint / DestinyAPBonus), exactly the
+  // sources V2's BreakdownItemDestinyAps feeds into the destiny point pool.
+  const bundle = useStaticBundle()
+  const loading = bundle.allTrees.length === 0
+
+  // Epic destiny trees, derived from the shared bundle.
+  const allTrees = useMemo(
+    () => bundle.allTrees.filter((t: EnhancementTree) => t.IsEpicDestiny === true),
+    [bundle.allTrees],
+  )
+
+  // Resolve equipped gear so gear-granted fate points/destiny APs are counted.
   useEffect(() => {
-    setLoading(true)
-    api.enhancements()
-      .then(data => {
-        setAllTrees(data.filter((t: EnhancementTree) => t.IsEpicDestiny === true))
-        setError(null)
-      })
-      .catch(err => setError(String(err)))
-      .finally(() => setLoading(false))
-  }, [])
+    const slots = Object.entries(build.gear).filter(([, name]) => name)
+    if (slots.length === 0) { setGearItems({}); return }
+    let cancelled = false
+    Promise.all(
+      slots.map(([slot, name]) =>
+        api.item(name).then(item => item ? [slot, item] as [string, Item] : null),
+      ),
+    ).then(results => {
+      if (cancelled) return
+      const map: Record<string, Item> = {}
+      for (const r of results) { if (r) map[r[0]] = r[1] }
+      setGearItems(map)
+    })
+    return () => { cancelled = true }
+  }, [build.gear])
+
+  const statsInput = useMemo(() => ({
+    allClasses: bundle.allClasses, allRaces: bundle.allRaces, allFeats: bundle.allFeats,
+    allTrees: bundle.allTrees, gearItems,
+    allSelfBuffs: bundle.allSelfBuffs, allAugments: bundle.allAugments,
+    allSetBonuses: bundle.allSetBonuses, allFiligreeBonuses: bundle.allFiligreeBonuses,
+    allFiligrees: bundle.allFiligrees, allWeaponGroups: bundle.allWeaponGroups,
+    allSpells: bundle.allSpells, allGuildBuffs: bundle.allGuildBuffs,
+  }), [bundle, gearItems])
+  const stats = useBuildStats(statsInput)
 
   // ── Build state accessors ─────────────────────────────────────────────────
 
@@ -105,9 +134,15 @@ export default function EpicDestiniesPanel() {
   const viewedChoices: TreeChoices = viewedTree ? (destinyChoices[viewedTree.Name] ?? {}) : {}
   const viewedSpent = viewedTree ? computeTreeSpent(viewedTree, viewedChoices) : 0
 
-  // Destiny points are a single shared pool spent across ALL selected trees.
-  // The pool is level- (and fate-point-) based; there is no per-tree cap.
-  const destinyPool = useMemo(() => destinyPointPool(build.totalLevel), [build.totalLevel])
+  // Destiny points are a single shared pool spent across ALL selected trees;
+  // there is no per-tree cap. V2 BreakdownItemDestinyAps sums:
+  //   level-based pool + floor(fatePoints/3) + DestinyAPBonus effects.
+  const fatePoints = Math.max(0, Math.round(stats.total('fatePoint')))
+  const destinyApBonus = Math.max(0, Math.round(stats.total('destinyAP')))
+  const destinyPool = useMemo(
+    () => destinyPointPool(build.totalLevel, fatePoints) + destinyApBonus,
+    [build.totalLevel, fatePoints, destinyApBonus],
+  )
   const totalSpentAllTrees = useMemo(
     () => selectedSlots.reduce((sum, name) => {
       const tree = allTrees.find(t => t.Name === name)
@@ -166,7 +201,6 @@ export default function EpicDestiniesPanel() {
   const tooLow = build.totalLevel < 20
 
   if (loading) return <div className="panel"><div className="panel-header">Epic Destinies</div><div className="panel-body"><div className={styles.statusMsg}>Loading…</div></div></div>
-  if (error)   return <div className="panel"><div className="panel-header">Epic Destinies</div><div className="panel-body"><div className={`${styles.statusMsg} ${styles.errorMsg}`}>{error}</div></div></div>
   if (tooLow)  return <div className="panel"><div className="panel-header">Epic Destinies</div><div className="panel-body"><div className={styles.statusMsg}>Epic Destinies unlock at level 20.</div></div></div>
 
   // ── Full panel ────────────────────────────────────────────────────────────
