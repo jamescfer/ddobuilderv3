@@ -1256,6 +1256,38 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       }
     }
 
+    // V2 BreakdownItemSpellPower.cpp:112-150 — each element's spell power adds
+    // the *total* of a governing skill: Heal → Positive/Negative, Perform →
+    // Sonic, Repair → Repair/Rust, Spellcraft → everything else. (The universal
+    // spell power is added at the display layer.) V3 never folded the skill in,
+    // so e.g. Heal ranks gave no Positive/Negative spell power. Fold the
+    // governing-skill total into each element's sp.<element> key.
+    {
+      const skillTotal = (name: string) => resolveBonus(map.get(`skill.${name}`) ?? []).total
+      const SP_SKILL: Record<string, string> = {
+        Positive: 'Heal', Negative: 'Heal',
+        Sonic: 'Perform',
+        Repair: 'Repair', Rust: 'Repair',
+      }
+      // Default governing skill for every other element is Spellcraft.
+      const SP_ELEMENTS = [
+        'Acid', 'Cold', 'Electric', 'Fire', 'Force', 'LightAlignment',
+        'Negative', 'Positive', 'Repair', 'Rust', 'Sonic', 'Poison',
+        'Physical', 'Chaos', 'Evil', 'Lawful', 'Untyped',
+      ]
+      for (const el of SP_ELEMENTS) {
+        const skill = SP_SKILL[el] ?? 'Spellcraft'
+        const bonus = skillTotal(skill)
+        if (bonus !== 0) {
+          add(map, `sp.${el}`, {
+            value: bonus,
+            type: 'Skill Bonus',
+            source: `${skill} skill bonus`,
+          })
+        }
+      }
+    }
+
     // V2 BreakdownItemBAB.cpp:43-55 — an OverrideBAB effect (e.g. Tenser's
     // Transformation, certain enhancements) boosts BAB up to the character
     // level, capped at MAX_BAB. V3 parsed the effect into `babOverride` but
