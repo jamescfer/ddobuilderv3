@@ -749,6 +749,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     // "Mountain Stance", "Favored Weapon", "Power Attack", "Rage", etc. fire
     // correctly when the player has toggled them on in the Stances panel.
     for (const s of build.activeBuffs) ctxStances.add(s)
+    // V2 parity: StancesPane.cpp:329-354 adds an Auto-controlled stance named
+    // after every race, gated on Requirement_Race; CStanceButton::Evaluate
+    // auto-activates it when the build's race matches. Effects gated on
+    // Requirement_Stance:<raceName> (e.g. Bladeforged +10 Repair/Rust spell
+    // power, Morninglord, Shifter, Razorclaw Shifter, Aasimar Scourge, Deep
+    // Gnome, …) only fire once that race stance is active. Mirror that here so
+    // those race-form effects fire without the player toggling anything.
+    if (build.race) ctxStances.add(build.race)
     // V2 parity: Monk and Sacred Fist are "Centered" when wearing cloth/no armor.
     // Centered gates all Monk Ki effects (KiMaximum, KiHit, KiPassive, KiCritical).
     {
