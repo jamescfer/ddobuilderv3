@@ -6,6 +6,15 @@
 
 import type { Effect, ItemBuff, Requirements, Requirement } from '../types/ddo'
 
+// The six ability scores — used to expand Item="All" ability effects (V2 applies
+// an AbilityBonus with ability "All" to every ability, e.g. Completionist +2).
+const ALL_ABILITIES = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'] as const
+
+/** Expands an ability item list, turning "All" into the six ability names. */
+function expandAbilityItems(items: string[]): string[] {
+  return items.flatMap(it => (it === 'All' ? [...ALL_ABILITIES] : [it]))
+}
+
 // ---------------------------------------------------------------------------
 // EffectContext: evaluated build state used to gate effects
 // ---------------------------------------------------------------------------
@@ -536,7 +545,7 @@ export function parseEffect(
     case 'AbilityBonus':
     case 'AbilityScore':
       if (items.length > 0) {
-        return items.map(item => make(`ability.${item}`))
+        return expandAbilityItems(items).map(item => make(`ability.${item}`))
       }
       return []
 
@@ -1424,7 +1433,7 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
 
     case 'AbilityBonus':
       if (items.length > 0) {
-        return items.map(item => make(`ability.${item}`))
+        return expandAbilityItems(items).map(item => make(`ability.${item}`))
       }
       return []
 

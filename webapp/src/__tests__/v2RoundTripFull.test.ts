@@ -71,10 +71,12 @@ maybeDescribe('V2 round-trip with real XML catalogues — Yings Monk', () => {
   it('Wisdom is in the expected Aasimar-monk band (24+, end-game stacks high)', () => {
     // Yings is a maxed-out Monk with every WIS-stacking item, augment,
     // tome, level-up, past life and enhancement. End-game WIS routinely
-    // hits 50-70 once every source compounds.
+    // hits 50-70 once every source compounds. (Upper band bumped after the
+    // Completionist / Item="All" AbilityBonus fix, which now correctly adds
+    // +2 to every ability for this 40+-past-life build.)
     const wis = stats.total('ability.Wisdom')
     expect(wis).toBeGreaterThanOrEqual(24)
-    expect(wis).toBeLessThanOrEqual(80)
+    expect(wis).toBeLessThanOrEqual(90)
   })
 
   it('HP is in the expected Monk end-game band (500+)', () => {

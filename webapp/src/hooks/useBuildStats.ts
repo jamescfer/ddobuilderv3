@@ -24,6 +24,7 @@ import { resolveBonus, emptyResolvedStat } from '../lib/bonus'
 import type { RawBonus, ResolvedStat } from '../lib/bonus'
 import { deriveWeaponClasses } from '../lib/weapons/groups'
 import type { WeaponGroupSpec } from '../lib/weapons/groups'
+import { buildAutomaticFeatGroups } from '../lib/automaticFeats'
 import {
   reaperHpCap, styleBonusHp, effectiveDodgeCap,
   divineGraceCap, halfElfLesserDivineGraceCap,
@@ -840,6 +841,37 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       if (!count) continue
       const feat = allFeats.find(f => f.Name === source || f.Name === `Past Life: ${source}`)
       if (feat) accumulateFeat(map, feat, count, `Past life: ${source} ×${count}`, build.totalLevel, ctx)
+    }
+
+    // ── Auto-acquired feats (V2 Build::AutomaticFeats via <AutomaticAcquisition>) ──
+    // V2 grants some feats purely through the per-feat AutomaticAcquisition
+    // mechanism — they are in no class AutomaticFeats list nor race GrantedFeat,
+    // so V3's accumulation above never applied their *effects*. The ones with
+    // real stat effects:
+    //   • Heroic Durability — AutomaticAcquisition SpecificLevel 1 → +30 HP for
+    //     every character (universal; V3 was under-counting HP by 30).
+    //   • Completionist / Racial Completionist — +2 to all ability scores when
+    //     every heroic class / race past life is at 3 (gating reused from
+    //     buildAutomaticFeatGroups, which already lists them for display/export).
+    // The other auto-acquired stat feats are deliberately excluded: Attack
+    // (base AC 10, dodge cap 25, shield PRR, damage multipliers — already
+    // modeled as hardcoded defaults / the combat estimator in V3) and Defensive
+    // Fighting (a player-toggled stance).
+    {
+      const alreadyApplied = new Set<string>(Object.values(build.featChoices).filter(Boolean))
+      const autoNames = new Set<string>(['Heroic Durability'])
+      const groups = buildAutomaticFeatGroups(build, allClasses, allRaces ?? [])
+      for (const g of groups) {
+        for (const f of g.feats) {
+          if (f === 'Completionist' || f === 'Racial Completionist') autoNames.add(f)
+        }
+      }
+      for (const fn of autoNames) {
+        if (alreadyApplied.has(fn)) continue
+        if (fn === 'Heroic Durability' && build.totalLevel < 1) continue
+        const feat = allFeats.find(f => f.Name === fn)
+        if (feat) accumulateFeat(map, feat, 1, `Automatic: ${fn}`, build.totalLevel, ctx)
+      }
     }
 
     // ── Heroic enhancements ───────────────────────────────────────────────
