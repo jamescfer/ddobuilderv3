@@ -415,26 +415,35 @@ function resolveValue(
     }
 
     case 'BAB': {
+      // V2 Effect.cpp:1161-1183: stacks = min(BAB, MAX_BAB=25); total = Amount[0] * stacks.
       const base = getAmountAtRank(effect.Amount, 1)
-      return base * (ctx?.bab ?? 0)
+      const MAX_BAB = 25
+      return base * Math.min(ctx?.bab ?? 0, MAX_BAB)
     }
 
     case 'FeatCount': {
-      const feat = firstItem(effect)
+      // V2 Effect.cpp:1417-1428: count = FeatTrainedCount(StackSource());
+      // total = Amount[min(count, size-1)] * stacks. This is a VECTOR LOOKUP by
+      // feat-trained count, not base*count. The feat name lives in StackSource
+      // (Item is reserved for effect targets on most effect types).
+      const feat = effect.StackSource ?? firstItem(effect)
       if (!feat) return 0
-      const base = getAmountAtRank(effect.Amount, 1)
       const count =
         ctx?.featCounts?.[feat] ??
         (ctx?.feats.has(feat) ? 1 : 0)
-      return base * count
+      // count is a 0-based index into Amount[]; getAmountAtRank is 1-based → count+1.
+      return getAmountAtRank(effect.Amount, count + 1) * Math.max(1, rank)
     }
 
     case 'SetBonusCount': {
-      const setName = firstItem(effect)
+      // V2 Effect.cpp:1258-1278: count = SetBonusCount(StackSource());
+      // total = Amount[min(count, size-1)] * stacks. VECTOR LOOKUP by tier count,
+      // not base*count. StackSource carries the set name.
+      const setName = effect.StackSource ?? firstItem(effect)
       if (!setName) return 0
-      const base = getAmountAtRank(effect.Amount, 1)
       const count = ctx?.setBonusCounts?.[setName] ?? 0
-      return base * count
+      // count is a 0-based index into Amount[]; getAmountAtRank is 1-based → count+1.
+      return getAmountAtRank(effect.Amount, count + 1) * Math.max(1, rank)
     }
 
     case 'SliderValue': {
@@ -446,11 +455,16 @@ function resolveValue(
     }
 
     case 'SliderValueLookup': {
-      // V2 multiplies SliderValue by an Amount-array lookup at slider-value index.
-      const sliderName = firstItem(effect)
-      if (!sliderName) return 0
-      const value = ctx?.sliderValues?.[sliderName] ?? 0
-      return getAmountAtRank(effect.Amount, value)
+      // V2 PARITY (Effect.cpp:1448-1467): despite the AType name, V2 does NOT
+      // index Amount[] by the slider value — it indexes by ClassLevels(StackSource):
+      //   total = Amount[min(classLevels, size-1)] * stacks.
+      // This looks like a V2 bug (the name implies a slider-value lookup), but we
+      // replicate the actual V2 runtime behavior for faithful parity. StackSource
+      // holds the class name here.
+      const cls = effect.StackSource
+      const classLevels = cls && ctx ? (ctx.classLevels[cls] ?? 0) : 0
+      // classLevels is a 0-based index into Amount[]; getAmountAtRank is 1-based.
+      return getAmountAtRank(effect.Amount, classLevels + 1) * Math.max(1, rank)
     }
 
     case 'Stacks':
