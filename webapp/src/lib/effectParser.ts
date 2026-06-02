@@ -286,6 +286,29 @@ function firstItem(effect: Effect): string | undefined {
   return it
 }
 
+/**
+ * V2 ability-driven ATypes read the ability from StackSource (e.g. "Charisma"
+ * or "SnapshotCharisma"); they fall back to Item only as a legacy convenience.
+ * The "Snapshot" prefix is stripped — the stat planner has no temporal snapshot,
+ * so the current ability total is the closest analogue (and far better than 0).
+ */
+function abilityFromEffect(effect: Effect): string | undefined {
+  const raw = effect.StackSource ?? firstItem(effect)
+  if (!raw) return undefined
+  return raw.startsWith('Snapshot') ? raw.slice('Snapshot'.length) : raw
+}
+
+function effectHasCap(effect: Effect): boolean {
+  return effect.Cap !== undefined && effect.Cap !== null
+}
+
+function effectCap(effect: Effect): number {
+  const n = Number(typeof effect.Cap === 'object' && effect.Cap !== null
+    ? (effect.Cap as { '#text'?: unknown })['#text']
+    : effect.Cap)
+  return isNaN(n) ? Infinity : n
+}
+
 function resolveValue(
   effect: Effect,
   rank: number,
@@ -339,38 +362,44 @@ function resolveValue(
     }
 
     // ---------------------------------------------------------------------
-    // Ability-driven stack counts. V2 indexes Amount by ability score for
-    // AbilityValue/Total, by mod for AbilityMod variants. We approximate by
-    // multiplying base * derived-count (matches the typical Simple+stacks shape).
+    // Ability-driven amounts. V2 Effect.cpp:1316-1416 reads the ability from
+    // StackSource (e.g. "Charisma" or "SnapshotCharisma") — NOT from Item, which
+    // for these effects holds the targets (Trip/Sunder/…) — and returns the
+    // ability total / mod directly, ignoring the Amount field. V3 previously
+    // read Item[0] and multiplied by Amount[0], so effects with no Amount and a
+    // StackSource ability (e.g. Warpriest Divine Might) resolved to 0.
     // ---------------------------------------------------------------------
     case 'AbilityValue':
-    case 'AbilityTotal':
-    case 'AbilityTotalIndex': {
-      const ability = firstItem(effect)
+    case 'AbilityTotal': {
+      const ability = abilityFromEffect(effect)
       const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
-      const base = getAmountAtRank(effect.Amount, 1)
-      return base * total
+      return effectHasCap(effect) ? Math.min(total, effectCap(effect)) : total
+    }
+
+    case 'AbilityTotalIndex': {
+      // V2: Amount[min(abilityTotal, size-1)]
+      const ability = abilityFromEffect(effect)
+      const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
+      const v = getAmountAtRank(effect.Amount, total + 1)
+      return effectHasCap(effect) ? Math.min(v, effectCap(effect)) : v
     }
 
     case 'AbilityMod': {
-      const ability = firstItem(effect)
+      const ability = abilityFromEffect(effect)
       const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
-      const base = getAmountAtRank(effect.Amount, 1)
-      return base * abilityModFromTotal(total)
+      return abilityModFromTotal(total)
     }
 
     case 'HalfAbilityMod': {
-      const ability = firstItem(effect)
+      const ability = abilityFromEffect(effect)
       const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
-      const base = getAmountAtRank(effect.Amount, 1)
-      return base * Math.floor(abilityModFromTotal(total) / 2)
+      return Math.trunc(abilityModFromTotal(total) / 2)
     }
 
     case 'ThirdAbilityMod': {
-      const ability = firstItem(effect)
+      const ability = abilityFromEffect(effect)
       const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
-      const base = getAmountAtRank(effect.Amount, 1)
-      return base * Math.floor(abilityModFromTotal(total) / 3)
+      return Math.trunc(abilityModFromTotal(total) / 3)
     }
 
     case 'BAB': {
