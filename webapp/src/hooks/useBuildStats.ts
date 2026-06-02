@@ -438,15 +438,52 @@ function accumulateSetBonuses(
   map: StatMap,
   gearItems: Record<string, Item>,
   allSetBonuses: SetBonus[],
+  augmentChoices: Record<string, string>,
+  allAugments: Augment[],
   ctx?: EffectContext,
 ): void {
-  // Count equipped items per set bonus name
+  const augByName = new Map<string, Augment>(allAugments.map(a => [a.Name, a]))
+
+  // Group selected augments by their host gear slot. The augment key is
+  // "slot:augmentType:index" (GearPanel augmentKey), so the slot is the
+  // first ":"-delimited segment.
+  const augmentsBySlot = new Map<string, Augment[]>()
+  for (const [key, augName] of Object.entries(augmentChoices)) {
+    if (!augName) continue
+    const slot = key.split(':')[0]
+    const aug = augByName.get(augName)
+    if (!aug) continue
+    const arr = augmentsBySlot.get(slot) ?? []
+    arr.push(aug)
+    augmentsBySlot.set(slot, arr)
+  }
+
+  // Count equipped items per set-bonus name. V2 Build::ApplyItem (Build.cpp:
+  // 4905-4922) + Item::HasSetBonus (Item.cpp:508-548): augment-granted set
+  // bonuses always count; the item's NATIVE set bonuses count only when no
+  // augment on that item has SuppressSetBonus.
   const counts = new Map<string, number>()
-  for (const item of Object.values(gearItems)) {
-    for (const name of toArray(item.SetBonus)) {
-      counts.set(name, (counts.get(name) ?? 0) + 1)
+  const bump = (name: string) => counts.set(name, (counts.get(name) ?? 0) + 1)
+
+  for (const [slot, item] of Object.entries(gearItems)) {
+    const slotAugs = augmentsBySlot.get(slot) ?? []
+    let suppressNative = false
+    for (const aug of slotAugs) {
+      if ('SuppressSetBonus' in aug && aug.SuppressSetBonus !== undefined) suppressNative = true
+      for (const name of toArray(aug.SetBonus)) bump(name)
+    }
+    if (!suppressNative) {
+      for (const name of toArray(item.SetBonus)) bump(name)
     }
   }
+  // Set-bonus augments slotted in the sentient jewel (no host item) still count.
+  for (const [slot, augs] of augmentsBySlot) {
+    if (gearItems[slot]) continue
+    for (const aug of augs) {
+      for (const name of toArray(aug.SetBonus)) bump(name)
+    }
+  }
+
   for (const [bonusName, count] of counts) {
     const sb = allSetBonuses.find(s => s.Type === bonusName)
     if (!sb) continue
@@ -982,7 +1019,9 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     accumulateAugments(map, allAugmentChoices, allAugments, ctx)
 
     // ── Gear set bonuses ──────────────────────────────────────────────────
-    accumulateSetBonuses(map, gearItems, allSetBonuses, ctx)
+    // Pass the merged augment choices so augment-granted set bonuses (and
+    // SuppressSetBonus) are honoured (V2 Item::HasSetBonus, Item.cpp:508-548).
+    accumulateSetBonuses(map, gearItems, allSetBonuses, allAugmentChoices, allAugments, ctx)
 
     // ── Filigrees + filigree set bonuses ──────────────────────────────────
     accumulateFiligrees(map, build.filigreeSlots, build.artifactFiligreeSlots ?? [], allFiligrees, allFiligreeBonuses, ctx)

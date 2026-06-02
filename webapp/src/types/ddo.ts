@@ -280,9 +280,17 @@ export interface Augment {
   Name: string
   Description?: string
   MinLevel?: number
-  Type: string
+  Type: string | string[]
   Icon?: string
   Effect?: Effect | Effect[]
+  /** Set-bonus names this augment grants (V2 Augment::SetBonus). */
+  SetBonus?: string | string[]
+  /**
+   * V2 Augment::SuppressSetBonus (DL_FLAG): when present, this augment
+   * suppresses the host item's NATIVE set bonuses (Item::HasSetBonus).
+   * The XML flag parses to "" — treat presence as true.
+   */
+  SuppressSetBonus?: boolean | string
 }
 
 // ---------------------------------------------------------------------------
