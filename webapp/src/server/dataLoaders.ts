@@ -35,7 +35,8 @@ export const xmlParser = new XMLParser({
     'ClassSkill', 'Alignment', 'Augment', 'Buff', 'ItemAugment',
     'SetBonus', 'Gem', 'Stance', 'Spell', 'Patron', 'Quest', 'GuildBuff',
     'GrantedFeat', 'ClassFeat', 'RacialFeat', 'WeaponGroup', 'Weapon',
-    'OptionalBuff', 'Filigree', 'SpellDC', 'SpellDamage',
+    'OptionalBuff', 'Filigree', 'SpellDC', 'SpellDamage', 'ClassSpell',
+    'ModAbility',
   ].includes(name),
 })
 
@@ -173,11 +174,103 @@ export function loadEnhancementTrees(dataDir: string): EnhancementTree[] {
   })
 }
 
+/** The ten per-spell metamagic DL_FLAGs in V2 Spell.h:67-76 (no EschewMaterials). */
+const SPELL_METAMAGIC_FLAGS = [
+  'Accelerate', 'Embolden', 'Empower', 'EmpowerHealing', 'Enlarge',
+  'Extend', 'Heighten', 'Intensify', 'Maximize', 'Quicken',
+] as const
+
+/** Unwraps fast-xml-parser's `{ '#text': N, size: M }` shape to a plain number. */
+function asNumber(v: unknown): number | undefined {
+  if (typeof v === 'number') return v
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v)
+    return Number.isNaN(n) ? undefined : n
+  }
+  if (v && typeof v === 'object' && '#text' in (v as Record<string, unknown>)) {
+    return asNumber((v as Record<string, unknown>)['#text'])
+  }
+  return undefined
+}
+
+/**
+ * Loads Spells.xml and reconciles the parsed shape with the typed `Spell`
+ * contract. Two XML quirks must be normalised:
+ *   1. Self-closing flags (`<Heighten/>`, `<CastingStatMod/>`) arrive as "" —
+ *      falsy — so `spell.Heighten === true` / `if (dc.CastingStatMod)` never
+ *      fired (metamagics and the DC casting-stat term silently vanished). We
+ *      promote presence to an explicit boolean (V2 treats these as DL_FLAG).
+ *   2. `<Amount size="1">25</Amount>` parses to `{ '#text': 25, size: 1 }`;
+ *      coerce to a number so `dc.Amount ?? 10` is arithmetic-safe.
+ *
+ * The per-class spell Level / Cost / MaxCasterLevel live in each class XML's
+ * `<ClassSpell>` list (Spells.xml has no <Level>/<Class>), exactly as V2
+ * stamps them via Spell::UpdateSpell (Spell.cpp:147-162). We merge those here
+ * so `spell.Level[className]` is populated for SpellsPanel/DC display.
+ */
 export function loadSpells(dataDir: string): Spell[] {
+  let spells: Spell[]
   try {
     const parsed = readXml(path.join(dataDir, 'Spells.xml')) as { Spells?: { Spell?: unknown[] } }
-    return (parsed?.Spells?.Spell ?? []) as Spell[]
+    spells = (parsed?.Spells?.Spell ?? []) as Spell[]
   } catch { return [] }
+
+  // Per-class spell level/cost map keyed by spell name.
+  type ClassSpellInfo = { className: string; level: number; cost?: number; maxCasterLevel?: number }
+  const byName = new Map<string, ClassSpellInfo[]>()
+  try {
+    const dir = path.join(dataDir, 'Classes')
+    if (fs.existsSync(dir)) {
+      for (const f of fs.readdirSync(dir).filter(n => /\.class\.xml$/i.test(n))) {
+        const parsed = readXml(path.join(dir, f)) as { Classes?: { Class?: unknown[] } }
+        for (const c of (parsed?.Classes?.Class ?? []) as Record<string, unknown>[]) {
+          const className = c.Name as string
+          const cs = c.ClassSpell
+          const list = Array.isArray(cs) ? cs : cs ? [cs] : []
+          for (const e of list as Record<string, unknown>[]) {
+            const name = e.Name as string
+            const level = asNumber(e.Level)
+            if (!name || level == null) continue
+            const arr = byName.get(name) ?? []
+            arr.push({ className, level, cost: asNumber(e.Cost), maxCasterLevel: asNumber(e.MaxCasterLevel) })
+            byName.set(name, arr)
+          }
+        }
+      }
+    }
+  } catch { /* class spell lists optional */ }
+
+  return spells.map(raw => {
+    const s = { ...raw } as Spell & Record<string, unknown>
+    // 1. promote metamagic / CastingStatMod presence flags to booleans
+    for (const flag of SPELL_METAMAGIC_FLAGS) {
+      if (flag in s) s[flag] = true
+    }
+    // 2. normalise SpellDC blocks
+    const dcs = Array.isArray(s.SpellDC) ? s.SpellDC : s.SpellDC ? [s.SpellDC] : []
+    if (dcs.length > 0) {
+      s.SpellDC = dcs.map(dc => {
+        const d = { ...dc } as Record<string, unknown>
+        if ('CastingStatMod' in d) d.CastingStatMod = true
+        if ('Amount' in d) {
+          const n = asNumber(d.Amount)
+          if (n != null) d.Amount = n
+        }
+        return d as unknown as typeof dc
+      })
+    }
+    // 3. merge per-class Level / Cost / MaxCasterLevel from <ClassSpell>
+    const info = byName.get(s.Name)
+    if (info && info.length > 0) {
+      const levelMap: Record<string, number> = { ...(typeof s.Level === 'object' ? s.Level : {}) }
+      for (const ci of info) levelMap[ci.className] = ci.level
+      s.Level = levelMap
+      // Spell-level cost / max-caster-level default from the (matching) class entry.
+      if (s.Cost == null && info[0].cost != null) s.Cost = info[0].cost
+      if (s.MaxCasterLevel == null && info[0].maxCasterLevel != null) s.MaxCasterLevel = info[0].maxCasterLevel
+    }
+    return s as Spell
+  })
 }
 
 export function loadWeaponGroups(dataDir: string): WeaponGroupSpec[] {

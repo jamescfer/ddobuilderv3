@@ -59,10 +59,15 @@ function pickCastingStat(cls: DDOClass | undefined, stats: BuildStats): Ability 
   return list.reduce((best, ab) => abilityTotal(stats, ab) > abilityTotal(stats, best) ? ab : best)
 }
 
-/** All metamagic flag keys on Spell (mirrors V2 Spell.h:67-77). */
+/**
+ * All metamagic flag keys on Spell (mirrors V2 Spell.h:67-76).
+ * V2 declares exactly ten DL_FLAG metamagics; EschewMaterials is NOT among them
+ * (it is a feat, not a per-spell metamagic flag, and appears 0 times in
+ * Spells.xml), so it must not be offered as a toggle here.
+ */
 export const METAMAGIC_KEYS: Array<keyof Spell> = [
   'Accelerate', 'Embolden', 'Empower', 'EmpowerHealing', 'Enlarge',
-  'EschewMaterials', 'Extend', 'Heighten', 'Intensify', 'Maximize', 'Quicken',
+  'Extend', 'Heighten', 'Intensify', 'Maximize', 'Quicken',
 ]
 
 /** Returns the metamagic names that the spell allows. */
@@ -110,12 +115,12 @@ export function computeSpellDC(
     if (bestMod !== -Infinity) value += bestMod
   }
 
-  // School DC bonuses. If the DC entry didn't declare its own schools, fall
-  // back to the spell's schools (matches V2 behavior where a school-less DC
-  // entry inherits the parent spell's school for bonus aggregation).
-  const dcSchools = toArray(dc.School)
-  const schools = dcSchools.length > 0 ? dcSchools : toArray(spell.School)
-  for (const sch of schools) {
+  // School DC bonuses. V2 (SpellDC.cpp:120-128) iterates ONLY the DC block's
+  // own m_School list — it does NOT fall back to the parent spell's school.
+  // The school-less DC blocks in the data are fixed-Amount on-hit effects
+  // (e.g. Gust of Wind "Knocked Prone", Sleet Storm) that must NOT pick up
+  // school DC bonuses; adding the spell's school here over-counts them.
+  for (const sch of toArray(dc.School)) {
     value += stats.total(`dc.${sch}`)
   }
   // Universal DC bonuses

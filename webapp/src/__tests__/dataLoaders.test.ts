@@ -15,7 +15,7 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import {
   loadAttackRates, loadBonusTypes, loadChallenges, loadItemBuffs, loadItemClickies,
-  loadAllCatalogues,
+  loadAllCatalogues, loadSpells,
 } from '../server/dataLoaders'
 
 const DATA_DIR = join(__dirname, '..', '..', '..', 'Output', 'DataFiles')
@@ -59,6 +59,38 @@ maybeDescribe('V2 data loaders — new XML formats', () => {
     const clickies = loadItemClickies(DATA_DIR)
     expect(clickies.length).toBeGreaterThan(50)
     expect(clickies.every(c => typeof c.Name === 'string')).toBe(true)
+  })
+
+  it('loadSpells normalises self-closing flags and merges per-class levels', () => {
+    // V2 parity: Spells.xml carries no <Level>/<Class>; the per-class spell
+    // level / cost / max-CL come from each class XML <ClassSpell> list, exactly
+    // as Spell::UpdateSpell stamps them (Spell.cpp:147-162). Self-closing
+    // metamagic / CastingStatMod flags arrive as "" and must become booleans.
+    const spells = loadSpells(DATA_DIR)
+    const fireball = spells.find(s => s.Name === 'Fireball')
+    expect(fireball).toBeDefined()
+    // Metamagic flags become true (not "") so availableMetamagics works.
+    expect(fireball!.Empower).toBe(true)
+    expect(fireball!.Heighten).toBe(true)
+    expect(fireball!.Maximize).toBe(true)
+    // EschewMaterials is not a per-spell flag in V2 — never present as a flag.
+    expect((fireball as Record<string, unknown>).EschewMaterials).toBeUndefined()
+    // Per-class level map populated from <ClassSpell> (Wizard list: Fireball=3).
+    expect(fireball!.Level?.Wizard).toBe(3)
+    // SpellDC CastingStatMod normalised to boolean true (was "").
+    const dcs = Array.isArray(fireball!.SpellDC) ? fireball!.SpellDC : []
+    expect(dcs[0]?.CastingStatMod).toBe(true)
+    expect(dcs[0]?.School).toBe('Evocation')
+  })
+
+  it('loadSpells coerces <Amount size="N"> SpellDC overrides to a number', () => {
+    const spells = loadSpells(DATA_DIR)
+    // Find any DC block with a fixed Amount; it must be a plain number, not
+    // the parser's { '#text': N, size: M } object.
+    const withAmount = spells.flatMap(s => Array.isArray(s.SpellDC) ? s.SpellDC : [])
+      .filter(d => d.Amount != null)
+    expect(withAmount.length).toBeGreaterThan(0)
+    for (const d of withAmount) expect(typeof d.Amount).toBe('number')
   })
 
   it('loadAllCatalogues exposes every new V2-parity collection', () => {
