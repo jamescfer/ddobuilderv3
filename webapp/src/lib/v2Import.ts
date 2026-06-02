@@ -15,7 +15,8 @@
 
 import { XMLParser } from 'fast-xml-parser'
 import type {
-  Ability, BuildClass, CharacterBuild, FiligreeSlot, QuestDifficulty,
+  Ability, BuildClass, CharacterBuild, CharacterDocument, FiligreeSlot, Life,
+  QuestDifficulty,
 } from '../types/ddo'
 import { emptyBuild } from '../types/ddo'
 
@@ -37,10 +38,10 @@ const parser = new XMLParser({
   // via arr() at the call site.
   isArray: (name, jpath) => {
     const ALWAYS_ARRAY = new Set([
-      'TrainedFeat', 'TrainedSkill', 'TrainedEnhancement',
+      'TrainedFeat', 'TrainedSkill', 'TrainedEnhancement', 'TrainedSpell',
       'LevelTraining', 'Build', 'Life',
       'Augment', 'CompletedQuest', 'EquippedGear', 'ItemAugment',
-      'Buff',
+      'Buff', 'AttackChain',
       'EnhancementSpendInTree', 'ReaperSpendInTree', 'DestinySpendInTree',
     ])
     if (ALWAYS_ARRAY.has(name)) return true
@@ -52,6 +53,10 @@ const parser = new XMLParser({
     if (name === 'ArtifactFiligree' && /SentientGem|Filigrees/.test(jpath)) return true
     // SelfAndPartyBuffs are at Life level, multiple sibling elements
     if (name === 'SelfAndPartyBuffs') return true
+    // ContentIDontOwn is a Character-level DL_STRING_LIST (repeated element).
+    if (name === 'ContentIDontOwn') return true
+    // <Attacks> inside an <AttackChain> is a DL_STRING_LIST.
+    if (name === 'Attacks' && /AttackChain/.test(jpath)) return true
     return false
   },
 })
@@ -323,35 +328,67 @@ function buildFeatSlotKey(
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// Special-feat parsing (Character / Life FeatsListObject → V3 model)
 // ---------------------------------------------------------------------------
 
-export interface ImportResult {
-  build: CharacterBuild
-  warnings: string[]
+/**
+ * Parse a V2 <SpecialFeats>/<FavorFeats> FeatsListObject. Past-life types are
+ * folded into `pastLives`; all other special feats (UniversalTree access,
+ * Favor rewards, Granted, …) are returned as a flat name list for
+ * `Life.specialFeats` / `build` favor feats.
+ */
+function parseFeatsListObject(node: AnyRec | undefined): {
+  pastLives: Record<string, number>
+  pastLifeTypes: Record<string, string>
+  feats: string[]
+} {
+  const pastLives: Record<string, number> = {}
+  const pastLifeTypes: Record<string, string> = {}
+  const feats: string[] = []
+  if (!node) return { pastLives, pastLifeTypes, feats }
+  for (const f of arr(node.TrainedFeat as AnyRec | AnyRec[] | undefined)) {
+    const fr = f as AnyRec
+    const name = asStr(fr.FeatName)
+    const type = asStr(fr.Type)
+    if (!name) continue
+    if (type === 'HeroicPastLife' || type === 'RacialPastLife') {
+      const key = name.replace(/^Past Life:\s*/, '')
+      pastLives[key] = (pastLives[key] ?? 0) + 1
+      pastLifeTypes[key] = type
+    } else if (type === 'EpicPastLife' || type === 'IconicPastLife') {
+      pastLives[name] = (pastLives[name] ?? 0) + 1
+      pastLifeTypes[name] = type
+    } else {
+      feats.push(name)
+    }
+  }
+  return { pastLives, pastLifeTypes, feats }
 }
 
-export function importV2Build(xml: string): ImportResult {
-  const warnings: string[] = []
-  const parsed = parser.parse(xml) as AnyRec
-  const root = (parsed.DDOBuilderCharacterData ?? parsed) as AnyRec
-  const character = getRec(root, 'Character') ?? root
-  const lifeRaw = arr(character.Life as AnyRec | AnyRec[] | undefined)
-  const activeLifeIdx = asNum(character.ActiveLifeIndex)
-  const life = (lifeRaw[activeLifeIdx] ?? lifeRaw[0]) as AnyRec | undefined
-  if (!life) {
-    warnings.push('No <Life> found in V2 build; using empty build.')
-    return { build: emptyBuild(), warnings }
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
   }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+  })
+}
 
-  const buildArr = arr(life.Build as AnyRec | AnyRec[] | undefined)
-  const activeBuildIdx = asNum(character.ActiveBuildIndex ?? life.ActiveBuildIndex)
-  const buildNode = (buildArr[activeBuildIdx] ?? buildArr[0]) as AnyRec | undefined
-  if (!buildNode) {
-    warnings.push('No <Build> found in V2 life; using empty build.')
-    return { build: emptyBuild(), warnings }
-  }
+// ---------------------------------------------------------------------------
+// Per-build parser
+//
+// Parses a single <Build> node (given its parent <Life> and <Character> for
+// the fields that live above the build level: name/race/alignment/tomes/past
+// lives). Shared by the active-build importer (importV2Build) and the full
+// multi-life document importer (importV2Document).
+// ---------------------------------------------------------------------------
 
+function parseBuildNode(
+  buildNode: AnyRec,
+  life: AnyRec,
+  character: AnyRec,
+): CharacterBuild {
   const out = emptyBuild()
 
   // ── Top-level character fields ───────────────────────────────────────────
@@ -529,21 +566,70 @@ export function importV2Build(xml: string): ImportResult {
   }
 
   // ── Past lives (Character.SpecialFeats with Type=*PastLife) ─────────────
-  const specialFeats = arr(getRec(character, 'SpecialFeats')?.TrainedFeat as AnyRec | AnyRec[] | undefined)
-  for (const f of specialFeats) {
-    const fr = f as AnyRec
-    const name = asStr(fr.FeatName)
-    const type = asStr(fr.Type)
-    if (!name) continue
-    if (type === 'HeroicPastLife') {
-      const cls = name.replace(/^Past Life:\s*/, '')
-      out.pastLives[cls] = (out.pastLives[cls] ?? 0) + 1
-    } else if (type === 'RacialPastLife') {
-      const race = name.replace(/^Past Life:\s*/, '')
-      out.pastLives[race] = (out.pastLives[race] ?? 0) + 1
-    } else if (type === 'EpicPastLife' || type === 'IconicPastLife') {
-      out.pastLives[name] = (out.pastLives[name] ?? 0) + 1
+  // Character-level FeatsListObject holds past lives plus character-wide
+  // special feats (e.g. Falconry / Vistani universal-tree access can also
+  // appear here). Past lives fold into `pastLives`.
+  const charSpecial = parseFeatsListObject(getRec(character, 'SpecialFeats'))
+  out.pastLifeTypes = {}
+  for (const [k, n] of Object.entries(charSpecial.pastLives)) {
+    out.pastLives[k] = (out.pastLives[k] ?? 0) + n
+  }
+  for (const [k, t] of Object.entries(charSpecial.pastLifeTypes)) {
+    out.pastLifeTypes[k] = t
+  }
+
+  // ── Spells (per class / spell-level) — F3 ─────────────────────────────────
+  // V2 <TrainedSpells> is a DL_OBJECT_VECTOR of <TrainedSpell> with
+  // <Class>/<Level>/<SpellName> (TrainedSpell.h:24-27).
+  for (const s of arr(buildNode.TrainedSpell as AnyRec | AnyRec[] | undefined)) {
+    const sr = s as AnyRec
+    const cls = asStr(sr.Class)
+    const lvl = asNum(sr.Level)
+    const spell = asStr(sr.SpellName)
+    if (!cls || !spell) continue
+    const byClass = out.trainedSpells[cls] ?? (out.trainedSpells[cls] = {})
+    const byLevel = byClass[lvl] ?? (byClass[lvl] = [])
+    if (!byLevel.includes(spell)) byLevel.push(spell)
+  }
+
+  // ── Attack chains — F3 ────────────────────────────────────────────────────
+  // V2 <AttackChain> (AttackChain.h): <Name> + <Attacks> string list, plus a
+  // build-level <ActiveAttackChain> string naming the live chain. V3 models
+  // chains as name → ordered attack labels in `attackChains` and stores the
+  // active chain name under the reserved key '' is avoided; the active chain is
+  // surfaced via attackChains key membership (active chain name kept as-is).
+  for (const ch of arr(buildNode.AttackChain as AnyRec | AnyRec[] | undefined)) {
+    const cr = ch as AnyRec
+    const chName = asStr(cr.Name)
+    if (!chName) continue
+    out.attackChains[chName] = arr(cr.Attacks as string | string[] | undefined)
+      .map(asStr).filter(Boolean)
+  }
+  out.activeAttackChain = asStr(buildNode.ActiveAttackChain)
+
+  // ── Favor feats (Build.m_FavorFeats FeatsListObject) — F3 ─────────────────
+  out.favorFeats = parseFeatsListObject(getRec(buildNode, 'FavorFeats')).feats
+
+  // ── Gear-set ability snapshots (EquippedGear.Snapshot*) — F3 ──────────────
+  // V2 stores six <Snapshot{Ability}> values inside each <EquippedGear> plus a
+  // build-level <GearSetSnapshot> naming the snapshot baseline set.
+  out.gearSetSnapshot = asStr(buildNode.GearSetSnapshot)
+  out.gearSetSnapshots = {}
+  for (const set of arr(buildNode.EquippedGear as AnyRec | AnyRec[] | undefined)) {
+    const sr = set as AnyRec
+    const setName = asStr(sr.Name)
+    if (!setName) continue
+    const snap: Partial<Record<Ability, number>> = {}
+    const pairs: [Ability, string][] = [
+      ['Strength', 'SnapshotStrength'], ['Dexterity', 'SnapshotDexterity'],
+      ['Constitution', 'SnapshotConstitution'], ['Intelligence', 'SnapshotIntelligence'],
+      ['Wisdom', 'SnapshotWisdom'], ['Charisma', 'SnapshotCharisma'],
+    ]
+    let any = false
+    for (const [ab, tag] of pairs) {
+      if (tag in sr) { snap[ab] = asNum(sr[tag]); any = true }
     }
+    if (any) out.gearSetSnapshots[setName] = snap
   }
 
   // ── Quest completions (best-effort) ──────────────────────────────────────
@@ -559,5 +645,145 @@ export function importV2Build(xml: string): ImportResult {
     }
   }
 
-  return { build: out, warnings }
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export interface ImportResult {
+  /** The active life's active build (back-compat for single-build callers). */
+  build: CharacterBuild
+  /**
+   * The full Character → Life[] → Build[] document (F1). Every life and build
+   * in the file is imported; `activeLifeId`/`activeBuildId` point at the build
+   * returned in `build`. Callers that only need the active build can ignore it.
+   */
+  document: CharacterDocument
+  warnings: string[]
+}
+
+/**
+ * Parse the <Character>/<Life>/<Build> skeleton out of a V2 .DDOBuild XML
+ * string. Returns the parsed nodes and the active indices.
+ */
+function parseRoot(xml: string) {
+  const parsed = parser.parse(xml) as AnyRec
+  const root = (parsed.DDOBuilderCharacterData ?? parsed) as AnyRec
+  const character = getRec(root, 'Character') ?? root
+  const lives = arr(character.Life as AnyRec | AnyRec[] | undefined)
+  const activeLifeIdx = asNum(character.ActiveLifeIndex)
+  const activeBuildIdx = asNum(character.ActiveBuildIndex ?? '')
+  return { character, lives, activeLifeIdx, activeBuildIdx }
+}
+
+/**
+ * Import the FULL multi-life / multi-build document (F1). Every <Life> and its
+ * every <Build> is imported into the CharacterDocument model, preserving the
+ * V2 ActiveLifeIndex / ActiveBuildIndex selection. The exporter
+ * (exportV2Document) emits all of them.
+ */
+export function importV2Document(xml: string): {
+  document: CharacterDocument
+  warnings: string[]
+} {
+  const warnings: string[] = []
+  const { character, lives, activeLifeIdx, activeBuildIdx } = parseRoot(xml)
+
+  const docLives: Life[] = []
+  let activeLifeId = ''
+  let activeBuildId = ''
+
+  for (let li = 0; li < lives.length; li++) {
+    const lifeNode = lives[li]
+    const buildNodes = arr(lifeNode.Build as AnyRec | AnyRec[] | undefined)
+    const lifeId = generateId()
+
+    const lifeSpecial = parseFeatsListObject(getRec(lifeNode, 'SpecialFeats'))
+    const builds: CharacterBuild[] = []
+    for (let bi = 0; bi < buildNodes.length; bi++) {
+      const build = parseBuildNode(buildNodes[bi], lifeNode, character)
+      builds.push(build)
+      // The active build is the one at (ActiveLifeIndex, ActiveBuildIndex).
+      if (li === activeLifeIdx && bi === activeBuildIdx) {
+        activeLifeId = lifeId
+        activeBuildId = build.id
+      }
+    }
+    if (builds.length === 0) {
+      warnings.push(`Life ${li} ("${asStr(lifeNode.Name)}") has no <Build>; skipped.`)
+      continue
+    }
+
+    docLives.push({
+      id: lifeId,
+      name: asStr(lifeNode.Name) || `Life ${li + 1}`,
+      race: asStr(lifeNode.Race) || 'Human',
+      alignment: asStr(lifeNode.Alignment) || 'True Neutral',
+      abilityTomes: {
+        Strength: asNum(character.StrTome),
+        Dexterity: asNum(character.DexTome),
+        Constitution: asNum(character.ConTome),
+        Intelligence: asNum(character.IntTome),
+        Wisdom: asNum(character.WisTome),
+        Charisma: asNum(character.ChaTome),
+      },
+      skillTomes: builds[0].skillTomes,
+      selfBuffs: arr(lifeNode.SelfAndPartyBuffs as string | string[] | undefined).map(asStr).filter(Boolean),
+      // F4: Life-level SpecialFeats beyond past lives (universal-tree access,
+      // Granted feats, …) — previously dropped.
+      specialFeats: lifeSpecial.feats,
+      builds,
+    })
+  }
+
+  // Fall back to the first life/build if the active indices are out of range.
+  if (!activeLifeId && docLives.length > 0) {
+    activeLifeId = docLives[0].id
+    activeBuildId = docLives[0].builds[0]?.id ?? ''
+  }
+
+  const document: CharacterDocument = {
+    id: generateId(),
+    name: asStr(character.Name) || docLives[0]?.name || 'Imported V2 Character',
+    guildLevel: asNum(character.GuildLevel),
+    applyGuildBuffs: Boolean(character.ApplyGuildBuffs),
+    characterTomes: {
+      Strength: asNum(character.StrTome),
+      Dexterity: asNum(character.DexTome),
+      Constitution: asNum(character.ConTome),
+      Intelligence: asNum(character.IntTome),
+      Wisdom: asNum(character.WisTome),
+      Charisma: asNum(character.ChaTome),
+    },
+    // F4: Character-level ContentIDontOwn (adventure packs not owned).
+    contentIDontOwn: arr(character.ContentIDontOwn as string | string[] | undefined).map(asStr).filter(Boolean),
+    lives: docLives,
+    activeLifeId,
+    activeBuildId,
+    _v: 2,
+  }
+
+  if (docLives.length === 0) {
+    warnings.push('No <Life> found in V2 build; document has no lives.')
+  }
+
+  return { document, warnings }
+}
+
+/**
+ * Import the active life's active build (back-compat). Also returns the full
+ * multi-life document (F1) so newer callers can access every life/build.
+ */
+export function importV2Build(xml: string): ImportResult {
+  const { document, warnings } = importV2Document(xml)
+  const life = document.lives.find(l => l.id === document.activeLifeId) ?? document.lives[0]
+  const build = life?.builds.find(b => b.id === document.activeBuildId)
+    ?? life?.builds[0]
+    ?? emptyBuild()
+  if (document.lives.length === 0) {
+    return { build: emptyBuild(), document, warnings: [...warnings] }
+  }
+  return { build, document, warnings }
 }

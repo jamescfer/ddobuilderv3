@@ -458,6 +458,12 @@ export interface CharacterBuild {
   augmentChoices: Record<string, string>
   /** className|raceName → count of past lives */
   pastLives: Record<string, number>
+  /**
+   * past-life key → V2 <Type> string (HeroicPastLife / RacialPastLife /
+   * EpicPastLife / IconicPastLife). Captured on V2 import so the exporter can
+   * reproduce the exact Type instead of guessing from the name (F5).
+   */
+  pastLifeTypes?: Record<string, string>
   /** sentient weapon filigree slots (6 slots) */
   filigreeSlots: FiligreeSlot[]
   /** artifact filigree slots (up to 10) */
@@ -538,6 +544,22 @@ export interface CharacterBuild {
    * free-text labels for now; the Combat panel may consume these).
    */
   attackChains: Record<string, string[]>
+  /** Name of the active attack chain (V2 Build::ActiveAttackChain). */
+  activeAttackChain?: string
+  /**
+   * Build-level favor-reward feats (V2 Build::m_FavorFeats FeatsListObject,
+   * Type="Favor"/"Granted"/…): House Deneith/Twelve/etc. favor rewards. Stored
+   * as a flat name list; folded into the stat engine as granted feats.
+   */
+  favorFeats?: string[]
+  /**
+   * Per-gear-set ability snapshots for "what-if" gear swaps
+   * (V2 EquippedGear::Snapshot*; setName → ability → value) plus the
+   * `gearSetSnapshot` name (V2 Build::GearSetSnapshot). Round-trips only.
+   */
+  gearSetSnapshots?: Record<string, Partial<Record<Ability, number>>>
+  /** Name of the gear set used as the ability snapshot baseline. */
+  gearSetSnapshot?: string
 }
 
 export interface SentientGemState {
@@ -645,7 +667,12 @@ export function emptyBuild(): CharacterBuild {
     questDifficulty: {},
     slaCharges: {},
     alternateFeats: {},
+    pastLifeTypes: {},
     attackChains: {},
+    activeAttackChain: '',
+    favorFeats: [],
+    gearSetSnapshots: {},
+    gearSetSnapshot: '',
   }
 }
 
