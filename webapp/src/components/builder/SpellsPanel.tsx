@@ -58,6 +58,7 @@ export default function SpellsPanel() {
   const [allSetBonuses, setAllSetBonuses] = useState<SetBonus[]>([])
   const [allFiligreeBonuses, setAllFiligreeBonuses] = useState<FiligreeSetBonus[]>([])
   const [allFiligrees, setAllFiligrees] = useState<Filigree[]>([])
+  const [allItemBuffs, setAllItemBuffs] = useState<import('../../server/dataLoaders').ItemBuffSpec[]>([])
   const [gearItems, setGearItems] = useState<Record<string, Item>>({})
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<string | null>(null)
@@ -75,10 +76,12 @@ export default function SpellsPanel() {
       api.setbonuses().catch(() => [] as SetBonus[]),
       api.filigreeSetBonuses().catch(() => [] as FiligreeSetBonus[]),
       api.filigree().catch(() => [] as Filigree[]),
-    ]).then(([sp, cls, ra, fe, tr, sb, aug, sbn, fbn, fil]) => {
+      api.itemBuffs().catch(() => [] as import('../../server/dataLoaders').ItemBuffSpec[]),
+    ]).then(([sp, cls, ra, fe, tr, sb, aug, sbn, fbn, fil, ib]) => {
       setAllSpells(sp); setAllClasses(cls); setAllRaces(ra); setAllFeats(fe)
       setAllTrees(tr); setAllSelfBuffs(sb); setAllAugments(aug)
       setAllSetBonuses(sbn); setAllFiligreeBonuses(fbn); setAllFiligrees(fil)
+      setAllItemBuffs(ib)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -102,8 +105,10 @@ export default function SpellsPanel() {
   const statsInput = useMemo(() => ({
     allClasses, allRaces, allFeats, allTrees, gearItems,
     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+    allItemBuffs,
   }), [allClasses, allRaces, allFeats, allTrees, gearItems,
-      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees])
+      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+      allItemBuffs])
   const stats = useBuildStats(statsInput)
 
   const tabs = buildClassTabs(build.classes, allClasses, allSpells)

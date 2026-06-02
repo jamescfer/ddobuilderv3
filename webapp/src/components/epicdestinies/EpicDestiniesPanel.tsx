@@ -92,6 +92,7 @@ export default function EpicDestiniesPanel() {
     allSetBonuses: bundle.allSetBonuses, allFiligreeBonuses: bundle.allFiligreeBonuses,
     allFiligrees: bundle.allFiligrees, allWeaponGroups: bundle.allWeaponGroups,
     allSpells: bundle.allSpells, allGuildBuffs: bundle.allGuildBuffs,
+    allItemBuffs: bundle.allItemBuffs,
   }), [bundle, gearItems])
   const stats = useBuildStats(statsInput)
 

@@ -438,6 +438,10 @@ export function loadChallenges(dataDir: string): Challenge[] {
 export interface ItemBuffSpec {
   Type: string
   DisplayText?: string
+  // The buff template's Effect list (V2 Buff::Effects). Carries the real stat
+  // effects that an item's <Buff> references by Type; parseItemBuff resolves
+  // flavour-named Types against these (V2 Item::FindEffect, Item.cpp:452-472).
+  Effect?: import('../types/ddo').Effect | import('../types/ddo').Effect[]
 }
 
 export function loadItemBuffs(dataDir: string): ItemBuffSpec[] {

@@ -1396,12 +1396,66 @@ export function parseEffect(
 // ---------------------------------------------------------------------------
 
 /**
+ * A buff template from ItemBuffs.xml (V2 Buff.cpp). The item's per-Buff Type
+ * names one of these; its Effect list carries the real stats, with Amount /
+ * Bonus placeholders that the item's Value1 / BonusType override
+ * (V2 Buff::UpdatedEffects, Buff.cpp:164-249).
+ */
+export interface ItemBuffTemplate {
+  Type: string
+  Effect?: Effect | Effect[]
+}
+
+/**
+ * Resolves a named item-buff Type against the ItemBuffs.xml template
+ * catalogue, mirroring V2 Item::FindEffect / BuffValue (Item.cpp:452-506):
+ * FindBuff(Type).Effects() with the item's Value1/Item/BonusType stamped onto
+ * the template effects via Buff::UpdatedEffects. Most equipped-item buffs use
+ * flavour-named Types (Vampirism, PhysicalSheltering, WeaponEnchantment, …)
+ * whose stats live ONLY in the template — without this they were silently
+ * dropped by the direct switch's `default: return []`.
+ */
+function parseItemBuffViaTemplate(
+  buff: ItemBuff,
+  source: string,
+  catalogue: Map<string, ItemBuffTemplate>,
+): ParsedBonus[] {
+  const tpl = catalogue.get(buff.Type)
+  if (!tpl) return []
+  const effects = Array.isArray(tpl.Effect) ? tpl.Effect : tpl.Effect ? [tpl.Effect] : []
+  if (effects.length === 0) return []
+
+  const hasValue1 = buff.Value1 != null
+  const itemBonus = buff.BonusType && buff.BonusType !== '' ? buff.BonusType : undefined
+  const itemFilter = buff.Item && buff.Item !== '' ? buff.Item : undefined
+
+  const out: ParsedBonus[] = []
+  for (const eff of effects) {
+    // Buff::UpdatedEffects: stamp BonusType (if the item supplies one), set the
+    // Item filter, and override Amount with Value1 (ItemBuff carries no Value2,
+    // so the even/odd split collapses to "Value1 on every effect").
+    const cloned: Effect = { ...eff }
+    if (itemBonus) cloned.Bonus = itemBonus
+    if (itemFilter) cloned.Item = itemFilter
+    if (hasValue1) cloned.Amount = buff.Value1
+    out.push(...parseEffect(cloned, 1, source))
+  }
+  return out
+}
+
+/**
  * Converts an ItemBuff (from an equipped item's Buff list) into ParsedBonus
  * entries for the relevant stat keys.
  *
  * ItemBuff uses `Value1` for the magnitude and `BonusType` for the bonus type.
+ * Types not recognised by the direct switch are resolved against the
+ * ItemBuffs.xml template catalogue (when supplied) before being dropped.
  */
-export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
+export function parseItemBuff(
+  buff: ItemBuff,
+  source: string,
+  catalogue?: Map<string, ItemBuffTemplate>,
+): ParsedBonus[] {
   const value = buff.Value1 ?? 0
   const items = toStringArray(buff.Item as string | string[] | undefined)
 
@@ -2163,8 +2217,10 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
     case 'Unknown':
       return []
 
-    // Unknown buff type
+    // Unknown buff type → resolve via the ItemBuffs.xml template catalogue
+    // (V2 Item::FindEffect/BuffValue) before giving up.
     default:
+      if (catalogue) return parseItemBuffViaTemplate(buff, source, catalogue)
       return []
   }
 }

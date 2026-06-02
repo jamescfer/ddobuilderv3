@@ -16,10 +16,10 @@ import { SKILLS } from '../lib/gamedata'
 import type {
   Race, DDOClass, Feat, EnhancementTree, EnhancementTreeItem, Item,
   Effect, EnhancementSelection, Augment, SetBonus, FiligreeSetBonus, Filigree,
-  OptionalBuff, FiligreeSlot, Spell, GuildBuff,
+  OptionalBuff, FiligreeSlot, Spell, GuildBuff, ItemBuff,
 } from '../types/ddo'
 import { parseEffect, parseItemBuff } from '../lib/effectParser'
-import type { EffectContext } from '../lib/effectParser'
+import type { EffectContext, ItemBuffTemplate } from '../lib/effectParser'
 import { resolveBonus, emptyResolvedStat } from '../lib/bonus'
 import type { RawBonus, ResolvedStat } from '../lib/bonus'
 import { deriveWeaponClasses } from '../lib/weapons/groups'
@@ -83,6 +83,12 @@ export interface BuildStatsInput {
   allSpells?: Spell[]
   /** All guild-buff definitions (from /api/guildbuffs). Optional. */
   allGuildBuffs?: GuildBuff[]
+  /**
+   * ItemBuffs.xml template catalogue (from /api/itembuffs). Optional — used to
+   * resolve flavour-named item Buff Types (e.g. Vampirism, PhysicalSheltering)
+   * whose stat effects live only in the template (V2 Item::FindEffect).
+   */
+  allItemBuffs?: ItemBuffTemplate[]
 }
 
 // ---------------------------------------------------------------------------
@@ -341,11 +347,15 @@ function accumulateEnhancementTree(
   }
 }
 
-function accumulateGear(map: StatMap, gearItems: Record<string, Item>): void {
+function accumulateGear(
+  map: StatMap,
+  gearItems: Record<string, Item>,
+  buffCatalogue?: Map<string, ItemBuffTemplate>,
+): void {
   for (const [slot, item] of Object.entries(gearItems)) {
     const source = `${item.Name} (${slot})`
     for (const buff of toArray(item.Buff)) {
-      addParsed(map, parseItemBuff(buff, source), true)
+      addParsed(map, parseItemBuff(buff, source, buffCatalogue), true)
     }
     // Armor bonus from armor/shield items — treated as Armor bonus type
     if (item.ArmorBonus) {
@@ -621,8 +631,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
   const {
     allClasses, allRaces, allFeats, allTrees, gearItems,
     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-    allWeaponGroups, allSpells, allGuildBuffs,
+    allWeaponGroups, allSpells, allGuildBuffs, allItemBuffs,
   } = input
+
+  // ItemBuffs.xml template catalogue (Type → template) for resolving
+  // flavour-named item Buff Types via parseItemBuff (V2 Item::FindEffect).
+  const buffCatalogue = allItemBuffs && allItemBuffs.length > 0
+    ? new Map<string, ItemBuffTemplate>(allItemBuffs.map(b => [b.Type, b]))
+    : undefined
 
     // ──────────────────────────────────────────────────────────────────────
     // Build the EffectContext used to gate effects via Requirements::Met.
@@ -952,7 +968,7 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     }
 
     // ── Gear item buffs ───────────────────────────────────────────────────
-    accumulateGear(map, gearItems)
+    accumulateGear(map, gearItems, buffCatalogue)
 
     // ── Augments ─────────────────────────────────────────────────────────
     // Include sentient-gem augments alongside regular slot augments (Stream 3).

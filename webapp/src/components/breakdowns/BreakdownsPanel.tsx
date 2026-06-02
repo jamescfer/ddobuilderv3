@@ -207,6 +207,7 @@ export default function BreakdownsPanel() {
   const [allFiligrees,      setAllFiligrees]      = useState<Filigree[]>([])
   const [allWeaponGroups,   setAllWeaponGroups]   = useState<import('../../lib/weapons/groups').WeaponGroupSpec[]>([])
   const [allGuildBuffs,     setAllGuildBuffs]     = useState<GuildBuff[]>([])
+  const [allItemBuffs,      setAllItemBuffs]      = useState<import('../../server/dataLoaders').ItemBuffSpec[]>([])
   const [gearItems,         setGearItems]         = useState<Record<string, Item>>({})
   const [tip, setTip] = useState<TipState | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -224,6 +225,7 @@ export default function BreakdownsPanel() {
     api.filigree().then(setAllFiligrees)
     api.weaponGroups().then(setAllWeaponGroups).catch(() => setAllWeaponGroups([]))
     api.guildbuffs().then(setAllGuildBuffs).catch(() => setAllGuildBuffs([]))
+    api.itemBuffs().then(setAllItemBuffs).catch(() => setAllItemBuffs([]))
   }, [])
 
   // Resolve gear items whenever equipped slots change
@@ -251,11 +253,11 @@ export default function BreakdownsPanel() {
     () => ({
       allClasses, allRaces, allFeats, allTrees, gearItems,
       allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-      allWeaponGroups, allGuildBuffs,
+      allWeaponGroups, allGuildBuffs, allItemBuffs,
     }),
     [allClasses, allRaces, allFeats, allTrees, gearItems,
      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-     allWeaponGroups, allGuildBuffs],
+     allWeaponGroups, allGuildBuffs, allItemBuffs],
   )
   const stats = useBuildStats(statsInput)
 

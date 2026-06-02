@@ -26,6 +26,7 @@ export default function ForumExportPanel() {
   const [allFiligrees, setAllFiligrees] = useState<Filigree[]>([])
   const [allStances, setAllStances] = useState<Stance[]>([])
   const [epicPastLifeFeats, setEpicPastLifeFeats] = useState<Feat[]>([])
+  const [allItemBuffs, setAllItemBuffs] = useState<import('../../server/dataLoaders').ItemBuffSpec[]>([])
   const [gearItems, setGearItems] = useState<Record<string, Item>>({})
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function ForumExportPanel() {
     api.filigree().then(setAllFiligrees)
     api.stances().then(setAllStances).catch(() => setAllStances([]))
     api.feats({ acquire: 'EpicPastLife' }).then(setEpicPastLifeFeats).catch(() => setEpicPastLifeFeats([]))
+    api.itemBuffs().then(setAllItemBuffs).catch(() => setAllItemBuffs([]))
   }, [])
 
   useEffect(() => {
@@ -62,8 +64,10 @@ export default function ForumExportPanel() {
   const statsInput = useMemo(() => ({
     allClasses, allRaces, allFeats, allTrees, gearItems,
     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+    allItemBuffs,
   }), [allClasses, allRaces, allFeats, allTrees, gearItems,
-      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees])
+      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+      allItemBuffs])
   const stats = useBuildStats(statsInput)
 
   const sections: SectionDef[] = useMemo(
