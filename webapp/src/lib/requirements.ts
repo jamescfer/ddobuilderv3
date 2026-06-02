@@ -89,14 +89,69 @@ export function meetsSingleRequirement(req: Requirement, ctx: RequirementContext
     case 'BAB':
       return totalBAB(build, allClasses) >= value
     case 'Feat':
+    case 'FeatAnySource':
+      // V2 Requirement.cpp:870-911: both check the trained-feat set; FeatAnySource
+      // additionally accepts granted feats, which getFeatSet already folds in.
       return getFeatSet(ctx).has(item)
     case 'Race':
       return build.race === item
+    case 'RaceConstruct':
+      // V2 Requirement.cpp:1031: race.HasIsConstruct(). Only Warforged/Bladeforged
+      // carry IsConstruct in the race data.
+      return build.race === 'Warforged' || build.race === 'Bladeforged'
+    case 'NotConstruct':
+      // V2 Requirement.cpp:1004: !race.HasIsConstruct().
+      return !(build.race === 'Warforged' || build.race === 'Bladeforged')
+    case 'AlignmentType': {
+      // V2 Requirement.cpp:662-706: match the build alignment against an axis option
+      // (Lawful/Chaotic/Good/Evil/TrueNeutral/PartNeutral). Alignment strings here
+      // are like "Lawful Good", "True Neutral", "Chaotic Evil".
+      const a = build.alignment
+      switch (item) {
+        case 'Lawful':       return a.includes('Lawful')
+        case 'Chaotic':      return a.includes('Chaotic')
+        case 'Good':         return a.includes('Good')
+        case 'Evil':         return a.includes('Evil')
+        case 'TrueNeutral':  return a === 'True Neutral'
+        case 'PartNeutral':  return a.includes('Neutral') && a !== 'True Neutral'
+        default:             return false
+      }
+    }
     case 'Class':
       return build.classes.some(c => c.name === item && c.levels > 0)
     case 'ClassLevel': {
       const bc = build.classes.find(c => c.name === item)
       return (bc?.levels ?? 0) >= value
+    }
+    case 'BaseClass': {
+      // V2 Requirement.cpp:719-731: BaseClassLevels >= Value (or > 0 if no Value).
+      const lvls = classLevelsAtLevel(build, item, build.totalLevel || 20, allClasses, true)
+      return req.Value !== undefined ? lvls >= value : lvls > 0
+    }
+    case 'ClassAtLevel': {
+      // V2 Requirement.cpp:806-825: classLevels == Value (and class-at-level == item).
+      // V3 has no per-level class-at-level snapshot here; match the exact-level
+      // count which is the build-affecting half of the predicate.
+      const bc = build.classes.find(c => c.name === item)
+      return (bc?.levels ?? 0) === value
+    }
+    case 'BaseClassAtLevel': {
+      // V2 Requirement.cpp:733-778: base-class-aware exact-level match.
+      const lvls = classLevelsAtLevel(build, item, build.totalLevel || 20, allClasses, true)
+      return req.Value !== undefined ? lvls === value : lvls > 0
+    }
+    case 'AbilityGreaterCondition': {
+      // V2 Requirement.cpp:633-645: value(Item[0]) > value(Item[1]).
+      const its = Array.isArray(req.Item) ? req.Item : req.Item ? [req.Item] : []
+      if (its.length < 2) return false
+      const charLvl = Math.max(1, build.totalLevel || 1)
+      const score = (ab: string) => {
+        const tomeRaw = (build.abilityTomes ?? {})[ab as Ability] ?? 0
+        const tome = Math.min(tomeRaw, tomeCapAtLevel(charLvl))
+        const racial = ctx.race ? Number((ctx.race as unknown as Record<string, unknown>)[ab] ?? 0) || 0 : 0
+        return abilityAtLevel(build, ab as Ability, charLvl, racial, tome)
+      }
+      return score(its[0]) > score(its[1])
     }
     case 'ClassMinLevel': {
       if (!item || item === 'Any') {
@@ -134,6 +189,19 @@ export function meetsSingleRequirement(req: Requirement, ctx: RequirementContext
       // false negatives.
       return true
     case 'StartingWorld':
+      return true
+    case 'WeaponTypesEquipped':
+    case 'GroupMember':
+    case 'GroupMember2':
+    case 'WeaponClassMainHand':
+    case 'WeaponClassOffHand':
+    case 'ItemTypeInSlot':
+    case 'ItemSlot':
+    case 'MaterialType':
+      // V2 Requirement.cpp: these depend on the currently-equipped weapon / item /
+      // slot, which this trainability context does not carry. Conservative pass —
+      // they gate runtime effect activation (handled in effectParser via weaponTypes),
+      // not whether a feat/enhancement can be trained at all.
       return true
     case 'Exclusive': {
       // V2 parity: Build::IsExclusiveEnhancement (Build.cpp:3617-3636).
