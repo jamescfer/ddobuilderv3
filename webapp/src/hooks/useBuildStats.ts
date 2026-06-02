@@ -738,6 +738,31 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     const groups = allWeaponGroups ?? []
     const ctxWeaponClassMain = deriveWeaponClasses(mainWeaponType, groups)
     const ctxWeaponClassOff = deriveWeaponClasses(offWeaponType, groups)
+
+    // V2 parity: the StancesPane auto-activates weapon-type and fighting-style
+    // stances from the equipped weapons (they default ON when the weapon is
+    // wielded). Effects gated on "Two Handed Fighting" / "Two Weapon Fighting" /
+    // "Single Weapon Fighting", the weapon type itself ("Quarterstaff",
+    // "Dwarven Axe", "Handwraps", …), or "Shield" otherwise never fired in V3,
+    // where stances were purely player-toggled (43 THF / 29 TWF / 19 SWF +
+    // weapon-type-gated effects in the live data). Player toggles still merge in
+    // via activeBuffs above; this only adds the gear-derived defaults.
+    if (mainWeaponType) ctxStances.add(mainWeaponType)
+    if (offWeaponType) ctxStances.add(offWeaponType)
+    {
+      const hasShield = ['Tower Shield', 'Heavy Shield', 'Light Shield', 'Buckler']
+        .some(s => ctxStances.has(s))
+      if (hasShield) ctxStances.add('Shield')
+      const twoHandedMain = ctxWeaponClassMain.has('Two Handed')
+      const hasOffhandWeapon = offWeaponType !== ''
+      if (twoHandedMain) {
+        ctxStances.add('Two Handed Fighting')
+      } else if (hasOffhandWeapon) {
+        ctxStances.add('Two Weapon Fighting')
+      } else if (mainWeaponType && !hasShield) {
+        ctxStances.add('Single Weapon Fighting')
+      }
+    }
     const ctxSliderValues: Record<string, number> = {
       ...((build as { sliderValues?: Record<string, number> }).sliderValues ?? {}),
     }
