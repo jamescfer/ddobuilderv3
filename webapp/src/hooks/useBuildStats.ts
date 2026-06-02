@@ -897,6 +897,29 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
         const feat = allFeats.find(f => f.Name === fn)
         if (feat) accumulateFeat(map, feat, 1, `Automatic: ${fn}`, build.totalLevel, ctx)
       }
+
+      // V2 Class::ImprovedHeroicDurabilityFeats (Class.cpp:375-399): every heroic
+      // (non-NotHeroic) class dynamically synthesizes "Improved Heroic Durability
+      // (<Class> 5/10/15)" feats, each auto-acquired via Requirement_ClassAtLevel
+      // at class level 5, 10 and 15. Each grants the base "Improved Heroic
+      // Durability" effect (+5 max HP, Feats.xml:3791). These exist in no XML
+      // AutomaticFeats / GrantedFeat list, so V3 was under-counting HP by +5 per
+      // milestone class-level each heroic class reaches (max +15 per class).
+      const ihdBase = allFeats.find(f => f.Name === 'Improved Heroic Durability')
+      if (ihdBase) {
+        for (const bc of build.classes) {
+          if (!bc.name || bc.levels <= 0) continue
+          const cls = allClasses.find(c => c.Name === bc.name)
+          if (!cls || cls.NotHeroic) continue
+          let milestones = 0
+          for (let level = 5; level <= 15; level += 5) {
+            if (bc.levels >= level) milestones++
+          }
+          if (milestones > 0) {
+            accumulateFeat(map, ihdBase, milestones, `Improved Heroic Durability (${bc.name})`, build.totalLevel, ctx)
+          }
+        }
+      }
     }
 
     // ── Heroic enhancements ───────────────────────────────────────────────
