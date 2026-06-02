@@ -123,6 +123,7 @@ export default function CombatPanel() {
       offhand,
       offhandIsLight,
       oversizedTwf,
+      perfectTwf: twfTier >= 4, // Perfect TWF → 65% off-hand doublestrike
     })
   }, [stats, foeAC, foePRR, foeFort, helpless, build.featChoices, build.gear, gearItems, allAttackRates, allWeaponGroups])
 

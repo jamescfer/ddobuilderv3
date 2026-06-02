@@ -75,4 +75,82 @@ describe('buildAttackEntry', () => {
     )
     expect(b.totalDPR).toBeGreaterThan(a.totalDPR * 1.4)
   })
+
+  // ---- Gap 1: separate 19-20 critical multiplier ----
+  // V2 BreakdownItemWeaponCriticalMultiplier.cpp: the 19-20 multiplier seeds
+  // itself with the standard multiplier and stacks 19-20-only effects on top.
+  it('applies a 19-20 crit multiplier only to the 19-20 threat faces', () => {
+    // 19-20 weapon (critThreatRange 2 = faces 19,20). With a +1 19-20 multiplier
+    // bonus, every threat face benefits (both faces lie in 19-20).
+    const narrow: WeaponInfo = { ...falchion, critThreatRange: 2 }
+    const base = buildAttackEntry(makeStats({}), narrow, 18, 20, { foeAC: 10 })
+    const boosted = buildAttackEntry(
+      makeStats({ 'weapon.critMultiplier19to20': 1 }), narrow, 18, 20, { foeAC: 10 },
+    )
+    expect(boosted.critDamage).toBeGreaterThan(base.critDamage)
+
+    // 17-20 weapon (critThreatRange 4): only 2 of the 4 threat faces (19,20) get
+    // the bonus, so the average crit damage rises by less than the narrow case.
+    const wide: WeaponInfo = { ...falchion, critThreatRange: 4 }
+    const wideBase = buildAttackEntry(makeStats({}), wide, 18, 20, { foeAC: 10 })
+    const wideBoost = buildAttackEntry(
+      makeStats({ 'weapon.critMultiplier19to20': 1 }), wide, 18, 20, { foeAC: 10 },
+    )
+    const narrowGain = boosted.critDamage - base.critDamage
+    const wideGain = wideBoost.critDamage - wideBase.critDamage
+    // Narrow: all faces boosted; wide: half the faces → ~half the gain.
+    expect(wideGain).toBeCloseTo(narrowGain / 2, 4)
+  })
+
+  // ---- Gap 2: crit-only damage bonus ----
+  // V2 BreakdownItemWeaponDamageBonus.cpp:184-202: `*Critical` damage effects
+  // land only on a confirmed crit.
+  it('adds melee.crit.damage to crit damage but not to normal hit damage', () => {
+    const a = buildAttackEntry(makeStats({}), falchion, 18, 20, { foeAC: 10 })
+    const b = buildAttackEntry(
+      makeStats({ 'melee.crit.damage': 10 }), falchion, 18, 20, { foeAC: 10 },
+    )
+    // Normal hit damage unchanged; crit damage rises by exactly +10 (mult 1.0).
+    expect(b.hitDamage).toBeCloseTo(a.hitDamage, 6)
+    expect(b.critDamage).toBeCloseTo(a.critDamage + 10, 6)
+  })
+
+  // ---- Gap 3: off-hand doublestrike derived from main-hand ----
+  // V2 BreakdownItemOffhandDoublestrike.cpp:58-69: off-hand doublestrike =
+  // 50% of main-hand doublestrike (65% with Perfect TWF).
+  it('derives off-hand doublestrike from main-hand doublestrike (50% / 65% PTWF)', () => {
+    // Main-hand doublestrike 100% → off-hand proc multiplier:
+    //   plain TWF: 1 + 1.00*0.50 = 1.50 ; Perfect TWF: 1 + 1.00*0.65 = 1.65
+    const stats = makeStats({ 'melee.doublestrike': 100 })
+    const noDs = buildAttackEntry(makeStats({}), falchion, 18, 20, {
+      foeAC: 10, offhand: falchion, twoWeaponFightingTier: 2,
+    })
+    const plain = buildAttackEntry(stats, falchion, 18, 20, {
+      foeAC: 10, offhand: falchion, twoWeaponFightingTier: 2,
+    })
+    const perfect = buildAttackEntry(stats, falchion, 18, 20, {
+      foeAC: 10, offhand: falchion, twoWeaponFightingTier: 2, perfectTwf: true,
+    })
+    // Off-hand DPR scales by the (1 + derived doublestrike) factor.
+    expect(plain.offhandDPR).toBeCloseTo(noDs.offhandDPR * 1.5, 4)
+    expect(perfect.offhandDPR).toBeCloseTo(noDs.offhandDPR * 1.65, 4)
+  })
+
+  // ---- Gap 4: fortification downgrades crits to normal hits ----
+  it('fortification converts a fraction of crits to normal hits', () => {
+    const stats = makeStats({})
+    // No off-hand & no PRR ⇒ totalDPR == mainDPR, so per-swing scaling is exact.
+    const none = buildAttackEntry(stats, falchion, 18, 20, { foeAC: 10 })
+    const full = buildAttackEntry(stats, falchion, 18, 20, { foeAC: 10, foeFortification: 100 })
+    const half = buildAttackEntry(stats, falchion, 18, 20, { foeAC: 10, foeFortification: 50 })
+    const { hitChance: h, critChance: c, hitDamage: hd, critDamage: cd } = none
+    const perSwingNoFort = (h - c) * hd + c * cd
+    // 100% fort: every crit deals hitDamage instead of critDamage.
+    const perSwingFullFort = h * hd
+    expect(full.totalDPR).toBeCloseTo(none.totalDPR * (perSwingFullFort / perSwingNoFort), 4)
+    // 50% fort sits exactly halfway in expected per-swing damage.
+    const perSwingHalf = (h - c * 0.5) * hd + c * 0.5 * cd
+    expect(half.totalDPR).toBeCloseTo(none.totalDPR * (perSwingHalf / perSwingNoFort), 4)
+    expect(full.totalDPR).toBeLessThan(none.totalDPR)
+  })
 })
