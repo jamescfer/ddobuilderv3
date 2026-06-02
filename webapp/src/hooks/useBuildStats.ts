@@ -982,7 +982,15 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     // equipped) by tower-shield MDB. V2 BreakdownItemAC.cpp:62-82 applies
     // both caps in sequence; whichever yields the lowest dex bonus wins.
     add(map, 'ac', { value: 10, type: 'Base', source: 'Base AC' })
-    const armorMaxDex = extractArmorMaxDex(gearItems)
+    const armorMaxDexBase = extractArmorMaxDex(gearItems)
+    // V2 BreakdownItemMDB sums the armor's printed MaximumDexterityBonus AND
+    // every Effect_MaxDexBonus (armor-mastery enhancements, etc.) into a single
+    // Breakdown_MaxDexBonus->Total(). V3 only used the printed item value, so
+    // enhancements that raise the dex cap were ignored. The armor's printed
+    // field is not part of the `mdb` stat (which collects only Effect_MaxDexBonus
+    // contributions), so adding them together does not double-count.
+    const mdbEffectBonus = resolveBonus(map.get('mdb') ?? []).total
+    const armorMaxDex = armorMaxDexBase != null ? armorMaxDexBase + mdbEffectBonus : null
     let effectiveDexForAC = dexMod
     let dexCapLabel: string | null = null
     if (armorMaxDex != null && effectiveDexForAC > armorMaxDex) {

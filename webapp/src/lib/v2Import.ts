@@ -547,7 +547,9 @@ export function importV2Build(xml: string): ImportResult {
   }
 
   // ── Quest completions (best-effort) ──────────────────────────────────────
-  const completed = arr(getRec(life, 'CompletedQuests')?.CompletedQuest as AnyRec | AnyRec[] | undefined)
+  // V2 stores <CompletedQuests> on the Build node (Build.h Build_PROPERTIES),
+  // not the Life node. Reading from `life` here silently imported nothing.
+  const completed = arr(getRec(buildNode, 'CompletedQuests')?.CompletedQuest as AnyRec | AnyRec[] | undefined)
   for (const q of completed) {
     const name = asStr((q as AnyRec).Name)
     const diff = asStr((q as AnyRec).Difficulty) as QuestDifficulty

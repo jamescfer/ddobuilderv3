@@ -1,8 +1,8 @@
 # V3 ↔ V2 Parity TODO
 
 Tracking the remaining gaps between the V2 MFC application (`DDOBuilder/`,
-~519 source files, ~100k lines C++) and the V3 React webapp
-(`webapp/`, ~70 source files, ~16k lines TS). Updated as gaps close.
+~244 `.cpp` files, ~100k lines C++) and the V3 React webapp
+(`webapp/`, ~97 source files, ~17k lines TS). Updated as gaps close.
 
 Status legend:
 - ✅ Done
@@ -57,107 +57,149 @@ the PR number, so this file doubles as a changelog.
 | 36 | Reaper XP required for n RAPs — `reaperXpRequired(n)` in `lib/v2Formulas.ts` implements V2 `ReaperEnhancementsPane.cpp:248-255` loop (sum of first n odd numbers = n²); `ReaperPanel` now shows "Requires Nk Reaper XP" next to RAPs spent, matching V2's panel title. | #72 |
 | 37 | Player-toggled stances in effect-context stances — `buildStatMap` now merges `build.activeBuffs` into `ctxStances` so all 1 000+ enhancement effects gated on non-armor stances (Mountain Stance, Favored Weapon, Power Attack, Rage, Two Handed Fighting, Action Boost, …) correctly fire or not based on the player's current stance selection (V2 `Build::IsStanceActive` parity). | #73 |
 | 38 | SLA list auto-derived from SpellLikeAbility effects — `parseEffect` now emits `sla.<spellName>` markers for `SpellLikeAbility` effects (feats, race grants, enhancements, augments); `BuildStats.slaList` exposes the sorted list of derived SLA names; forum export `slas` section now uses `stats.slaList` instead of the manual `build.slaCharges` fallback, matching V2 `CSLAControl`/`ForumExportDlg::AddSLAs` parity. | #74 |
+| 39 | **V2 `.DDOBuild` exporter** — new `lib/v2Export.ts` `exportV2Build()` serialises a V3 build back to V2 `<DDOBuilderCharacterData>/<Character>/<Life>/<Build>` XML so builds edited in V3 can be re-opened in V2. Wired into `usePersistence` as an "Export .DDOBuild" button. Element-name fidelity per `Character.h`/`Life.h`/`Build.h` `*_PROPERTIES` macros (tomes, `AbilitySpend` reconstructed from scores via `POINT_BUY_COSTS`, per-level `LevelTraining` with `TrainedFeat`/`TrainedSkill`, `EnhancementName`/`Selection`/`Ranks`, `*_SelectedTrees`, `EquippedGear` with index-preserving augment padding). Before this, V3 could read V2 files but never write them. | this PR |
+| 40 | **Genuine round-trip test** — `__tests__/v2RoundTripExport.test.ts` imports a real `.DDOBuild`, exports it, re-imports, and asserts every V3-modeled field survives (identity, classes, abilities, tomes, feats, per-level skills, enhancement/destiny/reaper spend, gear + augments + named sets, stances, notes, guild, past lives). The old `v2RoundTrip*` tests only imported + computed stats — they never re-serialised. | this PR |
+| 41 | **`CompletedQuests` import node-bug fix** — V2 stores `<CompletedQuests>` on the `Build` node (`Build.h`), but `v2Import.ts` read it from the `Life` node, so quest completions never imported. Now reads from `buildNode`. | this PR |
+| 42 | **AC dex cap includes `Effect_MaxDexBonus`** — V2 `BreakdownItemMDB` sums the armor's printed `MaximumDexterityBonus` AND every `Effect_MaxDexBonus` (armor-mastery enhancements, etc.) into one `Breakdown_MaxDexBonus->Total()`. V3 only used the printed item value, so enhancements that raise the dex-to-AC cap were ignored. Now adds the resolved `mdb` stat to the armor cap (no double-count — the printed field is not part of the `mdb` stat). | this PR |
 
 ---
 
-## High-priority remaining
+## ⚠️ Methodology caveat (read before trusting "Done")
 
-### Numerical correctness (fix as user reports specific mismatches)
+The `parityPass*` unit tests and `scripts/v2DiffReport.ts` assert V3's **own**
+computed numbers — they are self-consistency checks, **not** golden values
+captured from the running C++ app. `v2DiffReport.ts` prints a single V3 column,
+not a V2-vs-V3 diff. So "verified via regression tests" means "stable and
+internally consistent," not "byte-for-byte equal to V2." A real V2-golden
+comparison harness (item **G1** below) is the highest-leverage way to make all
+future parity claims trustworthy.
 
-- ✅ **BonusTypes stacking rules** — `lib/bonus.ts` now reads stacking rules
-  from `BonusTypes.xml` via `initBonusTypes()`. The hard-coded fallback
-  remains for environments where the XML is unavailable. (#56)
-- ✅ **AttackRates in Combat panel** — `lib/combat/attackRate.ts` provides
-  `lookupAttacksPerMinute` (backward-scan through sparse BAB table) and
-  `pickCombatStyleName` (maps TWF/THF/SWF/Shield/Unarmed to V2 style strings);
-  `CombatPanel` fetches `/api/attack-rates` and derives `attacksPerRound = APM / 10`
-  (6-second round, 10 rounds/min) from the XML table, replacing the hardcoded
-  default of 5. (#70)
-- ✅ **Save bonus edge cases** — Divine Grace cap and Half-Elf Lesser Divine
-  Grace (#56); SaveBonusAbility ability substitution (Force of Personality,
-  Insightful Reflexes, Insightful Fortitude, Domain of Strength feats) (#63).
-  "Reaper-only Diehard" and "Mantle saves" do not exist in V2
-  `BreakdownItemSave.cpp` — those TODO entries were inaccurate.
-- ✅ **Spell DC: per-school stacking** — `SchoolFocusNumber` and
-  `SpellFocusNumber` item buff types now wire to `dc.<school>` and `dc.All`
-  respectively in `parseItemBuff`; DCPanel double-count of Spell Focus feats
-  removed. Multi-source stacking (Feat + Equipment + Insightful + Profane)
-  verified correct via new regression tests. (#66)
-- ✅ **Caster level universal item bonuses** — `computeCasterLevel` now adds
-  `cl.All` and `computeMaxCasterLevel` now adds `maxCl.All`; equipment that
-  grants "+N Caster Levels" with no class/school restriction was previously
-  silently discarded. Class/school/spell-specific paths were already correct.
-  (V2 `Spell.cpp:174-228` parity). (#67)
-- ✅ **Skill cross-class .5-rank display** — `lib/skillDisplay.ts` provides
-  `perLevelRankDisplay` / `perLevelRankCap` / `displayRankToTrained`; the
-  `PerLevelGrid` in `Skills.tsx` now shows 0.5-increment ranks, correct
-  `(N+3)/2` cap, and `step=0.5` inputs for cross-class skills. (#64)
-- ✅ **Reaper points awarded by quest difficulty** — `reaperXpRequired(n)` in
-  `lib/v2Formulas.ts` computes n² (matching V2 `ReaperEnhancementsPane.cpp:248-255`
-  loop: sum of odd numbers 1+3+5+…); `ReaperPanel` now shows "Requires Nk Reaper XP"
-  in the header and budget note, matching V2's panel display. (#72)
-- ✅ **Eldritch blast dice scaling** — `resolveBonus` now tracks `fromGear` per
-  `RawBonus` and applies "Highest Only" only within gear contributions; feat/
-  enhancement contributions always stack (V2 `BreakdownItem.cpp::m_effects`
-  parity). Repeated auto-feat grants like `Warlock: Eldritch Blast Damage` ×5
-  and `Pact Damage` ×10 now produce correct 6d8 + 10d6 totals at L20. (#68)
-- ✅ **Ki / Turn Undead / Song breakdowns** — `BaseClassLevel`/`ClassLevel`
-  AType now uses `Amount[classLevel]` array index (not multiply). Centered
-  stance added for cloth-armor Monks. Turn Undead base level from
-  Cleric/Dark Apostate/Paladin class levels wired into `turnUndead.levelBonus`
-  and `turnUndead.diceBonus`. (#57)
-- ❌ **Hireling stat passthrough** — V2 has hireling sliders; V3 surfaces
-  them in BreakdownsPanel but doesn't drive a hireling sub-build.
+---
 
-### Effect parser coverage
+## File compatibility with V2 `.DDOBuild` files
 
-- ✅ **Stance requirement evaluation** — `RequirementContext` now accepts
-  `activeBuffs?: string[]`; the `Stance` case in `meetsSingleRequirement`
-  evaluates strictly against that list when provided, passes conservatively
-  when absent (V2 `Requirement.cpp:1062 EvaluateStance` parity). (#71)
-  `Skill` and `EnemyType` remain permissive (runtime-only conditions).
+The user's headline requirement: V3 must read **and write** V2 files and behave
+like V2. Import + a build-skeleton exporter now exist (Done #15, #38–#41).
+Remaining read/write-fidelity gaps:
 
-- ✅ **`SLA` (Spell-Like Ability)** effects — `parseEffect` now emits
-  `sla.<spellName>` markers for `SpellLikeAbility` effects; `BuildStats.slaList`
-  exposes the sorted derived SLA name list; forum export `slas` section uses
-  `stats.slaList` (V2 `CSLAControl`/`ForumExportDlg::AddSLAs` parity). Charge
-  consumption is not simulated (runtime-only, out of scope for a stat planner). (#74)
-- ✅ **`Slider` effects with stance gating** — `buildStatMap` now merges
-  `build.activeBuffs` into `ctxStances`; all Stance-gated SliderValue effects
-  (e.g. Blessed Purpose / Favored Weapon) now correctly fire. (#73)
-  Non-stance gates (EnemyType, MaterialType, etc.) remain conservative-pass
-  (runtime-only, not tracked in the stat planner — intentional).
-- ✅ **`ExclusionGroup`** — `computeExclusionGroups()` in `lib/exclusionGroups.ts`
-  derives a `groupName → InternalName` map from trained enhancements; the
-  `Exclusive` requirement type in `lib/requirements.ts` now evaluates against
-  that map (passes for the owning enhancement or an unclaimed group, fails for
-  conflicting enhancements). Passes conservatively when the map is not supplied
-  to preserve backward compatibility. (#62)
+- ❌ **F1 — Multi-life / multi-build import.** `importV2Build` collapses the
+  whole `Character → Life[] → Build[]` tree to the *active* life's *active*
+  build (`v2Import.ts:339-349`); all other lives and builds are silently
+  dropped with no warning. The model to hold them already exists
+  (`CharacterDocument`/`Life` in `ddo.ts:543-567`, helpers in `multiLife.ts`)
+  but the importer never produces a document. Fix: import every life/build,
+  preserve `ActiveLifeIndex`/`ActiveBuildIndex`, and have the exporter emit all
+  of them.
+- 🟡 **F2 — Gear-effect embedding in the exporter.** V2 stores the *full* item
+  definition (all `<Buff>` effects) inside each `<EquippedGear>` slot and trusts
+  the embedded copy on load (it does not re-resolve by name). `exportV2Build`
+  currently emits `<Name>` + augments only, so a V3-exported file re-opens in V2
+  with the right item names but no item effects until re-resolved. Fix: pass the
+  item catalogue to the exporter and emit each equipped item's full definition.
+- ❌ **F3 — Dropped Build fields that carry real effects.** Import drops
+  `<FavorFeats>` (House Deneith/Twelve/etc. favor rewards — populated in the
+  example files), `<TrainedSpells>` (caster spell selections), stance slider
+  values (`build.sliderValues` never populated — V2 `StanceSliderChanged`),
+  `<AttackChains>`/`<ActiveAttackChain>`, and `<GearSetSnapshot>` + the
+  `<Snapshot*>` ability values. Targets exist in `ddo.ts`
+  (`trainedSpells:496`, `attackChains:525`, `sliderValues:494`).
+- ❌ **F4 — `ContentIDontOwn` + Life-level `SpecialFeats`.** `ContentIDontOwn`
+  (Character-level) and Life-level `SpecialFeats` (beyond past lives) are not
+  imported; `CharacterDocument.contentIDontOwn` and `Life.specialFeats` stay
+  empty.
+- 🟡 **F5 — Past-life Type round-trip.** The exporter reconstructs past-life
+  feat `<Type>` from the class/race name (best-effort). Counts round-trip, but a
+  rich V2 `SpecialFeats` list (Granted, Favor, etc.) is not fully reproduced.
+  Pairs with F3/F4.
 
-### UI features
+---
 
-- ❌ **Multi-life document UI** — `Life`/`CharacterDocument` storage exists
-  (#53) but the UI is single-build focused. V2 has a left-rail life picker
-  with collapsible build snapshots per life.
-- 🟡 **Build comparison** — works for the active build vs one saved build;
-  V2 supports comparing across lives within a document.
-- ❌ **Per-level UI for level-up bonuses** — currently a flat list at L4 /
-  L8 / etc.; V2's `LevelTraining` UI shows feats / skills / spells trained
-  at a specific level.
-- ❌ **Spell metamagic gating** — V3 lists metamagics per spell but
-  doesn't enforce class-specific availability (e.g. Wizards can use
-  Maximize at L3, Sorcerers at L4 etc.).
-- ❌ **Help documents / tooltips** — V2 has `Help/` HTML; V3 has none.
+## High-priority remaining — numerical correctness
 
-### Forum export
+- ❌ **N1 — AC: percentage armor/shield bonuses treated as flat.**
+  `effectParser.ts:795-799,1649-1653` maps `ArmorACBonus`→`ac/Armor` and
+  `ACBonusShield`→`ac/Shield` as **flat** AC points. V2 routes these into
+  `Breakdown_BonusArmorAC`/`Breakdown_BonusShieldAC` and applies them as
+  **percentages** of `(armorValue + armorEnhancement)` (`BreakdownItemAC.cpp:115-157`),
+  with the shield % gated on an active Shield stance. A "+X% armor" enhancement
+  adds `X` flat AC in V3 instead of `X%`. Real mismatch on armored builds.
+- ❌ **N2 — Combat to-hit omits TWF / non-proficiency / ACP penalties.**
+  `attackEntry.ts:107` computes `bab + meleeToHit + abilityMod` only; off-hand
+  is a flat proc-rate table. V2 `BreakdownItemWeaponAttackBonus.cpp:79-211`
+  applies the TWF attack penalty (−4/−6 main, −10 off without OTWF; +2 light
+  off-hand), a non-proficiency penalty, and ACP-to-attack. V3 over-states
+  hit-chance (and DPR) for dual-wielders and non-proficient / heavy-armor builds.
+- ❌ **N3 — False Life not a true non-stacking breakdown.**
+  `effectParser.ts:857-858` folds `FalseLife` into the `hp` stat under bonus
+  type "False Life"; because non-gear bonuses always stack (`bonus.ts:210-214`)
+  and only *gear* False Life gets highest-only, multiple non-gear False Life
+  sources stack in V3. V2 keeps a dedicated `Breakdown_FalseLife`
+  (`BreakdownItemHitpoints.cpp:154-166`) that is highest-only across **all**
+  sources. Lower-frequency but real.
+- 🟡 **N4 — FvS/Sorcerer SP multiplier ordering.** V3 applies the
+  `total/min(level,20)` multiplier to the SP subtotal as an added bonus
+  (`useBuildStats.ts:1184-1205`); V2 multiplies the **entire final** breakdown
+  total (`BreakdownItemSpellPoints::Multiplier()`). SP sources added after the
+  multiplier (e.g. fate-point SP) are not multiplied in V3. Small L20+ delta.
+- ❌ **N5 — Hireling stat passthrough.** V2 has hireling sliders driving a
+  hireling sub-build; V3 surfaces them in BreakdownsPanel but doesn't compute a
+  hireling.
 
-- ✅ **`SimpleGear`** (FES_SimpleGear) — slots now sort in V2's canonical
-  `Inventory_Arrows..Inventory_Weapon2` enum order; augment choices are
-  emitted per item as `type: name` lines, matching V2 `ForumExportDlg.cpp::ExportGear`. (#65)
-- ✅ **`AlternateGearLayouts`** — slots now sort in V2 canonical inventory
-  order; `namedGearAugments` field stores augments per named gear set;
-  forum export emits augments per item slot matching V2 `ExportGear`. (#69)
-- ❌ **Image embedding** — V2 export inserts `[img]` tags for class /
+### Tooling
+- ❌ **G1 — Real V2-golden comparison harness.** Replace the one-sided
+  `scripts/v2DiffReport.ts` with a tool that diffs V3's output against captured
+  V2 numbers (e.g. exported from V2's BreakdownsPane), so "parity" claims become
+  verifiable instead of self-referential. This unblocks trustworthy validation
+  of every numerical item above.
+
+---
+
+## High-priority remaining — effect parser coverage
+
+- 🟡 **E1 — `SLA` (Spell-Like Ability)** — the SLA *list* is now auto-derived
+  (`sla.<spellName>` markers + `BuildStats.slaList` + forum export, #74). Charge
+  *consumption* is still not simulated (runtime-only, out of scope for a stat
+  planner).
+- 🟡 **Non-stance runtime gates** (EnemyType, MaterialType, Skill, …) remain
+  conservative-pass in the stat planner — intentional (runtime-only), tracked
+  here for completeness.
+
+---
+
+## High-priority remaining — UI features
+
+- ❌ **U1 — Multi-life / multi-build document UI.** The running app state is a
+  single flat `CharacterBuild` (`CharacterContext.tsx`), persistence is a flat
+  localStorage array, and V2 import keeps only the active build. V2's core model
+  is a Character document with a left-rail life picker and per-life build
+  snapshots. Pairs with **F1**. Highest-impact UI gap.
+- ❌ **U2 — Twists of Fate editor.** Epic-destiny twisting (fate-point spend to
+  twist abilities from other destinies) has no UI — "Twist of Fate" appears only
+  in `lib/export/sections.ts`, not in `EpicDestiniesPanel.tsx`. `twistChoices`
+  exists on the model but is not editable.
+- 🟡 **U3 — Reaper AP not persisted.** `ReaperPanel.tsx:62-63` keeps the reaper
+  AP budget as session-only React state; selections persist via `reaperChoices`
+  but the budget resets, unlike V2 where reaper XP/AP is part of the saved build.
+- 🟡 **U4 — Spells known-per-level limit.** `SpellsPanel.tsx` lets you check any
+  number of spells per level (it caps the spell *level* but not the *count* of
+  known spells per level), reading more like a full spellbook than V2's limited
+  known-spell selection.
+- 🟡 **U5 — Granted / Special / Automatic feats consolidated.** V2 has three
+  panes (Automatic/Granted/Special); V3 folds them into one `AutomaticFeats.tsx`.
+- 🟡 **U6 — Build comparison scope.** V3 compares two *saved* builds via dropdown
+  (`BuildCompare.tsx`); V2 compares simultaneously-active builds within a life.
+- ❌ **U7 — Per-level training UI** — flat list at L4/L8/… rather than V2's
+  `LevelTraining` view of feats/skills/spells trained at a specific level.
+- ❌ **U8 — Spell metamagic class-gating** — V3 lists metamagics per spell but
+  doesn't enforce class-specific availability (Wizard Maximize @L3, Sorc @L4…).
+- ❌ **U9 — Content-ownership filtering UI** (`ContentPane`), Find-Gear-by-effect
+  (`FindGearDialog`), help docs / tooltips — no equivalents in V3.
+
+---
+
+## High-priority remaining — forum export
+
+- ❌ **X1 — Image embedding** — V2 export inserts `[img]` tags for class /
   destiny / racial icons. V3 export is text-only.
 
 ---
@@ -165,54 +207,38 @@ the PR number, so this file doubles as a changelog.
 ## Medium-priority remaining
 
 ### Subsystems V3 hasn't ported
+- ❌ **Combat simulator with attack chains** — V2 `AttackChain.cpp` /
+  `Attack.cpp` models a per-swing rotation (main / off / cleave / strikethrough)
+  and a `BreakdownItemWeaponEffects` holder chain; V3 has a single-weapon
+  expected-DPR estimator only.
+- ❌ **Gear optimizer / auto-equip** — V2's "auto-equip" searches the item DB
+  for the best stat result given a goal. Multi-day port.
+- ❌ **Settings dialog** — DPI scaling, auto-update, log-level, data-files-path,
+  file associations. V3 has none.
+- ❌ **Build version migration** — V2 has `Build version="1"`; V3's localStorage
+  version is `_v: 2`. Need a migration path for older `_v` saves.
 
-- ❌ **Combat simulator with attack chains** — V2 `AttackChain.cpp`
-  models a rotation of attacks (e.g. main / off / cleave / strikethrough).
-  V3 has a single-weapon DPR estimator only.
-- ❌ **Gear optimizer / auto-equip** — V2's "auto-equip" searches the
-  item DB for the highest stat result given a goal. Multi-day port.
-- ❌ **Settings dialog** — DPI scaling, auto-update toggles, log-level,
-  data-files-path, file associations. V3 has none.
-- ❌ **Build version migration** — V2 has explicit `Build version="1"`;
-  V3's localStorage version is `_v: 2`. Need a migration path for users
-  who saved on older `_v` values.
+### Data-file edge cases
+- ❌ **Item slot edge cases** — two ring slots, trinket-via-augment, etc.
+- ❌ **Cosmetic gear effects** — V2 ignores cosmetic stat effects but shows them;
+  V3 ignores them entirely.
+- ❌ **Sentient gem augment / personality buffs** — `majorAugment`/`minorAugment`
+  are wired (#53) but personality buffs aren't.
+- ❌ **Filigree set bonuses with conditional triggers** — V2 has triggered set
+  bonuses (e.g. on-crit); V3 always-on.
 
-### Data file edge cases
-
-- ❌ **Item slot edge cases** — V2 supports two ring slots (`Ring1` /
-  `Ring2`), two trinket-via-augment, etc. V3 rebases ring slots but doesn't
-  surface every edge case.
-- ❌ **Cosmetic gear effects** — V2 ignores cosmetic stat effects but
-  shows them in display. V3 ignores them entirely.
-- ❌ **Sentient gem augment effects** — the `majorAugment` /
-  `minorAugment` are wired (#53) but the personality buffs aren't.
-- ❌ **Filigree set bonuses with conditional triggers** — V2 has
-  triggered set bonuses (e.g. on-crit). V3 always-on.
-
-### Editor tools (V2 has, V3 doesn't)
-
-- ➖ **Item editor** — V2 ships a full item-edit dialog that writes back
-  to XML. Out of scope for V3 (data-authoring tool, not a player tool).
-- ➖ **Enhancement tree editor** — same scope.
-- ➖ **Spell / race / class editors** — same scope.
-
-These are intentionally not on the parity path since V3 reads V2's XML
-files directly; if the user wants to add an item, they can edit V2's data
-files and refresh.
+### Editor tools (intentionally out of parity scope)
+- ➖ **Item / enhancement-tree / spell / race / class editors** — V2 ships
+  data-authoring dialogs that write back to XML. V3 reads V2's XML directly; to
+  add content, edit V2's data files and refresh. Not on the parity path.
 
 ---
 
 ## Low-priority polish
 
-- ❌ **Keyboard shortcuts** — V2 `KeybindEditor` lets users rebind UI
-  actions. V3 has none.
-- ❌ **Print layout** — V2 supports printing the build summary.
-- ❌ **Auto-save** — V3 saves explicitly via toolbar; V2 has periodic
-  auto-save toggles.
-- ❌ **Recent files menu** — V3 has a single saved-builds list; V2 has
-  a most-recently-used file menu.
-- ❌ **Drag-and-drop import** — V3 uses a file-picker; V2 supports OS
-  file-association double-click + drag-drop.
+- ❌ **Keyboard shortcuts** (V2 `KeybindEditor`), **print layout**, **auto-save
+  toggle**, **recent-files menu**, **drag-and-drop / file-association import**.
+  None present in V3.
 
 ---
 
@@ -235,7 +261,11 @@ cd webapp
 npx tsx scripts/v2DiffReport.ts ../Output/Example\ Builds/YingsMonk.DDOBuild
 ```
 
-Open the same `.DDOBuild` file in V2 (Windows) and diff visually.
+Open the same `.DDOBuild` file in V2 (Windows) and diff visually. **Note:**
+`v2DiffReport.ts` currently prints only V3's own numbers — until item **G1**
+lands, you must compare against V2 by eye. For file-format work, prefer the
+round-trip guard `webapp/src/__tests__/v2RoundTripExport.test.ts`
+(import → `exportV2Build` → re-import → field equality).
 
 ---
 
@@ -251,4 +281,7 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#74 for completed items.*
+*Maintained by the parity-pass series. See PRs #53–#74 and the Done table
+above for completed items. Last full V2↔V3 review: 2026-06 (added the
+`.DDOBuild` exporter, round-trip test, `CompletedQuests` import fix, and AC
+MDB-effect fix; refreshed the remaining-gap list with verified findings).*

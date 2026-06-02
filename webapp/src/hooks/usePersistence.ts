@@ -4,6 +4,7 @@ import type { CharacterBuild } from '../types/ddo'
 import { useCharacter } from '../context/CharacterContext'
 import { isCharacterDocument, flattenDocument } from '../lib/multiLife'
 import { importV2Build } from '../lib/v2Import'
+import { exportV2Build } from '../lib/v2Export'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -92,6 +93,27 @@ export function usePersistence(): PersistenceAPI {
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error('usePersistence: exportJSON failed', err)
+    }
+  }, [])
+
+  /**
+   * Trigger a browser download of the build as a V2-compatible .DDOBuild XML
+   * file so it can be re-opened in the V2 MFC application.
+   */
+  const exportDDOBuild = useCallback((build: CharacterBuild) => {
+    try {
+      const xml = exportV2Build(build)
+      const blob = new Blob([xml], { type: 'application/xml' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${build.name.replace(/[^a-z0-9_\- ]/gi, '_')}.DDOBuild`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('usePersistence: exportDDOBuild failed', err)
     }
   }, [])
 
@@ -248,6 +270,16 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
     'Export JSON',
   )
 
+  const exportV2Btn = h(
+    'button',
+    {
+      type: 'button',
+      onClick: () => exportDDOBuild(build),
+      title: 'Export current character as a V2-compatible .DDOBuild file',
+    },
+    'Export .DDOBuild',
+  )
+
   const hiddenInput = h('input', {
     ref: fileInputRef,
     type: 'file',
@@ -281,6 +313,7 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
     saveBtn,
     loadSelect,
     exportBtn,
+    exportV2Btn,
     hiddenInput,
     importBtn,
     errorSpan,
