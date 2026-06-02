@@ -2,20 +2,12 @@ import { useEffect, useState, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { EnhancementTree, EnhancementTreeItem, Item } from '../../types/ddo'
-import TreeGrid, { type TreeChoices, type TreeSelections } from '../enhancements/TreeGrid'
+import TreeGrid, { type TreeChoices } from '../enhancements/TreeGrid'
 import { useStaticBundle } from '../../hooks/useStaticBundle'
 import { useBuildStats } from '../../hooks/useBuildStats'
 import { destinyPointPool } from '../../lib/v2Formulas'
+import { tier5LockedTree, availableDestinyTrees } from '../../lib/destiny'
 import styles from './EpicDestiniesPanel.module.css'
-
-// ---------------------------------------------------------------------------
-// V2 Constants  (from DDOBuilder/stdafx.h)
-// ---------------------------------------------------------------------------
-
-// NOTE: Epic Destiny points are NOT a per-tree cap. They form a single shared
-// pool (level- and fate-point-based) spent across all selected destiny trees.
-// See destinyPointPool() in lib/v2Formulas.ts (V2 BreakdownItemDestinyAps.cpp).
-const MAX_DESTINY_TREES = 3      // exactly 3 selected destiny trees
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,8 +53,6 @@ export default function EpicDestiniesPanel() {
   const { build, dispatch } = useCharacter()
 
   const [viewingSlot, setViewingSlot] = useState<0 | 1 | 2>(0)
-  const [destinySelections, setDestinySelections] = useState<Record<string, TreeSelections>>({})
-  const [unlockedOpen, setUnlockedOpen] = useState(true)
   const [gearItems, setGearItems] = useState<Record<string, Item>>({})
 
   // Static data + full build stats. Stats give us the aggregated fate-point and
@@ -108,18 +98,36 @@ export default function EpicDestiniesPanel() {
   // ── Build state accessors ─────────────────────────────────────────────────
 
   const selectedDestinyTrees: [string, string, string] = build.selectedDestinyTrees ?? ['', '', '']
-  const activeEpicDestiny = build.activeEpicDestiny ?? ''
-  const unlockedDestinyTrees: string[] = build.unlockedDestinyTrees ?? []
   const destinyChoices = build.destinyChoices
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
-  // Trees the character has marked as unlocked in-game
-  const availableForSelect = useMemo(() =>
-    unlockedDestinyTrees.length > 0
-      ? allTrees.filter(t => unlockedDestinyTrees.includes(t.Name))
-      : allTrees,
-  [allTrees, unlockedDestinyTrees])
+  // V2: a destiny tree is available once the character meets its <Requirements>
+  // (its same-named "claim" feat), which all epic characters have at level 20+.
+  const race = useMemo(
+    () => bundle.allRaces.find(r => r.Name === build.race),
+    [bundle.allRaces, build.race],
+  )
+  const availableForSelect = useMemo(
+    () => availableDestinyTrees(allTrees, build, bundle.allClasses, race),
+    [allTrees, build, bundle.allClasses, race],
+  )
+
+  // V2 Tier-5 lock: only the tree holding a trained Tier-5 may train more
+  // Tier-5s. This tree is also the "active"/primary destiny (V2 Tier5Tree).
+  const lockedTier5Tree = useMemo(
+    () => tier5LockedTree(selectedDestinyTrees, destinyChoices, allTrees),
+    [selectedDestinyTrees, destinyChoices, allTrees],
+  )
+
+  // Keep build.activeEpicDestiny in sync with the Tier-5 tree (V2: Tier5Tree is
+  // exported/imported as the active destiny).
+  useEffect(() => {
+    if ((build.activeEpicDestiny ?? '') !== lockedTier5Tree) {
+      dispatch({ type: 'SET_ACTIVE_DESTINY', name: lockedTier5Tree })
+    }
+  }, [lockedTier5Tree, build.activeEpicDestiny, dispatch])
+  const activeEpicDestiny = lockedTier5Tree
 
   // Selected (non-empty) slot names
   const selectedSlots = selectedDestinyTrees.filter(n => n !== '')
@@ -160,6 +168,11 @@ export default function EpicDestiniesPanel() {
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   function handleSlotChange(slot: 0 | 1 | 2, name: string) {
+    // V2: a slot's tree can only be changed when it has no AP spent.
+    const current = selectedDestinyTrees[slot]
+    if (current && (destinyChoices[current] ? computeTreeSpent(allTrees.find(t => t.Name === current)!, destinyChoices[current]) : 0) > 0) {
+      return
+    }
     dispatch({ type: 'SET_SELECTED_DESTINY', slot, name })
     if (slot === viewingSlot) setViewingSlot(slot)
   }
@@ -176,24 +189,12 @@ export default function EpicDestiniesPanel() {
     }
   }
 
+  function handleSelectionsChange(treeName: string, updated: Record<string, string>) {
+    dispatch({ type: 'SET_DESTINY_SELECTIONS', treeName, selections: updated })
+  }
+
   function handleReset(treeName: string) {
     dispatch({ type: 'RESET_DESTINY_TREE', treeName })
-  }
-
-  function handleClaimCores() {
-    // V2: trains Core (YPosition === 0) enhancements in ALL destiny trees, not just selected ones
-    for (const tree of allTrees) {
-      const choices = destinyChoices[tree.Name] ?? {}
-      for (const item of tree.EnhancementTreeItem ?? []) {
-        if ((item.YPosition ?? 0) === 0 && (choices[item.Name] ?? 0) === 0) {
-          dispatch({ type: 'SET_DESTINY_CHOICE', treeName: tree.Name, itemName: item.Name, rank: 1 })
-        }
-      }
-    }
-  }
-
-  function toggleActive(treeName: string) {
-    dispatch({ type: 'SET_ACTIVE_DESTINY', name: activeEpicDestiny === treeName ? '' : treeName })
   }
 
   // ── Render guard ──────────────────────────────────────────────────────────
@@ -210,73 +211,25 @@ export default function EpicDestiniesPanel() {
       <div className="panel-header">Epic Destinies</div>
       <div className="panel-body" style={{ padding: 0 }}>
 
-        {/* ── 1. Unlocked Destiny Trees ─────────────────────────────────── */}
-        <div className={styles.unlockedSection}>
-          <button
-            className={styles.unlockedToggle}
-            onClick={() => setUnlockedOpen(v => !v)}
-          >
-            <span className={styles.unlockedToggleIcon}>{unlockedOpen ? '▾' : '▸'}</span>
-            Unlocked Destiny Trees
-            <span className={styles.unlockedCount}>
-              {unlockedDestinyTrees.length} / {allTrees.length} unlocked
-            </span>
-          </button>
-          {unlockedOpen && (
-            <div className={styles.unlockedGrid}>
-              {allTrees.map(tree => {
-                const isUnlocked = unlockedDestinyTrees.includes(tree.Name)
-                const hasSpend = spentInTrees.includes(tree.Name)
-                return (
-                  <button
-                    key={tree.Name}
-                    className={`${styles.unlockedItem} ${isUnlocked ? styles.unlockedItemOn : ''}`}
-                    onClick={() => dispatch({ type: 'TOGGLE_UNLOCKED_DESTINY', name: tree.Name })}
-                    title={`Mark ${tree.Name} as unlocked in-game${hasSpend ? ` (${computeTreeSpent(allTrees.find(t => t.Name === tree.Name)!, destinyChoices[tree.Name] ?? {})} AP spent)` : ''}`}
-                  >
-                    {tree.Name}
-                    {hasSpend && <span className={styles.unlockedSpend}> ✓</span>}
-                  </button>
-                )
-              })}
-              {allTrees.length === 0 && (
-                <div className={styles.statusMsg}>No destiny trees found.</div>
-              )}
-              {allTrees.length > 0 && (
-                <div className={styles.unlockedActions}>
-                  <button
-                    className={styles.unlockedActionBtn}
-                    onClick={() => allTrees.forEach(t => {
-                      if (!unlockedDestinyTrees.includes(t.Name))
-                        dispatch({ type: 'TOGGLE_UNLOCKED_DESTINY', name: t.Name })
-                    })}
-                  >Unlock All</button>
-                  <button
-                    className={styles.unlockedActionBtn}
-                    onClick={() => allTrees.forEach(t => {
-                      if (unlockedDestinyTrees.includes(t.Name))
-                        dispatch({ type: 'TOGGLE_UNLOCKED_DESTINY', name: t.Name })
-                    })}
-                  >Clear All</button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* ── 2. Destiny slot selectors ─────────────────────────────────── */}
+        {/* ── Destiny slot selectors ────────────────────────────────────── */}
         <div className={styles.slotSection}>
-          <div className={styles.slotSectionTitle}>Select Active Destiny Trees</div>
+          <div className={styles.slotSectionTitle}>Select Destiny Trees (up to 3)</div>
           <div className={styles.slotRows}>
             {([0, 1, 2] as const).map(slot => {
               const currentName = selectedDestinyTrees[slot]
               const otherSelected = selectedDestinyTrees.filter((_, i) => i !== slot)
+              const slotSpent = currentName
+                ? computeTreeSpent(allTrees.find(t => t.Name === currentName) ?? { EnhancementTreeItem: [] } as unknown as EnhancementTree, destinyChoices[currentName] ?? {})
+                : 0
+              const locked = slotSpent > 0   // V2: can't change a slot with AP spent
               return (
                 <div key={slot} className={styles.slotRow}>
                   <span className={styles.slotLabel}>Destiny {slot + 1}</span>
                   <select
                     className={styles.slotSelect}
                     value={currentName}
+                    disabled={locked}
+                    title={locked ? 'Reset this tree before changing it' : undefined}
                     onChange={e => handleSlotChange(slot, e.target.value)}
                   >
                     <option value="">— None —</option>
@@ -291,22 +244,21 @@ export default function EpicDestiniesPanel() {
                       </option>
                     ))}
                   </select>
-                  {currentName && (
-                    <button
-                      className={`${styles.activeBtn} ${activeEpicDestiny === currentName ? styles.activeBtnOn : ''}`}
-                      onClick={() => toggleActive(currentName)}
-                      title={activeEpicDestiny === currentName ? 'Active destiny — click to deactivate' : 'Set as active destiny'}
-                    >
-                      {activeEpicDestiny === currentName ? '⚡ Active' : 'Set Active'}
-                    </button>
+                  {currentName && activeEpicDestiny === currentName && (
+                    <span className={styles.activeBtnOn} title="Primary destiny (holds Tier-5 enhancements)">⚡ Primary</span>
+                  )}
+                  {locked && (
+                    <button className={styles.resetBtn} onClick={() => handleReset(currentName)} title="Reset this tree to change the slot">Reset</button>
                   )}
                 </div>
               )
             })}
           </div>
-          <button className={styles.claimBtn} onClick={handleClaimCores} title="Train all Core enhancements (free) across all destiny trees">
-            Claim Core Enhancements
-          </button>
+          {lockedTier5Tree && (
+            <div className={styles.slotSectionTitle} style={{ opacity: 0.8 }}>
+              Tier-5 locked to <strong>{lockedTier5Tree}</strong> — other trees' Tier-5s are unavailable until it is reset.
+            </div>
+          )}
         </div>
 
         {/* ── 3. Tabs + Tree Grid ───────────────────────────────────────── */}
@@ -357,11 +309,15 @@ export default function EpicDestiniesPanel() {
                   <TreeGrid
                     tree={viewedTree}
                     choices={viewedChoices}
-                    selections={destinySelections[viewedTree.Name] ?? {}}
+                    selections={build.destinySelections?.[viewedTree.Name] ?? {}}
                     totalSpentAllTrees={totalSpentAllTrees}
                     totalAP={destinyPool}
+                    tier5Locked={lockedTier5Tree !== '' && lockedTier5Tree !== viewedTree.Name}
+                    build={build}
+                    allClasses={bundle.allClasses}
+                    race={race}
                     onChoicesChange={(updated) => handleChoicesChange(viewedTree.Name, updated)}
-                    onSelectionsChange={(updated) => setDestinySelections(prev => ({ ...prev, [viewedTree.Name]: updated }))}
+                    onSelectionsChange={(updated) => handleSelectionsChange(viewedTree.Name, updated)}
                   />
                 </div>
               </>

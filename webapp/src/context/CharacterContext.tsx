@@ -28,6 +28,7 @@ type Action =
   | { type: 'SET_ARTIFACT_FILIGREE'; slotIndex: number; name: string }
   | { type: 'SET_ARTIFACT_FILIGREE_RARE'; slotIndex: number; rare: boolean }
   | { type: 'SET_DESTINY_CHOICE'; treeName: string; itemName: string; rank: number }
+  | { type: 'SET_DESTINY_SELECTIONS'; treeName: string; selections: Record<string, string> }
   | { type: 'RESET_DESTINY_TREE'; treeName: string }
   | { type: 'SET_ACTIVE_DESTINY'; name: string }
   | { type: 'SET_SELECTED_DESTINY'; slot: 0 | 1 | 2; name: string }
@@ -109,6 +110,7 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     filigreeSlots: migrateFiligreeSlots(raw.filigreeSlots as unknown, 6),
     artifactFiligreeSlots: migrateFiligreeSlots((raw as unknown as { artifactFiligreeSlots?: unknown }).artifactFiligreeSlots, 10),
     destinyChoices: raw.destinyChoices ?? {},
+    destinySelections: (raw as unknown as { destinySelections?: CharacterBuild['destinySelections'] }).destinySelections ?? {},
     reaperChoices: raw.reaperChoices ?? {},
     activeEpicDestiny: raw.activeEpicDestiny ?? '',
     selectedDestinyTrees: raw.selectedDestinyTrees ?? ['', '', ''],
@@ -287,10 +289,14 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       const treeChoices = { ...(state.destinyChoices[action.treeName] ?? {}), [action.itemName]: action.rank }
       return { ...state, destinyChoices: { ...state.destinyChoices, [action.treeName]: treeChoices } }
     }
+    case 'SET_DESTINY_SELECTIONS':
+      return { ...state, destinySelections: { ...state.destinySelections, [action.treeName]: action.selections } }
     case 'RESET_DESTINY_TREE': {
       const destinyChoices = { ...state.destinyChoices }
       delete destinyChoices[action.treeName]
-      return { ...state, destinyChoices }
+      const destinySelections = { ...state.destinySelections }
+      delete destinySelections[action.treeName]
+      return { ...state, destinyChoices, destinySelections }
     }
     case 'SET_ACTIVE_DESTINY':
       return { ...state, activeEpicDestiny: action.name }
