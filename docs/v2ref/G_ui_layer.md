@@ -148,3 +148,27 @@ These UI files are NOT just rendering — they embed game logic that V3 must rep
 - Breakdown tree / BonusesPane / DCPane data → **Effects & Breakdowns** computational section.
 - Forum export reuses every computed value → all compute sections (it is a read-only view).
 - Gear dialogs → **Items / Gear** section (Item model holds the logic, dialogs are pickers).
+
+## Remaining MFC plumbing (completeness — all ➖ N/A for V3)
+
+These five `.cpp` are pure Win32/MFC framework glue with no game logic and no V3
+counterpart (React/CSS handles their roles for free):
+
+| File | Purpose | V3 |
+|------|---------|----|
+| `CCustomMFCStatusBar.cpp` (25) | custom status-bar widget | ➖ |
+| `CustomContextMenuManager.cpp` (37) | right-click context-menu manager | ➖ |
+| `CustomMultiPaneFrameWnd.cpp` (83) | floating multi-pane frame window for docking | ➖ |
+| `SpellLikeAbilityPage.cpp` (171) | MFC property-sheet **page** for picking spell-like abilities | folded into `components/builder/SpellsPanel.tsx` / SLA list (`useBuildStats.slaList`) |
+| `SpellsPage.cpp` (199) | MFC property-sheet **page** for the known-spell picker | `components/builder/SpellsPanel.tsx` |
+
+### Header-only type/enum files (no `.cpp`)
+
+The `*Types.h` headers (`AbilityTypes.h`, `BreakdownTypes.h`, `RequirementTypes.h`,
+`SkillTypes.h`, `SaveTypes.h`, `SpellSchoolTypes.h`, `EnergyTypes.h`, `DamageTypes.h`,
+`InventorySlotTypes.h`, `TacticalTypes.h`, `FeatAcquisitionTypes.h`, …) are pure C++
+enum definitions plus their `EnumEntry` ⇄ string maps. They have no `.cpp`. In V3 these
+become **string literals / union types** (e.g. stat keys in `useBuildStats.ts`, bonus-type
+names in `bonus.ts`, requirement `Type` strings in `requirements.ts`); there is no central
+enum module. When a V2 file references `Effect_*`, `Breakdown_*`, `Requirement_*`,
+`Ability_*`, `Skill_*` etc., the definition is in the matching `*Types.h`.
