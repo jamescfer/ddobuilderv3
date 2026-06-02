@@ -10,7 +10,7 @@ import type {
   Filigree, OptionalBuff, GuildBuff, Spell,
 } from '../types/ddo'
 import type { WeaponGroupSpec } from '../lib/weapons/groups'
-import type { BonusTypeSpec } from '../server/dataLoaders'
+import type { BonusTypeSpec, ItemBuffSpec } from '../server/dataLoaders'
 import { initBonusTypes } from '../lib/bonus'
 
 export interface StaticBundle {
@@ -27,13 +27,14 @@ export interface StaticBundle {
   allGuildBuffs: GuildBuff[]
   allSpells: Spell[]
   allBonusTypes: BonusTypeSpec[]
+  allItemBuffs: ItemBuffSpec[]
 }
 
 const empty: StaticBundle = {
   allClasses: [], allRaces: [], allFeats: [], allTrees: [],
   allSelfBuffs: [], allAugments: [], allSetBonuses: [],
   allFiligreeBonuses: [], allFiligrees: [], allWeaponGroups: [],
-  allGuildBuffs: [], allSpells: [], allBonusTypes: [],
+  allGuildBuffs: [], allSpells: [], allBonusTypes: [], allItemBuffs: [],
 }
 
 export function useStaticBundle(): StaticBundle {
@@ -55,10 +56,11 @@ export function useStaticBundle(): StaticBundle {
       api.guildbuffs().catch(() => [] as GuildBuff[]),
       api.spells().catch(() => [] as Spell[]),
       api.bonusTypes().catch(() => [] as BonusTypeSpec[]),
+      api.itemBuffs().catch(() => [] as ItemBuffSpec[]),
     ]).then(([
       allClasses, allRaces, allFeats, allTrees, allSelfBuffs, allAugments,
       allSetBonuses, allFiligreeBonuses, allFiligrees, allWeaponGroups,
-      allGuildBuffs, allSpells, allBonusTypes,
+      allGuildBuffs, allSpells, allBonusTypes, allItemBuffs,
     ]) => {
       if (cancelled) return
       if (allBonusTypes.length > 0) {
@@ -67,7 +69,7 @@ export function useStaticBundle(): StaticBundle {
       setBundle({
         allClasses, allRaces, allFeats, allTrees, allSelfBuffs, allAugments,
         allSetBonuses, allFiligreeBonuses, allFiligrees, allWeaponGroups,
-        allGuildBuffs, allSpells, allBonusTypes,
+        allGuildBuffs, allSpells, allBonusTypes, allItemBuffs,
       })
     })
     return () => { cancelled = true }

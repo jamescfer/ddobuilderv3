@@ -35,7 +35,8 @@ export const xmlParser = new XMLParser({
     'ClassSkill', 'Alignment', 'Augment', 'Buff', 'ItemAugment',
     'SetBonus', 'Gem', 'Stance', 'Spell', 'Patron', 'Quest', 'GuildBuff',
     'GrantedFeat', 'ClassFeat', 'RacialFeat', 'WeaponGroup', 'Weapon',
-    'OptionalBuff', 'Filigree', 'SpellDC', 'SpellDamage',
+    'OptionalBuff', 'Filigree', 'SpellDC', 'SpellDamage', 'ClassSpell',
+    'ModAbility',
   ].includes(name),
 })
 
@@ -56,7 +57,12 @@ export function loadRaces(dataDir: string): Race[] {
   return files.flatMap(f => {
     try {
       const parsed = readXml(path.join(dir, f)) as { Races?: { Race?: unknown[] } }
-      return (parsed?.Races?.Race ?? []) as Race[]
+      const races = (parsed?.Races?.Race ?? []) as Race[]
+      // V2 Race::IsIconic() == HasIconicClass() (Race.cpp:84-87): there is no
+      // <IsIconic> XML tag — a race is iconic iff it declares an <IconicClass>.
+      // Derive it here so consumers (past-life gating, race pickers, exporter)
+      // can test r.IsIconic the way V2 does.
+      return races.map(r => ({ ...r, IsIconic: r.IconicClass != null && r.IconicClass !== '' }))
     } catch { return [] }
   })
 }
@@ -68,7 +74,12 @@ export function loadClasses(dataDir: string): DDOClass[] {
   return files.flatMap(f => {
     try {
       const parsed = readXml(path.join(dir, f)) as { Classes?: { Class?: unknown[] } }
-      return (parsed?.Classes?.Class ?? []) as DDOClass[]
+      const classes = (parsed?.Classes?.Class ?? []) as DDOClass[]
+      // <NotHeroic /> is a presence-only flag (Class.h DL_FLAG); the XML parser
+      // delivers it as "" which is falsy, so `!c.NotHeroic` wrongly treated
+      // Epic/Legendary as heroic. Normalise to an explicit boolean (matches the
+      // tree-flag normalisation below).
+      return classes.map(c => ({ ...c, NotHeroic: 'NotHeroic' in (c as object) ? true : undefined }))
     } catch { return [] }
   })
 }
@@ -81,25 +92,52 @@ export function loadFeats(dataDir: string): Feat[] {
     const feats = parsed?.Feats?.Feat ?? []
     out.push(...((Array.isArray(feats) ? feats : [feats]) as Feat[]))
   } catch { /* no Feats.xml */ }
-  // Class-defined feats (Epic destinies, Legendary, etc.)
+  // Class-defined inline feats (Epic destinies, Monk bonus feats, etc.).
+  // V2 folds these into the global feat catalogue (Class.h ClassFeats list,
+  // referenced by name from <AutomaticFeats>).
   const classDir = path.join(dataDir, 'Classes')
-  if (!fs.existsSync(classDir)) return out
-  try {
-    const classFiles = fs.readdirSync(classDir).filter(f => f.endsWith('.class.xml'))
-    for (const f of classFiles) {
-      try {
-        const parsed = readXml(path.join(classDir, f)) as { Classes?: { Class?: unknown } }
-        const classes = parsed?.Classes?.Class
-        const classList = Array.isArray(classes) ? classes : classes ? [classes] : []
-        for (const cls of classList) {
-          const classFeats = (cls as Record<string, unknown>)?.Feat
-          if (!classFeats) continue
-          const list = Array.isArray(classFeats) ? classFeats : [classFeats]
-          out.push(...(list as Feat[]))
-        }
-      } catch { /* skip bad file */ }
-    }
-  } catch { /* no Classes dir */ }
+  if (fs.existsSync(classDir)) {
+    try {
+      const classFiles = fs.readdirSync(classDir).filter(f => /\.class\.xml$/i.test(f))
+      for (const f of classFiles) {
+        try {
+          const parsed = readXml(path.join(classDir, f)) as { Classes?: { Class?: unknown } }
+          const classes = parsed?.Classes?.Class
+          const classList = Array.isArray(classes) ? classes : classes ? [classes] : []
+          for (const cls of classList) {
+            const classFeats = (cls as Record<string, unknown>)?.Feat
+            if (!classFeats) continue
+            const list = Array.isArray(classFeats) ? classFeats : [classFeats]
+            out.push(...(list as Feat[]))
+          }
+        } catch { /* skip bad file */ }
+      }
+    } catch { /* no Classes dir */ }
+  }
+  // Race-defined inline feats. V2 parses these into Race::RacialFeats and they
+  // resolve against the global feat catalogue when a race grants them by name
+  // (e.g. Drow <GrantedFeat>Drow Spell Resistance</GrantedFeat> + matching
+  // <Feat> in Drow.race.xml:15-36). V3 previously folded only class-inline
+  // feats, so the *effects* of race-granted inline feats were silently missing.
+  const raceDir = path.join(dataDir, 'Races')
+  if (fs.existsSync(raceDir)) {
+    try {
+      const raceFiles = fs.readdirSync(raceDir).filter(f => /\.race\.xml$/i.test(f))
+      for (const f of raceFiles) {
+        try {
+          const parsed = readXml(path.join(raceDir, f)) as { Races?: { Race?: unknown } }
+          const races = parsed?.Races?.Race
+          const raceList = Array.isArray(races) ? races : races ? [races] : []
+          for (const race of raceList) {
+            const raceFeats = (race as Record<string, unknown>)?.Feat
+            if (!raceFeats) continue
+            const list = Array.isArray(raceFeats) ? raceFeats : [raceFeats]
+            out.push(...(list as Feat[]))
+          }
+        } catch { /* skip bad file */ }
+      }
+    } catch { /* no Races dir */ }
+  }
   return out
 }
 
@@ -136,11 +174,103 @@ export function loadEnhancementTrees(dataDir: string): EnhancementTree[] {
   })
 }
 
+/** The ten per-spell metamagic DL_FLAGs in V2 Spell.h:67-76 (no EschewMaterials). */
+const SPELL_METAMAGIC_FLAGS = [
+  'Accelerate', 'Embolden', 'Empower', 'EmpowerHealing', 'Enlarge',
+  'Extend', 'Heighten', 'Intensify', 'Maximize', 'Quicken',
+] as const
+
+/** Unwraps fast-xml-parser's `{ '#text': N, size: M }` shape to a plain number. */
+function asNumber(v: unknown): number | undefined {
+  if (typeof v === 'number') return v
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v)
+    return Number.isNaN(n) ? undefined : n
+  }
+  if (v && typeof v === 'object' && '#text' in (v as Record<string, unknown>)) {
+    return asNumber((v as Record<string, unknown>)['#text'])
+  }
+  return undefined
+}
+
+/**
+ * Loads Spells.xml and reconciles the parsed shape with the typed `Spell`
+ * contract. Two XML quirks must be normalised:
+ *   1. Self-closing flags (`<Heighten/>`, `<CastingStatMod/>`) arrive as "" —
+ *      falsy — so `spell.Heighten === true` / `if (dc.CastingStatMod)` never
+ *      fired (metamagics and the DC casting-stat term silently vanished). We
+ *      promote presence to an explicit boolean (V2 treats these as DL_FLAG).
+ *   2. `<Amount size="1">25</Amount>` parses to `{ '#text': 25, size: 1 }`;
+ *      coerce to a number so `dc.Amount ?? 10` is arithmetic-safe.
+ *
+ * The per-class spell Level / Cost / MaxCasterLevel live in each class XML's
+ * `<ClassSpell>` list (Spells.xml has no <Level>/<Class>), exactly as V2
+ * stamps them via Spell::UpdateSpell (Spell.cpp:147-162). We merge those here
+ * so `spell.Level[className]` is populated for SpellsPanel/DC display.
+ */
 export function loadSpells(dataDir: string): Spell[] {
+  let spells: Spell[]
   try {
     const parsed = readXml(path.join(dataDir, 'Spells.xml')) as { Spells?: { Spell?: unknown[] } }
-    return (parsed?.Spells?.Spell ?? []) as Spell[]
+    spells = (parsed?.Spells?.Spell ?? []) as Spell[]
   } catch { return [] }
+
+  // Per-class spell level/cost map keyed by spell name.
+  type ClassSpellInfo = { className: string; level: number; cost?: number; maxCasterLevel?: number }
+  const byName = new Map<string, ClassSpellInfo[]>()
+  try {
+    const dir = path.join(dataDir, 'Classes')
+    if (fs.existsSync(dir)) {
+      for (const f of fs.readdirSync(dir).filter(n => /\.class\.xml$/i.test(n))) {
+        const parsed = readXml(path.join(dir, f)) as { Classes?: { Class?: unknown[] } }
+        for (const c of (parsed?.Classes?.Class ?? []) as Record<string, unknown>[]) {
+          const className = c.Name as string
+          const cs = c.ClassSpell
+          const list = Array.isArray(cs) ? cs : cs ? [cs] : []
+          for (const e of list as Record<string, unknown>[]) {
+            const name = e.Name as string
+            const level = asNumber(e.Level)
+            if (!name || level == null) continue
+            const arr = byName.get(name) ?? []
+            arr.push({ className, level, cost: asNumber(e.Cost), maxCasterLevel: asNumber(e.MaxCasterLevel) })
+            byName.set(name, arr)
+          }
+        }
+      }
+    }
+  } catch { /* class spell lists optional */ }
+
+  return spells.map(raw => {
+    const s = { ...raw } as Spell & Record<string, unknown>
+    // 1. promote metamagic / CastingStatMod presence flags to booleans
+    for (const flag of SPELL_METAMAGIC_FLAGS) {
+      if (flag in s) s[flag] = true
+    }
+    // 2. normalise SpellDC blocks
+    const dcs = Array.isArray(s.SpellDC) ? s.SpellDC : s.SpellDC ? [s.SpellDC] : []
+    if (dcs.length > 0) {
+      s.SpellDC = dcs.map(dc => {
+        const d = { ...dc } as Record<string, unknown>
+        if ('CastingStatMod' in d) d.CastingStatMod = true
+        if ('Amount' in d) {
+          const n = asNumber(d.Amount)
+          if (n != null) d.Amount = n
+        }
+        return d as unknown as typeof dc
+      })
+    }
+    // 3. merge per-class Level / Cost / MaxCasterLevel from <ClassSpell>
+    const info = byName.get(s.Name)
+    if (info && info.length > 0) {
+      const levelMap: Record<string, number> = { ...(typeof s.Level === 'object' ? s.Level : {}) }
+      for (const ci of info) levelMap[ci.className] = ci.level
+      s.Level = levelMap
+      // Spell-level cost / max-caster-level default from the (matching) class entry.
+      if (s.Cost == null && info[0].cost != null) s.Cost = info[0].cost
+      if (s.MaxCasterLevel == null && info[0].maxCasterLevel != null) s.MaxCasterLevel = info[0].maxCasterLevel
+    }
+    return s as Spell
+  })
 }
 
 export function loadWeaponGroups(dataDir: string): WeaponGroupSpec[] {
@@ -208,7 +338,20 @@ export function loadFiligreeSets(dataDir: string): Filigree[] {
   return files.flatMap(f => {
     try {
       const parsed = readXml(path.join(dir, f)) as { Filigrees?: { Filigree?: unknown[] } }
-      return (parsed?.Filigrees?.Filigree ?? []) as Filigree[]
+      const filigrees = (parsed?.Filigrees?.Filigree ?? []) as Filigree[]
+      // V2 Effect_Rare is a DL_FLAG (Effect.h:623) splitting normal vs rare
+      // effects (Filigree::NormalEffects/RareEffects). The XML self-closing
+      // <Rare/> parses to "" (falsy), so the rare-slot gate in useBuildStats
+      // never fired. Promote presence to an explicit boolean.
+      return filigrees.map(fil => {
+        const effects = fil.Effect
+        if (effects === undefined) return fil
+        const list = Array.isArray(effects) ? effects : [effects]
+        const normEffects = list.map(e =>
+          'Rare' in (e as object) ? { ...e, Rare: true } : e,
+        )
+        return { ...fil, Effect: Array.isArray(effects) ? normEffects : normEffects[0] }
+      })
     } catch { return [] }
   })
 }
@@ -308,6 +451,10 @@ export function loadChallenges(dataDir: string): Challenge[] {
 export interface ItemBuffSpec {
   Type: string
   DisplayText?: string
+  // The buff template's Effect list (V2 Buff::Effects). Carries the real stat
+  // effects that an item's <Buff> references by Type; parseItemBuff resolves
+  // flavour-named Types against these (V2 Item::FindEffect, Item.cpp:452-472).
+  Effect?: import('../types/ddo').Effect | import('../types/ddo').Effect[]
 }
 
 export function loadItemBuffs(dataDir: string): ItemBuffSpec[] {

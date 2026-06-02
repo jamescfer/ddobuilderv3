@@ -5,7 +5,7 @@ import type {
   DDOClass, Race, Feat, EnhancementTree, Item, Augment, SetBonus,
   FiligreeSetBonus, Filigree, OptionalBuff,
 } from '../../types/ddo'
-import type { AttackRate } from '../../server/dataLoaders'
+import type { AttackRate, ItemBuffSpec } from '../../server/dataLoaders'
 import { useBuildStats, extractOffhandWeaponInfo } from '../../hooks/useBuildStats'
 import { buildAttackEntry } from '../../lib/combat/attackEntry'
 import { lookupAttacksPerMinute, pickCombatStyleName } from '../../lib/combat/attackRate'
@@ -40,6 +40,7 @@ export default function CombatPanel() {
   const [gearItems, setGearItems] = useState<Record<string, Item>>({})
   const [allAttackRates, setAllAttackRates] = useState<AttackRate[]>([])
   const [allWeaponGroups, setAllWeaponGroups] = useState<WeaponGroupSpec[]>([])
+  const [allItemBuffs, setAllItemBuffs] = useState<ItemBuffSpec[]>([])
 
   const [foeAC, setFoeAC] = useState(DEFAULT_FOE_AC)
   const [foePRR, setFoePRR] = useState(DEFAULT_FOE_PRR)
@@ -58,6 +59,7 @@ export default function CombatPanel() {
     api.filigree().then(setAllFiligrees)
     api.attackRates().then(setAllAttackRates)
     api.weaponGroups().then(setAllWeaponGroups)
+    api.itemBuffs().then(setAllItemBuffs).catch(() => setAllItemBuffs([]))
   }, [])
 
   useEffect(() => {
@@ -80,8 +82,10 @@ export default function CombatPanel() {
   const statsInput = useMemo(() => ({
     allClasses, allRaces, allFeats, allTrees, gearItems,
     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+    allItemBuffs,
   }), [allClasses, allRaces, allFeats, allTrees, gearItems,
-      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees])
+      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+      allItemBuffs])
   const stats = useBuildStats(statsInput)
 
   const result = useMemo(() => {
@@ -119,6 +123,7 @@ export default function CombatPanel() {
       offhand,
       offhandIsLight,
       oversizedTwf,
+      perfectTwf: twfTier >= 4, // Perfect TWF → 65% off-hand doublestrike
     })
   }, [stats, foeAC, foePRR, foeFort, helpless, build.featChoices, build.gear, gearItems, allAttackRates, allWeaponGroups])
 

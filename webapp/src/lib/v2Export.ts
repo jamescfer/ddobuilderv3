@@ -23,8 +23,29 @@
 // effect definitions) are emitted best-effort / by-name only; see the inline
 // notes and PARITY_TODO.md.
 
-import type { Ability, CharacterBuild } from '../types/ddo'
+import type {
+  Ability, CharacterBuild, CharacterDocument, Item, ItemBuff,
+} from '../types/ddo'
 import { POINT_BUY_COSTS } from '../types/ddo'
+
+/**
+ * Optional item catalogue passed to the exporter for F2 (gear-effect
+ * embedding). When provided, each equipped item's full V2 definition — its
+ * <Buff> effects, <SetBonus>, <Material>, <EquipmentSlot> and metadata — is
+ * embedded inside <EquippedGear>, matching what V2 writes and trusts on load.
+ * A bare lookup `Map`/`Record` (name → Item) or a function both work.
+ */
+export type ItemCatalogue =
+  | Map<string, Item>
+  | Record<string, Item>
+  | ((name: string) => Item | undefined)
+
+function lookupItem(cat: ItemCatalogue | undefined, name: string): Item | undefined {
+  if (!cat) return undefined
+  if (typeof cat === 'function') return cat(name)
+  if (cat instanceof Map) return cat.get(name)
+  return cat[name]
+}
 
 // ---------------------------------------------------------------------------
 // XML emission helpers
@@ -67,7 +88,9 @@ class Xml {
 
   /** Leaf element with text content. */
   leaf(tag: string, value: string | number): this {
-    const text = typeof value === 'number' ? String(value) : esc(value)
+    // Catalogue-sourced fields (e.g. a numeric Description1) may arrive as a
+    // non-string; coerce defensively before escaping.
+    const text = typeof value === 'string' ? esc(value) : String(value)
     this.parts.push(`${this.pad()}<${tag}>${text}</${tag}>`)
     return this
   }
@@ -284,11 +307,60 @@ function emitSelectedTrees(
   xml.close(tag)
 }
 
+const SNAPSHOT_KEY: Record<Ability, string> = {
+  Strength: 'SnapshotStrength', Dexterity: 'SnapshotDexterity',
+  Constitution: 'SnapshotConstitution', Intelligence: 'SnapshotIntelligence',
+  Wisdom: 'SnapshotWisdom', Charisma: 'SnapshotCharisma',
+}
+
+/**
+ * F2 — embed an item's full V2 definition (Buffs + metadata + SetBonus). The
+ * <Name> is emitted by the caller; this adds everything V2 stores after it so
+ * the re-opened file carries the item's effects without re-resolving by name.
+ */
+function emitItemDefinition(xml: Xml, item: Item): void {
+  if (item.Icon) xml.leaf('Icon', item.Icon)
+  if (item.Description) xml.leaf('Description', item.Description)
+  if (item.DropLocation) xml.leaf('DropLocation', item.DropLocation)
+  if (item.MinLevel != null) xml.leaf('MinLevel', item.MinLevel)
+  if (item.EquipmentSlot) {
+    const slots = Object.entries(item.EquipmentSlot).filter(([, on]) => on)
+    if (slots.length > 0) {
+      xml.open('EquipmentSlot')
+      for (const [slot] of slots) xml.empty(slot)
+      xml.close('EquipmentSlot')
+    }
+  }
+  if (item.Material) xml.leaf('Material', item.Material)
+  const buffs: ItemBuff[] = item.Buff
+    ? (Array.isArray(item.Buff) ? item.Buff : [item.Buff])
+    : []
+  for (const b of buffs) {
+    if (!b?.Type) continue
+    xml.open('Buff')
+    xml.leaf('Type', b.Type)
+    if (b.Value1 != null) xml.leaf('Value1', b.Value1)
+    if (b.BonusType) xml.leaf('BonusType', b.BonusType)
+    if (b.Percent) xml.empty('Percent')
+    if (b.Description1) xml.leaf('Description1', b.Description1)
+    if (b.Item) xml.leaf('Item', b.Item)
+    xml.close('Buff')
+  }
+  const sets = item.SetBonus
+    ? (Array.isArray(item.SetBonus) ? item.SetBonus : [item.SetBonus])
+    : []
+  for (const s of sets) {
+    if (s) xml.leaf('SetBonus', s)
+  }
+}
+
 function emitGearSet(
   xml: Xml,
   setName: string,
   slots: Record<string, string>,
   augments: Record<string, string>,
+  snapshot?: Partial<Record<Ability, number>>,
+  itemCatalogue?: ItemCatalogue,
 ): void {
   xml.open('EquippedGear')
   xml.leaf('Name', setName)
@@ -296,11 +368,13 @@ function emitGearSet(
     const itemName = slots[v3Slot]
     if (!itemName) continue
     xml.open(v2Slot)
-    // V3 stores gear by name only. V2 embeds the full item definition; emitting
-    // just <Name> means V2 re-opens the slot with the named item but without
-    // V3-side stat effects until re-resolved. (See PARITY_TODO: gear-effect
-    // embedding.)
+    // V3 stores gear by name only. F2: when an item catalogue is supplied, embed
+    // the full item definition (Buffs + metadata) so V2 re-opens the slot with
+    // the item's effects — matching what V2 writes and trusts on load. Without a
+    // catalogue, only <Name> is emitted (V2 then re-resolves by name).
     xml.leaf('Name', itemName)
+    const itemDef = lookupItem(itemCatalogue, itemName)
+    if (itemDef) emitItemDefinition(xml, itemDef)
     // Augments are keyed `slot:type:index` where `index` is the position of the
     // augment in the item's FULL <ItemAugment> list (including empty slots). The
     // importer increments its index counter for every <ItemAugment> entry, even
@@ -337,18 +411,38 @@ function emitGearSet(
     }
     xml.close(v2Slot)
   }
+  // V2 EquippedGear.Snapshot{Ability} — per-set ability snapshot for gear-swap
+  // "what-if" comparisons (F3). Emitted after the slot elements.
+  if (snapshot) {
+    for (const ab of ABILITIES) {
+      if (snapshot[ab] != null) xml.leaf(SNAPSHOT_KEY[ab], snapshot[ab] as number)
+    }
+  }
   xml.close('EquippedGear')
 }
 
-/** Reconstruct Character-level <SpecialFeats> from V3 pastLives (best-effort). */
+/**
+ * Reconstruct Character-level <SpecialFeats> from V3 pastLives. F5: when the
+ * original V2 <Type> was captured on import (`pastLifeTypes`), reproduce it
+ * exactly — Iconic vs Epic past lives are otherwise indistinguishable by name.
+ * Falls back to name-based class/race detection for builds authored in V3.
+ */
 function emitSpecialFeats(xml: Xml, build: CharacterBuild): void {
   xml.open('SpecialFeats')
+  const knownTypes = build.pastLifeTypes ?? {}
   for (const [key, count] of Object.entries(build.pastLives)) {
     if (!count) continue
-    let type = 'EpicPastLife'
+    let type = knownTypes[key] ?? ''
     let featName = key
-    if (HEROIC_CLASSES.has(key)) { type = 'HeroicPastLife'; featName = `Past Life: ${key}` }
-    else if (RACES.has(key)) { type = 'RacialPastLife'; featName = `Past Life: ${key}` }
+    if (!type) {
+      // No captured type → infer from the key (V3-authored builds).
+      if (HEROIC_CLASSES.has(key)) type = 'HeroicPastLife'
+      else if (RACES.has(key)) type = 'RacialPastLife'
+      else type = 'EpicPastLife'
+    }
+    if (type === 'HeroicPastLife' || type === 'RacialPastLife') {
+      featName = `Past Life: ${key}`
+    }
     for (let i = 0; i < count; i++) {
       xml.open('TrainedFeat')
       xml.leaf('FeatName', featName)
@@ -360,44 +454,22 @@ function emitSpecialFeats(xml: Xml, build: CharacterBuild): void {
   xml.close('SpecialFeats')
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Serialise a V3 build into V2 .DDOBuild XML. The output is a complete
- * <DDOBuilderCharacterData> document with a single Life containing a single
- * Build (V3's working model). V2 will open it as a one-life, one-build
- * character.
- */
-export function exportV2Build(build: CharacterBuild): string {
-  const xml = new Xml()
-  xml.raw('<?xml version="1.0"?>')
-  xml.open('DDOBuilderCharacterData')
-  xml.open('Character', 'version="1"')
-
-  // ── Character: tomes ─────────────────────────────────────────────────────
-  for (const ab of ABILITIES) {
-    xml.leaf(TOME_KEY[ab], build.abilityTomes?.[ab] ?? 0)
+/** Emit a FeatsListObject (e.g. <FavorFeats>) from a flat name list. */
+function emitFeatsList(xml: Xml, tag: string, feats: string[], type: string): void {
+  xml.open(tag)
+  for (const name of feats) {
+    if (!name) continue
+    xml.open('TrainedFeat')
+    xml.leaf('FeatName', name)
+    xml.leaf('Type', type)
+    xml.leaf('LevelTrainedAt', 0)
+    xml.close('TrainedFeat')
   }
+  xml.close(tag)
+}
 
-  // ── Character: SpecialFeats (past lives) ────────────────────────────────
-  emitSpecialFeats(xml, build)
-
-  // ── Character: SkillTomes ────────────────────────────────────────────────
-  xml.open('SkillTomes')
-  for (const [skill, val] of Object.entries(build.skillTomes ?? {})) {
-    if (val) xml.leaf(skill, val)
-  }
-  xml.close('SkillTomes')
-
-  // ── Life ─────────────────────────────────────────────────────────────────
-  xml.open('Life', 'version="1"')
-  xml.leaf('Name', build.name || 'Imported V3 Build')
-  xml.leaf('Race', build.race || 'Human')
-  xml.leaf('Alignment', build.alignment || 'True Neutral')
-
-  // ── Build ──────────────────────────────────────────────────────────────
+/** Emit the inner <Build>…</Build> element for one build. */
+function emitBuild(xml: Xml, build: CharacterBuild, itemCatalogue?: ItemCatalogue): void {
   xml.open('Build', 'version="1"')
   const totalLevels = 20 + (build.epicLevels ?? 0) + (build.legendaryLevels ?? 0)
   xml.leaf('Level', totalLevels)
@@ -413,6 +485,20 @@ export function exportV2Build(build: CharacterBuild): string {
 
   emitAbilitySpend(xml, build)
   emitLevelTraining(xml, build)
+
+  // ── Trained spells (DL_OBJECT_VECTOR TrainedSpell) — F3 ──────────────────
+  for (const [cls, byLevel] of Object.entries(build.trainedSpells ?? {})) {
+    for (const [lvlStr, spells] of Object.entries(byLevel)) {
+      for (const spell of spells) {
+        if (!spell) continue
+        xml.open('TrainedSpell')
+        xml.leaf('Class', cls)
+        xml.leaf('Level', Number(lvlStr))
+        xml.leaf('SpellName', spell)
+        xml.close('TrainedSpell')
+      }
+    }
+  }
 
   // ── Active stances ───────────────────────────────────────────────────────
   xml.open('ActiveStances')
@@ -434,21 +520,38 @@ export function exportV2Build(build: CharacterBuild): string {
   emitSpendInTree(xml, 'ReaperSpendInTree', build.reaperChoices, {})
   emitSpendInTree(xml, 'DestinySpendInTree', build.destinyChoices, build.destinySelections)
 
-  // ── Attack chain (V3 models only the active chain name set) ─────────────
-  xml.empty('ActiveAttackChain')
+  // ── Attack chains (DL_STRING ActiveAttackChain + DL_OBJECT_LIST) — F3 ────
+  const activeChain = build.activeAttackChain ?? ''
+  if (activeChain) xml.leaf('ActiveAttackChain', activeChain)
+  else xml.empty('ActiveAttackChain')
+  for (const [chName, attacks] of Object.entries(build.attackChains ?? {})) {
+    xml.open('AttackChain')
+    xml.leaf('Name', chName)
+    for (const a of attacks) {
+      if (a) xml.leaf('Attacks', a)
+    }
+    xml.close('AttackChain')
+  }
 
   // ── Gear ─────────────────────────────────────────────────────────────────
   xml.leaf('ActiveGear', build.activeGearSetName || 'Standard')
   const named = build.namedGearSets ?? {}
   const namedAug = build.namedGearAugments ?? {}
+  const snapshots = build.gearSetSnapshots ?? {}
   const setNames = Object.keys(named)
   if (setNames.length > 0) {
     for (const name of setNames) {
-      emitGearSet(xml, name, named[name] ?? {}, namedAug[name] ?? {})
+      emitGearSet(xml, name, named[name] ?? {}, namedAug[name] ?? {}, snapshots[name], itemCatalogue)
     }
   } else if (Object.keys(build.gear ?? {}).length > 0) {
-    emitGearSet(xml, build.activeGearSetName || 'Standard', build.gear, build.augmentChoices)
+    const name = build.activeGearSetName || 'Standard'
+    emitGearSet(xml, name, build.gear, build.augmentChoices, snapshots[name], itemCatalogue)
   }
+  // GearSetSnapshot — names the snapshot baseline set (F3).
+  if (build.gearSetSnapshot) xml.leaf('GearSetSnapshot', build.gearSetSnapshot)
+
+  // ── Favor feats (FeatsListObject) — F3 ───────────────────────────────────
+  emitFeatsList(xml, 'FavorFeats', build.favorFeats ?? [], 'Favor')
 
   // ── Notes ─────────────────────────────────────────────────────────────────
   if (build.notes) xml.leaf('Notes', build.notes)
@@ -460,20 +563,148 @@ export function exportV2Build(build: CharacterBuild): string {
   }
 
   xml.close('Build')
+}
 
-  // ── Life-level self/party buffs ──────────────────────────────────────────
-  // (V3 merges these into activeBuffs on import; they are already emitted in
-  // ActiveStances above. No separate list is required for round-trip.)
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
-  xml.close('Life')
+/** A life to serialise: name/race/alignment + special feats + its builds. */
+export interface ExportLife {
+  name: string
+  race: string
+  alignment: string
+  /** Life-level SpecialFeats beyond past lives (F4). */
+  specialFeats: string[]
+  builds: CharacterBuild[]
+}
+
+/** Inputs for the full multi-life document exporter (F1). */
+export interface ExportDocument {
+  name?: string
+  lives: ExportLife[]
+  guildLevel: number
+  applyGuildBuffs: boolean
+  /** Character-level ContentIDontOwn (F4). */
+  contentIDontOwn: string[]
+  activeLifeIndex: number
+  activeBuildIndex: number
+}
+
+/**
+ * Serialise a full Character → Life[] → Build[] document into V2 .DDOBuild XML
+ * (F1). Every life and every build is emitted, preserving the active indices.
+ * Character-level tomes/SpecialFeats are taken from the active build (the V2
+ * model keeps a single Character-level tome/past-life set shared by all lives).
+ */
+export function exportV2Document(doc: ExportDocument, itemCatalogue?: ItemCatalogue): string {
+  const xml = new Xml()
+  xml.raw('<?xml version="1.0"?>')
+  xml.open('DDOBuilderCharacterData')
+  xml.open('Character', 'version="1"')
+
+  // The Character-level tomes + past-life SpecialFeats are shared in V2. Use
+  // the active build (falling back to the first) as the authoritative source.
+  const activeLife = doc.lives[doc.activeLifeIndex] ?? doc.lives[0]
+  const activeBuild = activeLife?.builds[doc.activeBuildIndex] ?? activeLife?.builds[0]
+    ?? doc.lives[0]?.builds[0]
+
+  // ── Character: tomes ─────────────────────────────────────────────────────
+  for (const ab of ABILITIES) {
+    xml.leaf(TOME_KEY[ab], activeBuild?.abilityTomes?.[ab] ?? 0)
+  }
+
+  // ── Character: SpecialFeats (past lives) ────────────────────────────────
+  if (activeBuild) emitSpecialFeats(xml, activeBuild)
+  else { xml.open('SpecialFeats'); xml.close('SpecialFeats') }
+
+  // ── Character: SkillTomes ────────────────────────────────────────────────
+  xml.open('SkillTomes')
+  for (const [skill, val] of Object.entries(activeBuild?.skillTomes ?? {})) {
+    if (val) xml.leaf(skill, val)
+  }
+  xml.close('SkillTomes')
+
+  // ── Lives ────────────────────────────────────────────────────────────────
+  for (const life of doc.lives) {
+    xml.open('Life', 'version="1"')
+    xml.leaf('Name', life.name || 'Imported V3 Build')
+    xml.leaf('Race', life.race || 'Human')
+    xml.leaf('Alignment', life.alignment || 'True Neutral')
+    // Life-level SpecialFeats (F4): universal-tree access, Granted feats, …
+    // (V2 Type for these access feats is UniversalTree; reproduced best-effort.)
+    if (life.specialFeats.length > 0) {
+      emitFeatsList(xml, 'SpecialFeats', life.specialFeats, 'UniversalTree')
+    }
+    for (const build of life.builds) emitBuild(xml, build, itemCatalogue)
+    // Life-level self/party buffs round-trip via each build's activeBuffs /
+    // ActiveStances; no separate list emitted.
+    xml.close('Life')
+  }
 
   // ── Character footer ─────────────────────────────────────────────────────
-  xml.leaf('GuildLevel', build.guildLevel ?? 0)
-  xml.leaf('ApplyGuildBuffs', build.applyGuildBuffs ? 1 : 0)
-  xml.leaf('ActiveLifeIndex', 0)
-  xml.leaf('ActiveBuildIndex', 0)
+  xml.leaf('GuildLevel', doc.guildLevel ?? 0)
+  xml.leaf('ApplyGuildBuffs', doc.applyGuildBuffs ? 1 : 0)
+  xml.leaf('ActiveLifeIndex', doc.activeLifeIndex ?? 0)
+  xml.leaf('ActiveBuildIndex', doc.activeBuildIndex ?? 0)
+  // ContentIDontOwn (F4): each entry is its own repeated element.
+  for (const c of doc.contentIDontOwn ?? []) {
+    if (c) xml.leaf('ContentIDontOwn', c)
+  }
 
   xml.close('Character')
   xml.close('DDOBuilderCharacterData')
   return xml.toString()
+}
+
+/**
+ * Convenience wrapper: serialise a CharacterDocument (the model produced by
+ * importV2Document) to V2 XML. Resolves the active life/build indices from the
+ * document's activeLifeId/activeBuildId.
+ */
+export function exportV2DocumentModel(doc: CharacterDocument, itemCatalogue?: ItemCatalogue): string {
+  const activeLifeIndex = Math.max(0, doc.lives.findIndex(l => l.id === doc.activeLifeId))
+  const activeLife = doc.lives[activeLifeIndex] ?? doc.lives[0]
+  const activeBuildIndex = activeLife
+    ? Math.max(0, activeLife.builds.findIndex(b => b.id === doc.activeBuildId))
+    : 0
+  return exportV2Document({
+    name: doc.name,
+    lives: doc.lives.map(l => ({
+      name: l.name,
+      race: l.race,
+      alignment: l.alignment,
+      specialFeats: l.specialFeats ?? [],
+      builds: l.builds,
+    })),
+    guildLevel: doc.guildLevel ?? 0,
+    applyGuildBuffs: doc.applyGuildBuffs ?? false,
+    contentIDontOwn: doc.contentIDontOwn ?? [],
+    activeLifeIndex,
+    activeBuildIndex,
+  }, itemCatalogue)
+}
+
+/**
+ * Serialise a V3 build into V2 .DDOBuild XML. The output is a complete
+ * <DDOBuilderCharacterData> document with a single Life containing a single
+ * Build (V3's working model). V2 will open it as a one-life, one-build
+ * character. Pass `itemCatalogue` (F2) to embed each equipped item's full V2
+ * definition (Buffs + metadata); omit it to emit gear by name only.
+ */
+export function exportV2Build(build: CharacterBuild, itemCatalogue?: ItemCatalogue): string {
+  return exportV2Document({
+    lives: [{
+      name: build.name || 'Imported V3 Build',
+      race: build.race || 'Human',
+      alignment: build.alignment || 'True Neutral',
+      specialFeats: [],
+      builds: [build],
+    }],
+    guildLevel: build.guildLevel ?? 0,
+    applyGuildBuffs: build.applyGuildBuffs ?? false,
+    contentIDontOwn: [],
+    activeLifeIndex: 0,
+    activeBuildIndex: 0,
+  }, itemCatalogue)
 }

@@ -58,6 +58,7 @@ export default function SpellsPanel() {
   const [allSetBonuses, setAllSetBonuses] = useState<SetBonus[]>([])
   const [allFiligreeBonuses, setAllFiligreeBonuses] = useState<FiligreeSetBonus[]>([])
   const [allFiligrees, setAllFiligrees] = useState<Filigree[]>([])
+  const [allItemBuffs, setAllItemBuffs] = useState<import('../../server/dataLoaders').ItemBuffSpec[]>([])
   const [gearItems, setGearItems] = useState<Record<string, Item>>({})
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<string | null>(null)
@@ -75,10 +76,12 @@ export default function SpellsPanel() {
       api.setbonuses().catch(() => [] as SetBonus[]),
       api.filigreeSetBonuses().catch(() => [] as FiligreeSetBonus[]),
       api.filigree().catch(() => [] as Filigree[]),
-    ]).then(([sp, cls, ra, fe, tr, sb, aug, sbn, fbn, fil]) => {
+      api.itemBuffs().catch(() => [] as import('../../server/dataLoaders').ItemBuffSpec[]),
+    ]).then(([sp, cls, ra, fe, tr, sb, aug, sbn, fbn, fil, ib]) => {
       setAllSpells(sp); setAllClasses(cls); setAllRaces(ra); setAllFeats(fe)
       setAllTrees(tr); setAllSelfBuffs(sb); setAllAugments(aug)
       setAllSetBonuses(sbn); setAllFiligreeBonuses(fbn); setAllFiligrees(fil)
+      setAllItemBuffs(ib)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -102,8 +105,10 @@ export default function SpellsPanel() {
   const statsInput = useMemo(() => ({
     allClasses, allRaces, allFeats, allTrees, gearItems,
     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+    allItemBuffs,
   }), [allClasses, allRaces, allFeats, allTrees, gearItems,
-      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees])
+      allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
+      allItemBuffs])
   const stats = useBuildStats(statsInput)
 
   const tabs = buildClassTabs(build.classes, allClasses, allSpells)
@@ -113,6 +118,27 @@ export default function SpellsPanel() {
 
   const heightenActive = build.activeBuffs.includes('Heighten Spell') ||
     build.activeBuffs.includes('Heighten')
+
+  // V2 BreakdownItemCasterLevel.cpp:77-100: the "Mixed Magics" enhancement
+  // (Wild Mage tree WMUnstableSorcery / Arcane Trickster tree ATMoreMagicMoreFun)
+  // raises that class's caster level to min(20, character level). The selection
+  // value "Mixed Magics" is stored under the owning archetype tree, so we map
+  // the trained selection back to its class and pass min(20, totalLevel) to
+  // computeCasterLevel for that class only.
+  const mixedMagicsClasses = useMemo(() => {
+    const set = new Set<string>()
+    const treeToClass: Record<string, string> = {
+      'Wild Mage': 'Wild Mage',
+      'Arcane Trickster': 'Arcane Trickster',
+    }
+    for (const [treeName, sels] of Object.entries(build.enhancementSelections ?? {})) {
+      const cls = treeToClass[treeName]
+      if (!cls) continue
+      if (Object.values(sels).includes('Mixed Magics')) set.add(cls)
+    }
+    return set
+  }, [build.enhancementSelections])
+  const characterLevel = Math.min(20, build.totalLevel ?? 0)
 
   function isTrained(className: string, lvl: number, name: string): boolean {
     return (build.trainedSpells[className]?.[lvl] ?? []).includes(name)
@@ -172,7 +198,12 @@ export default function SpellsPanel() {
                             const enabledMM = build.spellMetamagics[activeTabData.className]?.[spell.Name] ?? []
                             const dcs = Array.isArray(spell.SpellDC) ? spell.SpellDC : (spell.SpellDC ? [spell.SpellDC] : [])
                             const dcValues = dcs.map(d => computeSpellDC(spell, d, activeTabData.cls, activeTabData.classLevel, stats, { heightenActive }))
-                            const cl = computeCasterLevel(spell, activeTabData.cls, activeTabData.classLevel, stats)
+                            const cl = computeCasterLevel(
+                              spell, activeTabData.cls, activeTabData.classLevel, stats,
+                              mixedMagicsClasses.has(activeTabData.className)
+                                ? { mixedMagicsCharacterLevel: characterLevel }
+                                : {},
+                            )
                             const mcl = computeMaxCasterLevel(spell, activeTabData.cls, activeTabData.classLevel, stats)
                             const cost = computeSpellCost(spell, activeTabData.cls, activeTabData.classLevel, stats, enabledMM)
                             const mmList = availableMetamagics(spell)

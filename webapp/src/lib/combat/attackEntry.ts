@@ -29,6 +29,12 @@ export interface AttackEntryOptions {
   oversizedTwf?: boolean
   /** Character is non-proficient with the main-hand weapon (−4 to-hit). */
   nonProficient?: boolean
+  /**
+   * Perfect Two Weapon Fighting trained. Raises the derived off-hand
+   * doublestrike from 50% to 65% of the main hand
+   * (V2 BreakdownItemOffhandDoublestrike.cpp:58-69).
+   */
+  perfectTwf?: boolean
 }
 
 export interface AttackEntryResult {
@@ -102,6 +108,15 @@ export function buildAttackEntry(
   const meleeDamage = stats.total('melee.damage')
   const baseCrit = stats.total('melee.crit.range') // additional threat faces from feats
   const baseCritMult = stats.total('melee.crit.multiplier')
+  // V2 tracks a separate 19-20 critical multiplier that seeds itself with the
+  // standard multiplier as its base, then stacks 19-20-only effects on top
+  // (BreakdownItemWeaponCriticalMultiplier.cpp:52-66). Effects feed it via the
+  // `weapon.critMultiplier19to20` stat key (effectParser Weapon_CriticalMultiplier19To20).
+  const critMult19to20Bonus = stats.total('weapon.critMultiplier19to20')
+  // Crit-only damage bonus: V2 damage effects flagged `*Critical` apply on a
+  // confirmed crit on top of the multiplied base
+  // (BreakdownItemWeaponDamageBonus.cpp:184-202). Surfaced as `melee.crit.damage`.
+  const critOnlyDamage = stats.total('melee.crit.damage')
   const sneakDice = stats.total('melee.sneakDice') + stats.total('melee.sneakAttack')
 
   const abilityMod = modifier(abilityScore)
@@ -135,17 +150,42 @@ export function buildAttackEntry(
   const attackBonus = rawAttackBonus + mainTwfPenalty
   const hitC = hitChanceVsAC(attackBonus, opts.foeAC)
 
-  // Crit math: threat range = (21 - critThreatRange) .. 20
+  // Crit math: threat range = (21 - critThreatRange) .. 20 (faces that threaten).
   const threatFaces = Math.max(1, weapon.critThreatRange + baseCrit)
   const critC = (threatFaces / 20) * hitC
-  const critMult = weapon.critMultiplier + baseCritMult
-  // Crit damage = base damage scaled by multiplier (sneak NOT multiplied in DDO)
-  const critDmgRaw = baseDamage * critMult + sneakBonus
-  const critDmgScaled = critDmgRaw * meleePowerMult
 
-  // Per-attack expected damage = nonCritHits * hitDmg + crits * critDmg
-  // Decompose: hit-with-crit-confirm = critC, hit-without-crit = hitC - critC
-  const expectedRaw = (hitC - critC) * hitDmgRaw + critC * critDmgScaled
+  // V2 distinguishes the standard crit multiplier from the 19-20 multiplier
+  // (BreakdownItemWeaponCriticalMultiplier.cpp). DDO applies the 19-20 multiplier
+  // only on natural 19/20 rolls; lower threat faces (e.g. 17-18 on a falchion)
+  // use the standard multiplier. Split the threat faces accordingly so the
+  // higher 19-20 multiplier only weights the at-most-2 top faces.
+  const stdMult = weapon.critMultiplier + baseCritMult
+  const mult19to20 = stdMult + critMult19to20Bonus
+  const faces19to20 = Math.min(2, threatFaces) // 19 and/or 20
+  const facesStd = threatFaces - faces19to20 // 17,18,... when keened past 19-20
+  // Per-crit damage = (base × multiplier) + crit-only bonus; sneak is added flat
+  // (DDO does not multiply sneak dice on crits).
+  const critDmgForMult = (mult: number) => (baseDamage * mult + critOnlyDamage + sneakBonus) * meleePowerMult
+  // Probability-weighted average crit damage across the two multiplier tiers.
+  const critDmg19to20 = critDmgForMult(mult19to20)
+  const critDmgStd = critDmgForMult(stdMult)
+  const critDmgScaled =
+    threatFaces > 0
+      ? (faces19to20 * critDmg19to20 + facesStd * critDmgStd) / threatFaces
+      : critDmgStd
+
+  // Fortification (DDO mechanic): a fortified foe negates a fraction of crits,
+  // downgrading them to normal hits rather than reducing crit *damage*. With
+  // fortification F, a fraction F of confirmed crits deal hitDamage instead of
+  // critDamage; the swing still lands. (Closed-form analogue of DDO's per-crit
+  // fortification roll — overcome-fortification is not modelled.)
+  const fortF = Math.min(1, Math.max(0, (opts.foeFortification ?? 0) / 100))
+  const effCritC = critC * (1 - fortF) // crits that survive fortification
+
+  // Per-attack expected damage = nonCritHits * hitDmg + crits * critDmg.
+  // hit-with-surviving-crit = effCritC; every other landed swing (including
+  // fortification-downgraded crits) deals hitDmg.
+  const expectedRaw = (hitC - effCritC) * hitDmgRaw + effCritC * critDmgScaled
   // Doublestrike adds another swing of equal expected value
   const withDoublestrike = expectedRaw * (1 + doublestrike)
   // Strikethrough effectively scales DPS up against multi-target (THF only)
@@ -158,8 +198,17 @@ export function buildAttackEntry(
   let offhandDPR = 0
   if (opts.offhand) {
     const offhandTier = opts.twoWeaponFightingTier ?? 0
+    // V2 derives off-hand doublestrike from the main hand: 50% of the main-hand
+    // doublestrike, or 65% with Perfect Two Weapon Fighting
+    // (BreakdownItemOffhandDoublestrike.cpp:58-69). Any explicit
+    // `offhand.doublestrike` effect adds on top of that derived base.
+    const derivedOffhandDoublestrike = doublestrike * (opts.perfectTwf ? 0.65 : 0.5)
+    const offhandDoublestrikeChance = derivedOffhandDoublestrike + offhandDoublestrike
+    // Probability the off-hand swings at all (TWF tier proc + any attack bonus),
+    // multiplied up by the off-hand doublestrike for the extra off-hand swing.
     const offhandChance =
-      Math.min(1, TWF_OFFHAND_CHANCE[offhandTier] + offhandAttackBonus + offhandDoublestrike)
+      Math.min(1, TWF_OFFHAND_CHANCE[offhandTier] + offhandAttackBonus) *
+      (1 + offhandDoublestrikeChance)
     const ohDie = avgDie(opts.offhand.diceNum, opts.offhand.diceSides)
     const ohRaw = (ohDie + meleeDamage + abilityMod * (damageAbilMult / 2) + sneakBonus) * meleePowerMult
     // Off-hand swings roll against the off-hand attack bonus (larger TWF penalty).
@@ -167,13 +216,9 @@ export function buildAttackEntry(
     offhandDPR = ohRaw * offhandHitC * offhandChance * helplessFactor
   }
 
-  const fortMitigation = 1 - (opts.foeFortification ?? 0) / 100
-  // Fortification only affects crit portion of damage; approximate by halving
-  // the crit contribution proportional to fortification.
-  const totalDPR = applyPRR(
-    mainDPR * (1 - critC) + (mainDPR * critC) * fortMitigation + offhandDPR,
-    opts.foePRR ?? 0,
-  )
+  // Fortification is already applied at the per-swing expected-damage level
+  // above (crit downgrade), so only PRR remains to mitigate the total.
+  const totalDPR = applyPRR(mainDPR + offhandDPR, opts.foePRR ?? 0)
 
   const attacksPerRound = opts.attacksPerRound ?? 5
   // Heuristic: 1.5 attacks/sec baseline (V2 displays per-attack & per-second)

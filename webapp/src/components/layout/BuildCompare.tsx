@@ -13,6 +13,7 @@ import type {
   CharacterBuild, DDOClass, Race, Feat, EnhancementTree, Item,
   Augment, SetBonus, FiligreeSetBonus, Filigree, OptionalBuff,
 } from '../../types/ddo'
+import type { ItemBuffSpec } from '../../server/dataLoaders'
 import styles from './BuildCompare.module.css'
 
 interface DataBundle {
@@ -25,6 +26,7 @@ interface DataBundle {
   allSetBonuses: SetBonus[]
   allFiligreeBonuses: FiligreeSetBonus[]
   allFiligrees: Filigree[]
+  allItemBuffs: ItemBuffSpec[]
 }
 
 function useGearItems(build: CharacterBuild): Record<string, Item> {
@@ -128,11 +130,12 @@ export default function BuildCompare() {
       api.classes(), api.races(), api.feats(), api.enhancements(),
       api.selfbuffs(), api.augments(), api.setbonuses(),
       api.filigreeSetBonuses(), api.filigree(),
-    ]).then(([classes, races, feats, trees, selfBuffs, augs, sets, fbn, fil]) => {
+      api.itemBuffs().catch(() => [] as ItemBuffSpec[]),
+    ]).then(([classes, races, feats, trees, selfBuffs, augs, sets, fbn, fil, itemBuffs]) => {
       setData({
         allClasses: classes, allRaces: races, allFeats: feats, allTrees: trees,
         allSelfBuffs: selfBuffs, allAugments: augs, allSetBonuses: sets,
-        allFiligreeBonuses: fbn, allFiligrees: fil,
+        allFiligreeBonuses: fbn, allFiligrees: fil, allItemBuffs: itemBuffs,
       })
     }).catch(() => setData(null))
   }, [])

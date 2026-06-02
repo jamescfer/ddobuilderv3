@@ -114,4 +114,21 @@ describe('parseEffect — stat aggregation basics', () => {
     expect(out[0].statKey).toBe('destinyAP')
     expect(out[0].value).toBe(4)
   })
+
+  // Crit-only weapon damage (V2 BreakdownItemWeaponDamageBonus.cpp:184-202):
+  // applies only on a confirmed crit → surfaced as melee.crit.damage.
+  it.each(['Weapon_DamageCritical', 'Weapon_AttackAndDamageCritical', 'WeaponOtherDamageBonusCritical'])(
+    '%s emits melee.crit.damage',
+    type => {
+      const out = parseEffect(mk(type, { Amount: 6 }), 1, 'Weapon', 0, 0, ctx)
+      expect(out[0].statKey).toBe('melee.crit.damage')
+      expect(out[0].value).toBe(6)
+    },
+  )
+
+  it('Weapon_CriticalMultiplier19To20 emits weapon.critMultiplier19to20', () => {
+    const out = parseEffect(mk('Weapon_CriticalMultiplier19To20', { Amount: 1 }), 1, 'Weapon', 0, 0, ctx)
+    expect(out[0].statKey).toBe('weapon.critMultiplier19to20')
+    expect(out[0].value).toBe(1)
+  })
 })

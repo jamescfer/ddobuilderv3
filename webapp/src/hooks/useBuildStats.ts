@@ -16,10 +16,10 @@ import { SKILLS } from '../lib/gamedata'
 import type {
   Race, DDOClass, Feat, EnhancementTree, EnhancementTreeItem, Item,
   Effect, EnhancementSelection, Augment, SetBonus, FiligreeSetBonus, Filigree,
-  OptionalBuff, FiligreeSlot, Spell, GuildBuff,
+  OptionalBuff, FiligreeSlot, Spell, GuildBuff, ItemBuff,
 } from '../types/ddo'
 import { parseEffect, parseItemBuff } from '../lib/effectParser'
-import type { EffectContext } from '../lib/effectParser'
+import type { EffectContext, ItemBuffTemplate } from '../lib/effectParser'
 import { resolveBonus, emptyResolvedStat } from '../lib/bonus'
 import type { RawBonus, ResolvedStat } from '../lib/bonus'
 import { deriveWeaponClasses } from '../lib/weapons/groups'
@@ -83,6 +83,12 @@ export interface BuildStatsInput {
   allSpells?: Spell[]
   /** All guild-buff definitions (from /api/guildbuffs). Optional. */
   allGuildBuffs?: GuildBuff[]
+  /**
+   * ItemBuffs.xml template catalogue (from /api/itembuffs). Optional — used to
+   * resolve flavour-named item Buff Types (e.g. Vampirism, PhysicalSheltering)
+   * whose stat effects live only in the template (V2 Item::FindEffect).
+   */
+  allItemBuffs?: ItemBuffTemplate[]
 }
 
 // ---------------------------------------------------------------------------
@@ -341,11 +347,15 @@ function accumulateEnhancementTree(
   }
 }
 
-function accumulateGear(map: StatMap, gearItems: Record<string, Item>): void {
+function accumulateGear(
+  map: StatMap,
+  gearItems: Record<string, Item>,
+  buffCatalogue?: Map<string, ItemBuffTemplate>,
+): void {
   for (const [slot, item] of Object.entries(gearItems)) {
     const source = `${item.Name} (${slot})`
     for (const buff of toArray(item.Buff)) {
-      addParsed(map, parseItemBuff(buff, source), true)
+      addParsed(map, parseItemBuff(buff, source, buffCatalogue), true)
     }
     // Armor bonus from armor/shield items — treated as Armor bonus type
     if (item.ArmorBonus) {
@@ -428,15 +438,52 @@ function accumulateSetBonuses(
   map: StatMap,
   gearItems: Record<string, Item>,
   allSetBonuses: SetBonus[],
+  augmentChoices: Record<string, string>,
+  allAugments: Augment[],
   ctx?: EffectContext,
 ): void {
-  // Count equipped items per set bonus name
+  const augByName = new Map<string, Augment>(allAugments.map(a => [a.Name, a]))
+
+  // Group selected augments by their host gear slot. The augment key is
+  // "slot:augmentType:index" (GearPanel augmentKey), so the slot is the
+  // first ":"-delimited segment.
+  const augmentsBySlot = new Map<string, Augment[]>()
+  for (const [key, augName] of Object.entries(augmentChoices)) {
+    if (!augName) continue
+    const slot = key.split(':')[0]
+    const aug = augByName.get(augName)
+    if (!aug) continue
+    const arr = augmentsBySlot.get(slot) ?? []
+    arr.push(aug)
+    augmentsBySlot.set(slot, arr)
+  }
+
+  // Count equipped items per set-bonus name. V2 Build::ApplyItem (Build.cpp:
+  // 4905-4922) + Item::HasSetBonus (Item.cpp:508-548): augment-granted set
+  // bonuses always count; the item's NATIVE set bonuses count only when no
+  // augment on that item has SuppressSetBonus.
   const counts = new Map<string, number>()
-  for (const item of Object.values(gearItems)) {
-    for (const name of toArray(item.SetBonus)) {
-      counts.set(name, (counts.get(name) ?? 0) + 1)
+  const bump = (name: string) => counts.set(name, (counts.get(name) ?? 0) + 1)
+
+  for (const [slot, item] of Object.entries(gearItems)) {
+    const slotAugs = augmentsBySlot.get(slot) ?? []
+    let suppressNative = false
+    for (const aug of slotAugs) {
+      if ('SuppressSetBonus' in aug && aug.SuppressSetBonus !== undefined) suppressNative = true
+      for (const name of toArray(aug.SetBonus)) bump(name)
+    }
+    if (!suppressNative) {
+      for (const name of toArray(item.SetBonus)) bump(name)
     }
   }
+  // Set-bonus augments slotted in the sentient jewel (no host item) still count.
+  for (const [slot, augs] of augmentsBySlot) {
+    if (gearItems[slot]) continue
+    for (const aug of augs) {
+      for (const name of toArray(aug.SetBonus)) bump(name)
+    }
+  }
+
   for (const [bonusName, count] of counts) {
     const sb = allSetBonuses.find(s => s.Type === bonusName)
     if (!sb) continue
@@ -621,8 +668,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
   const {
     allClasses, allRaces, allFeats, allTrees, gearItems,
     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
-    allWeaponGroups, allSpells, allGuildBuffs,
+    allWeaponGroups, allSpells, allGuildBuffs, allItemBuffs,
   } = input
+
+  // ItemBuffs.xml template catalogue (Type → template) for resolving
+  // flavour-named item Buff Types via parseItemBuff (V2 Item::FindEffect).
+  const buffCatalogue = allItemBuffs && allItemBuffs.length > 0
+    ? new Map<string, ItemBuffTemplate>(allItemBuffs.map(b => [b.Type, b]))
+    : undefined
 
     // ──────────────────────────────────────────────────────────────────────
     // Build the EffectContext used to gate effects via Requirements::Met.
@@ -696,6 +749,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     // "Mountain Stance", "Favored Weapon", "Power Attack", "Rage", etc. fire
     // correctly when the player has toggled them on in the Stances panel.
     for (const s of build.activeBuffs) ctxStances.add(s)
+    // V2 parity: StancesPane.cpp:329-354 adds an Auto-controlled stance named
+    // after every race, gated on Requirement_Race; CStanceButton::Evaluate
+    // auto-activates it when the build's race matches. Effects gated on
+    // Requirement_Stance:<raceName> (e.g. Bladeforged +10 Repair/Rust spell
+    // power, Morninglord, Shifter, Razorclaw Shifter, Aasimar Scourge, Deep
+    // Gnome, …) only fire once that race stance is active. Mirror that here so
+    // those race-form effects fire without the player toggling anything.
+    if (build.race) ctxStances.add(build.race)
     // V2 parity: Monk and Sacred Fist are "Centered" when wearing cloth/no armor.
     // Centered gates all Monk Ki effects (KiMaximum, KiHit, KiPassive, KiCritical).
     {
@@ -897,6 +958,29 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
         const feat = allFeats.find(f => f.Name === fn)
         if (feat) accumulateFeat(map, feat, 1, `Automatic: ${fn}`, build.totalLevel, ctx)
       }
+
+      // V2 Class::ImprovedHeroicDurabilityFeats (Class.cpp:375-399): every heroic
+      // (non-NotHeroic) class dynamically synthesizes "Improved Heroic Durability
+      // (<Class> 5/10/15)" feats, each auto-acquired via Requirement_ClassAtLevel
+      // at class level 5, 10 and 15. Each grants the base "Improved Heroic
+      // Durability" effect (+5 max HP, Feats.xml:3791). These exist in no XML
+      // AutomaticFeats / GrantedFeat list, so V3 was under-counting HP by +5 per
+      // milestone class-level each heroic class reaches (max +15 per class).
+      const ihdBase = allFeats.find(f => f.Name === 'Improved Heroic Durability')
+      if (ihdBase) {
+        for (const bc of build.classes) {
+          if (!bc.name || bc.levels <= 0) continue
+          const cls = allClasses.find(c => c.Name === bc.name)
+          if (!cls || cls.NotHeroic) continue
+          let milestones = 0
+          for (let level = 5; level <= 15; level += 5) {
+            if (bc.levels >= level) milestones++
+          }
+          if (milestones > 0) {
+            accumulateFeat(map, ihdBase, milestones, `Improved Heroic Durability (${bc.name})`, build.totalLevel, ctx)
+          }
+        }
+      }
     }
 
     // ── Heroic enhancements ───────────────────────────────────────────────
@@ -929,7 +1013,7 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     }
 
     // ── Gear item buffs ───────────────────────────────────────────────────
-    accumulateGear(map, gearItems)
+    accumulateGear(map, gearItems, buffCatalogue)
 
     // ── Augments ─────────────────────────────────────────────────────────
     // Include sentient-gem augments alongside regular slot augments (Stream 3).
@@ -943,7 +1027,9 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     accumulateAugments(map, allAugmentChoices, allAugments, ctx)
 
     // ── Gear set bonuses ──────────────────────────────────────────────────
-    accumulateSetBonuses(map, gearItems, allSetBonuses, ctx)
+    // Pass the merged augment choices so augment-granted set bonuses (and
+    // SuppressSetBonus) are honoured (V2 Item::HasSetBonus, Item.cpp:508-548).
+    accumulateSetBonuses(map, gearItems, allSetBonuses, allAugmentChoices, allAugments, ctx)
 
     // ── Filigrees + filigree set bonuses ──────────────────────────────────
     accumulateFiligrees(map, build.filigreeSlots, build.artifactFiligreeSlots ?? [], allFiligrees, allFiligreeBonuses, ctx)
@@ -1253,6 +1339,38 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
           type: 'Stacking',
           source: `Negative levels (-1 × ${negLevels})`,
         })
+      }
+    }
+
+    // V2 BreakdownItemSpellPower.cpp:112-150 — each element's spell power adds
+    // the *total* of a governing skill: Heal → Positive/Negative, Perform →
+    // Sonic, Repair → Repair/Rust, Spellcraft → everything else. (The universal
+    // spell power is added at the display layer.) V3 never folded the skill in,
+    // so e.g. Heal ranks gave no Positive/Negative spell power. Fold the
+    // governing-skill total into each element's sp.<element> key.
+    {
+      const skillTotal = (name: string) => resolveBonus(map.get(`skill.${name}`) ?? []).total
+      const SP_SKILL: Record<string, string> = {
+        Positive: 'Heal', Negative: 'Heal',
+        Sonic: 'Perform',
+        Repair: 'Repair', Rust: 'Repair',
+      }
+      // Default governing skill for every other element is Spellcraft.
+      const SP_ELEMENTS = [
+        'Acid', 'Cold', 'Electric', 'Fire', 'Force', 'LightAlignment',
+        'Negative', 'Positive', 'Repair', 'Rust', 'Sonic', 'Poison',
+        'Physical', 'Chaos', 'Evil', 'Lawful', 'Untyped',
+      ]
+      for (const el of SP_ELEMENTS) {
+        const skill = SP_SKILL[el] ?? 'Spellcraft'
+        const bonus = skillTotal(skill)
+        if (bonus !== 0) {
+          add(map, `sp.${el}`, {
+            value: bonus,
+            type: 'Skill Bonus',
+            source: `${skill} skill bonus`,
+          })
+        }
       }
     }
 

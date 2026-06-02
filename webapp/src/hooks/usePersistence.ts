@@ -1,10 +1,11 @@
 import { useState, useCallback, useRef, createElement as h } from 'react'
 import type { ReactElement, ChangeEvent } from 'react'
-import type { CharacterBuild } from '../types/ddo'
+import type { CharacterBuild, Item } from '../types/ddo'
 import { useCharacter } from '../context/CharacterContext'
 import { isCharacterDocument, flattenDocument } from '../lib/multiLife'
 import { importV2Build } from '../lib/v2Import'
 import { exportV2Build } from '../lib/v2Export'
+import type { ItemCatalogue } from '../lib/v2Export'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -99,10 +100,20 @@ export function usePersistence(): PersistenceAPI {
   /**
    * Trigger a browser download of the build as a V2-compatible .DDOBuild XML
    * file so it can be re-opened in the V2 MFC application.
+   *
+   * F2 seam: when `itemCatalogue` (name → Item) is supplied, each equipped
+   * item's full V2 definition (Buffs + metadata + SetBonus) is embedded inside
+   * <EquippedGear>, matching what V2 writes/trusts on load. The app does not
+   * fetch the (large) /api/items catalogue just for export, so the catalogue is
+   * optional; pass it from a component that already has the item list loaded
+   * (e.g. GearPanel) to enable full-fidelity gear embedding.
    */
-  const exportDDOBuild = useCallback((build: CharacterBuild) => {
+  const exportDDOBuild = useCallback((build: CharacterBuild, itemCatalogue?: ItemCatalogue | Item[]) => {
     try {
-      const xml = exportV2Build(build)
+      const cat: ItemCatalogue | undefined = Array.isArray(itemCatalogue)
+        ? new Map(itemCatalogue.map(i => [i.Name, i]))
+        : itemCatalogue
+      const xml = exportV2Build(build, cat)
       const blob = new Blob([xml], { type: 'application/xml' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

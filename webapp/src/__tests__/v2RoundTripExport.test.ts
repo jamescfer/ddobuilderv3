@@ -98,8 +98,23 @@ describe.each(FILES)('round-trip fidelity: %s', (file) => {
     expect(second.applyGuildBuffs).toBe(first.applyGuildBuffs)
   })
 
-  it('preserves past-life counts', () => {
+  it('preserves past-life counts + types', () => {
     const { first, second } = roundTrip(file)
     expect(second.pastLives).toEqual(first.pastLives)
+    expect(second.pastLifeTypes).toEqual(first.pastLifeTypes)
+  })
+
+  it('preserves favor feats + gear-set snapshots (F3)', () => {
+    const { first, second } = roundTrip(file)
+    expect(second.favorFeats).toEqual(first.favorFeats)
+    expect(second.gearSetSnapshot).toBe(first.gearSetSnapshot)
+    expect(second.gearSetSnapshots).toEqual(first.gearSetSnapshots)
+  })
+
+  it('preserves trained spells + attack chains (F3)', () => {
+    const { first, second } = roundTrip(file)
+    expect(second.trainedSpells).toEqual(first.trainedSpells)
+    expect(second.attackChains).toEqual(first.attackChains)
+    expect(second.activeAttackChain).toBe(first.activeAttackChain)
   })
 })
