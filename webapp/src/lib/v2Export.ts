@@ -23,8 +23,29 @@
 // effect definitions) are emitted best-effort / by-name only; see the inline
 // notes and PARITY_TODO.md.
 
-import type { Ability, CharacterBuild, CharacterDocument } from '../types/ddo'
+import type {
+  Ability, CharacterBuild, CharacterDocument, Item, ItemBuff,
+} from '../types/ddo'
 import { POINT_BUY_COSTS } from '../types/ddo'
+
+/**
+ * Optional item catalogue passed to the exporter for F2 (gear-effect
+ * embedding). When provided, each equipped item's full V2 definition — its
+ * <Buff> effects, <SetBonus>, <Material>, <EquipmentSlot> and metadata — is
+ * embedded inside <EquippedGear>, matching what V2 writes and trusts on load.
+ * A bare lookup `Map`/`Record` (name → Item) or a function both work.
+ */
+export type ItemCatalogue =
+  | Map<string, Item>
+  | Record<string, Item>
+  | ((name: string) => Item | undefined)
+
+function lookupItem(cat: ItemCatalogue | undefined, name: string): Item | undefined {
+  if (!cat) return undefined
+  if (typeof cat === 'function') return cat(name)
+  if (cat instanceof Map) return cat.get(name)
+  return cat[name]
+}
 
 // ---------------------------------------------------------------------------
 // XML emission helpers
@@ -67,7 +88,9 @@ class Xml {
 
   /** Leaf element with text content. */
   leaf(tag: string, value: string | number): this {
-    const text = typeof value === 'number' ? String(value) : esc(value)
+    // Catalogue-sourced fields (e.g. a numeric Description1) may arrive as a
+    // non-string; coerce defensively before escaping.
+    const text = typeof value === 'string' ? esc(value) : String(value)
     this.parts.push(`${this.pad()}<${tag}>${text}</${tag}>`)
     return this
   }
@@ -290,12 +313,54 @@ const SNAPSHOT_KEY: Record<Ability, string> = {
   Wisdom: 'SnapshotWisdom', Charisma: 'SnapshotCharisma',
 }
 
+/**
+ * F2 — embed an item's full V2 definition (Buffs + metadata + SetBonus). The
+ * <Name> is emitted by the caller; this adds everything V2 stores after it so
+ * the re-opened file carries the item's effects without re-resolving by name.
+ */
+function emitItemDefinition(xml: Xml, item: Item): void {
+  if (item.Icon) xml.leaf('Icon', item.Icon)
+  if (item.Description) xml.leaf('Description', item.Description)
+  if (item.DropLocation) xml.leaf('DropLocation', item.DropLocation)
+  if (item.MinLevel != null) xml.leaf('MinLevel', item.MinLevel)
+  if (item.EquipmentSlot) {
+    const slots = Object.entries(item.EquipmentSlot).filter(([, on]) => on)
+    if (slots.length > 0) {
+      xml.open('EquipmentSlot')
+      for (const [slot] of slots) xml.empty(slot)
+      xml.close('EquipmentSlot')
+    }
+  }
+  if (item.Material) xml.leaf('Material', item.Material)
+  const buffs: ItemBuff[] = item.Buff
+    ? (Array.isArray(item.Buff) ? item.Buff : [item.Buff])
+    : []
+  for (const b of buffs) {
+    if (!b?.Type) continue
+    xml.open('Buff')
+    xml.leaf('Type', b.Type)
+    if (b.Value1 != null) xml.leaf('Value1', b.Value1)
+    if (b.BonusType) xml.leaf('BonusType', b.BonusType)
+    if (b.Percent) xml.empty('Percent')
+    if (b.Description1) xml.leaf('Description1', b.Description1)
+    if (b.Item) xml.leaf('Item', b.Item)
+    xml.close('Buff')
+  }
+  const sets = item.SetBonus
+    ? (Array.isArray(item.SetBonus) ? item.SetBonus : [item.SetBonus])
+    : []
+  for (const s of sets) {
+    if (s) xml.leaf('SetBonus', s)
+  }
+}
+
 function emitGearSet(
   xml: Xml,
   setName: string,
   slots: Record<string, string>,
   augments: Record<string, string>,
   snapshot?: Partial<Record<Ability, number>>,
+  itemCatalogue?: ItemCatalogue,
 ): void {
   xml.open('EquippedGear')
   xml.leaf('Name', setName)
@@ -303,11 +368,13 @@ function emitGearSet(
     const itemName = slots[v3Slot]
     if (!itemName) continue
     xml.open(v2Slot)
-    // V3 stores gear by name only. V2 embeds the full item definition; emitting
-    // just <Name> means V2 re-opens the slot with the named item but without
-    // V3-side stat effects until re-resolved. (See PARITY_TODO: gear-effect
-    // embedding.)
+    // V3 stores gear by name only. F2: when an item catalogue is supplied, embed
+    // the full item definition (Buffs + metadata) so V2 re-opens the slot with
+    // the item's effects — matching what V2 writes and trusts on load. Without a
+    // catalogue, only <Name> is emitted (V2 then re-resolves by name).
     xml.leaf('Name', itemName)
+    const itemDef = lookupItem(itemCatalogue, itemName)
+    if (itemDef) emitItemDefinition(xml, itemDef)
     // Augments are keyed `slot:type:index` where `index` is the position of the
     // augment in the item's FULL <ItemAugment> list (including empty slots). The
     // importer increments its index counter for every <ItemAugment> entry, even
@@ -402,7 +469,7 @@ function emitFeatsList(xml: Xml, tag: string, feats: string[], type: string): vo
 }
 
 /** Emit the inner <Build>…</Build> element for one build. */
-function emitBuild(xml: Xml, build: CharacterBuild): void {
+function emitBuild(xml: Xml, build: CharacterBuild, itemCatalogue?: ItemCatalogue): void {
   xml.open('Build', 'version="1"')
   const totalLevels = 20 + (build.epicLevels ?? 0) + (build.legendaryLevels ?? 0)
   xml.leaf('Level', totalLevels)
@@ -474,11 +541,11 @@ function emitBuild(xml: Xml, build: CharacterBuild): void {
   const setNames = Object.keys(named)
   if (setNames.length > 0) {
     for (const name of setNames) {
-      emitGearSet(xml, name, named[name] ?? {}, namedAug[name] ?? {}, snapshots[name])
+      emitGearSet(xml, name, named[name] ?? {}, namedAug[name] ?? {}, snapshots[name], itemCatalogue)
     }
   } else if (Object.keys(build.gear ?? {}).length > 0) {
     const name = build.activeGearSetName || 'Standard'
-    emitGearSet(xml, name, build.gear, build.augmentChoices, snapshots[name])
+    emitGearSet(xml, name, build.gear, build.augmentChoices, snapshots[name], itemCatalogue)
   }
   // GearSetSnapshot — names the snapshot baseline set (F3).
   if (build.gearSetSnapshot) xml.leaf('GearSetSnapshot', build.gearSetSnapshot)
@@ -530,7 +597,7 @@ export interface ExportDocument {
  * Character-level tomes/SpecialFeats are taken from the active build (the V2
  * model keeps a single Character-level tome/past-life set shared by all lives).
  */
-export function exportV2Document(doc: ExportDocument): string {
+export function exportV2Document(doc: ExportDocument, itemCatalogue?: ItemCatalogue): string {
   const xml = new Xml()
   xml.raw('<?xml version="1.0"?>')
   xml.open('DDOBuilderCharacterData')
@@ -569,7 +636,7 @@ export function exportV2Document(doc: ExportDocument): string {
     if (life.specialFeats.length > 0) {
       emitFeatsList(xml, 'SpecialFeats', life.specialFeats, 'UniversalTree')
     }
-    for (const build of life.builds) emitBuild(xml, build)
+    for (const build of life.builds) emitBuild(xml, build, itemCatalogue)
     // Life-level self/party buffs round-trip via each build's activeBuffs /
     // ActiveStances; no separate list emitted.
     xml.close('Life')
@@ -595,7 +662,7 @@ export function exportV2Document(doc: ExportDocument): string {
  * importV2Document) to V2 XML. Resolves the active life/build indices from the
  * document's activeLifeId/activeBuildId.
  */
-export function exportV2DocumentModel(doc: CharacterDocument): string {
+export function exportV2DocumentModel(doc: CharacterDocument, itemCatalogue?: ItemCatalogue): string {
   const activeLifeIndex = Math.max(0, doc.lives.findIndex(l => l.id === doc.activeLifeId))
   const activeLife = doc.lives[activeLifeIndex] ?? doc.lives[0]
   const activeBuildIndex = activeLife
@@ -615,16 +682,17 @@ export function exportV2DocumentModel(doc: CharacterDocument): string {
     contentIDontOwn: doc.contentIDontOwn ?? [],
     activeLifeIndex,
     activeBuildIndex,
-  })
+  }, itemCatalogue)
 }
 
 /**
  * Serialise a V3 build into V2 .DDOBuild XML. The output is a complete
  * <DDOBuilderCharacterData> document with a single Life containing a single
  * Build (V3's working model). V2 will open it as a one-life, one-build
- * character.
+ * character. Pass `itemCatalogue` (F2) to embed each equipped item's full V2
+ * definition (Buffs + metadata); omit it to emit gear by name only.
  */
-export function exportV2Build(build: CharacterBuild): string {
+export function exportV2Build(build: CharacterBuild, itemCatalogue?: ItemCatalogue): string {
   return exportV2Document({
     lives: [{
       name: build.name || 'Imported V3 Build',
@@ -638,5 +706,5 @@ export function exportV2Build(build: CharacterBuild): string {
     contentIDontOwn: [],
     activeLifeIndex: 0,
     activeBuildIndex: 0,
-  })
+  }, itemCatalogue)
 }

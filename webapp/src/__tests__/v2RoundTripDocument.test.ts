@@ -11,12 +11,15 @@
 // V2 fixtures: Output/Example Builds/*.DDOBuild
 
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { importV2Build, importV2Document } from '../lib/v2Import'
 import { exportV2Build, exportV2DocumentModel } from '../lib/v2Export'
+import { loadAllCatalogues } from '../server/dataLoaders'
+import type { Item } from '../types/ddo'
 
 const FIXTURE_DIR = join(__dirname, '..', '..', '..', 'Output', 'Example Builds')
+const DATA_DIR = join(__dirname, '..', '..', '..', 'Output', 'DataFiles')
 function load(name: string): string {
   return readFileSync(join(FIXTURE_DIR, name), 'utf-8')
 }
@@ -129,6 +132,47 @@ describe('F4 — ContentIDontOwn + Life SpecialFeats', () => {
     const xml = exportV2DocumentModel(document)
     const { document: second } = importV2Document(xml)
     expect(second.contentIDontOwn).toEqual(document.contentIDontOwn)
+  })
+})
+
+const haveData = existsSync(DATA_DIR)
+const maybeDescribe = haveData ? describe : describe.skip
+
+maybeDescribe('F2 — gear-effect embedding in the exporter', () => {
+  it('embeds each equipped item full <Buff> definition when a catalogue is passed', () => {
+    const build = importV2Build(load('YingsMonk.DDOBuild')).build
+    const cat = loadAllCatalogues(DATA_DIR)
+    const byName = new Map<string, Item>()
+    for (const item of cat.allItems) byName.set(item.Name, item)
+
+    // Without a catalogue: gear is emitted by name only (no embedded Buffs).
+    const nameOnly = exportV2Build(build)
+    // With a catalogue: full item definitions are embedded.
+    const embedded = exportV2Build(build, byName)
+
+    expect(embedded.length).toBeGreaterThan(nameOnly.length)
+    // The embedded output carries <Buff> blocks inside <EquippedGear>; the
+    // name-only output (for the same gear) carries none from item definitions.
+    expect((embedded.match(/<Buff>/g) ?? []).length).toBeGreaterThan(0)
+
+    // Pick an equipped item that exists in the catalogue and assert its buff
+    // metadata is present in the embedded XML.
+    const equippedName = Object.values(build.gear).find(n => byName.has(n))
+    expect(equippedName).toBeDefined()
+    const item = byName.get(equippedName!)!
+    if (item.Material) expect(embedded).toContain(`<Material>${item.Material}</Material>`)
+  })
+
+  it('embedded gear still round-trips item NAMES + augments intact', () => {
+    const build = importV2Build(load('YingsMonk.DDOBuild')).build
+    const cat = loadAllCatalogues(DATA_DIR)
+    const byName = new Map<string, Item>()
+    for (const item of cat.allItems) byName.set(item.Name, item)
+    const second = importV2Build(exportV2Build(build, byName)).build
+    expect(second.gear).toEqual(build.gear)
+    expect(second.augmentChoices).toEqual(build.augmentChoices)
+    expect(second.namedGearSets).toEqual(build.namedGearSets)
+    expect(second.namedGearAugments).toEqual(build.namedGearAugments)
   })
 })
 
