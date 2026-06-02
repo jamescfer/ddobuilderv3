@@ -6,6 +6,15 @@
 
 import type { Effect, ItemBuff, Requirements, Requirement } from '../types/ddo'
 
+// The six ability scores — used to expand Item="All" ability effects (V2 applies
+// an AbilityBonus with ability "All" to every ability, e.g. Completionist +2).
+const ALL_ABILITIES = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'] as const
+
+/** Expands an ability item list, turning "All" into the six ability names. */
+function expandAbilityItems(items: string[]): string[] {
+  return items.flatMap(it => (it === 'All' ? [...ALL_ABILITIES] : [it]))
+}
+
 // ---------------------------------------------------------------------------
 // EffectContext: evaluated build state used to gate effects
 // ---------------------------------------------------------------------------
@@ -162,6 +171,9 @@ export interface ParsedBonus {
   value: number
   bonusType: string  // from Effect.Bonus or ItemBuff.BonusType
   source: string
+  // V2 <Percent/> flag: the value is a percentage of the stat's base total
+  // (BreakdownItem::DoPercentageEffects), not a flat amount.
+  percent?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -286,6 +298,29 @@ function firstItem(effect: Effect): string | undefined {
   return it
 }
 
+/**
+ * V2 ability-driven ATypes read the ability from StackSource (e.g. "Charisma"
+ * or "SnapshotCharisma"); they fall back to Item only as a legacy convenience.
+ * The "Snapshot" prefix is stripped — the stat planner has no temporal snapshot,
+ * so the current ability total is the closest analogue (and far better than 0).
+ */
+function abilityFromEffect(effect: Effect): string | undefined {
+  const raw = effect.StackSource ?? firstItem(effect)
+  if (!raw) return undefined
+  return raw.startsWith('Snapshot') ? raw.slice('Snapshot'.length) : raw
+}
+
+function effectHasCap(effect: Effect): boolean {
+  return effect.Cap !== undefined && effect.Cap !== null
+}
+
+function effectCap(effect: Effect): number {
+  const n = Number(typeof effect.Cap === 'object' && effect.Cap !== null
+    ? (effect.Cap as { '#text'?: unknown })['#text']
+    : effect.Cap)
+  return isNaN(n) ? Infinity : n
+}
+
 function resolveValue(
   effect: Effect,
   rank: number,
@@ -339,38 +374,44 @@ function resolveValue(
     }
 
     // ---------------------------------------------------------------------
-    // Ability-driven stack counts. V2 indexes Amount by ability score for
-    // AbilityValue/Total, by mod for AbilityMod variants. We approximate by
-    // multiplying base * derived-count (matches the typical Simple+stacks shape).
+    // Ability-driven amounts. V2 Effect.cpp:1316-1416 reads the ability from
+    // StackSource (e.g. "Charisma" or "SnapshotCharisma") — NOT from Item, which
+    // for these effects holds the targets (Trip/Sunder/…) — and returns the
+    // ability total / mod directly, ignoring the Amount field. V3 previously
+    // read Item[0] and multiplied by Amount[0], so effects with no Amount and a
+    // StackSource ability (e.g. Warpriest Divine Might) resolved to 0.
     // ---------------------------------------------------------------------
     case 'AbilityValue':
-    case 'AbilityTotal':
-    case 'AbilityTotalIndex': {
-      const ability = firstItem(effect)
+    case 'AbilityTotal': {
+      const ability = abilityFromEffect(effect)
       const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
-      const base = getAmountAtRank(effect.Amount, 1)
-      return base * total
+      return effectHasCap(effect) ? Math.min(total, effectCap(effect)) : total
+    }
+
+    case 'AbilityTotalIndex': {
+      // V2: Amount[min(abilityTotal, size-1)]
+      const ability = abilityFromEffect(effect)
+      const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
+      const v = getAmountAtRank(effect.Amount, total + 1)
+      return effectHasCap(effect) ? Math.min(v, effectCap(effect)) : v
     }
 
     case 'AbilityMod': {
-      const ability = firstItem(effect)
+      const ability = abilityFromEffect(effect)
       const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
-      const base = getAmountAtRank(effect.Amount, 1)
-      return base * abilityModFromTotal(total)
+      return abilityModFromTotal(total)
     }
 
     case 'HalfAbilityMod': {
-      const ability = firstItem(effect)
+      const ability = abilityFromEffect(effect)
       const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
-      const base = getAmountAtRank(effect.Amount, 1)
-      return base * Math.floor(abilityModFromTotal(total) / 2)
+      return Math.trunc(abilityModFromTotal(total) / 2)
     }
 
     case 'ThirdAbilityMod': {
-      const ability = firstItem(effect)
+      const ability = abilityFromEffect(effect)
       const total = ability && ctx ? (ctx.abilityTotals[ability] ?? 0) : 0
-      const base = getAmountAtRank(effect.Amount, 1)
-      return base * Math.floor(abilityModFromTotal(total) / 3)
+      return Math.trunc(abilityModFromTotal(total) / 3)
     }
 
     case 'BAB': {
@@ -492,7 +533,7 @@ export function parseEffect(
   const items = toStringArray(effect.Item)
 
   function make(statKey: string, bt = bonusType): ParsedBonus {
-    return { statKey, value, bonusType: bt, source }
+    return { statKey, value, bonusType: bt, source, percent: effect.Percent === true }
   }
 
   const type = effect.Type
@@ -504,7 +545,7 @@ export function parseEffect(
     case 'AbilityBonus':
     case 'AbilityScore':
       if (items.length > 0) {
-        return items.map(item => make(`ability.${item}`))
+        return expandAbilityItems(items).map(item => make(`ability.${item}`))
       }
       return []
 
@@ -802,11 +843,15 @@ export function parseEffect(
     // Bonus-type-coded variants flow into the same 'ac' stat key with the
     // appropriate exclusive-stack type per V2.
     // -----------------------------------------------------------------------
+    // V2 routes Effect_ArmorACBonus → Breakdown_BonusArmorAC ("Armor % Bonus")
+    // and Effect_ACBonusShield → Breakdown_BonusShieldAC ("Shield % Bonus");
+    // BreakdownItemAC.cpp:115-157 applies these as a PERCENTAGE of the printed
+    // armor (+ enchantment) / shield AC, not as flat AC points.
     case 'ArmorACBonus':
-      return [make('ac', 'Armor')]
+      return [make('armorACPercent', 'Stacking')]
 
     case 'ACBonusShield':
-      return [make('ac', 'Shield')]
+      return [make('shieldACPercent', 'Stacking')]
 
     case 'ArmorCheckPenalty':
       return [make('armorCheckPenalty', 'Penalty')]
@@ -1364,7 +1409,7 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
   }
 
   function make(statKey: string, bt = bonusType): ParsedBonus {
-    return { statKey, value, bonusType: bt, source }
+    return { statKey, value, bonusType: bt, source, percent: buff.Percent === true }
   }
 
   const type = buff.Type
@@ -1388,7 +1433,7 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
 
     case 'AbilityBonus':
       if (items.length > 0) {
-        return items.map(item => make(`ability.${item}`))
+        return expandAbilityItems(items).map(item => make(`ability.${item}`))
       }
       return []
 
@@ -1654,13 +1699,19 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
     // -----------------------------------------------------------------------
     // V2 parity: armor / shield specific
     // -----------------------------------------------------------------------
-    case 'ArmorACBonus':
+    // ArmorBonus/ShieldBonus = flat printed AC; ArmorACBonus/ACBonusShield =
+    // percentage of base armor/shield AC (V2 Breakdown_BonusArmorAC/ShieldAC).
     case 'ArmorBonus':
       return [make('ac', 'Armor')]
 
-    case 'ACBonusShield':
     case 'ShieldBonus':
       return [make('ac', 'Shield')]
+
+    case 'ArmorACBonus':
+      return [make('armorACPercent', 'Stacking')]
+
+    case 'ACBonusShield':
+      return [make('shieldACPercent', 'Stacking')]
 
     case 'ArmorCheckPenalty':
       return [make('armorCheckPenalty', 'Penalty')]

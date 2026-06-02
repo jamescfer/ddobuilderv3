@@ -23,6 +23,12 @@ export interface AttackEntryOptions {
   twoWeaponFightingTier?: 0 | 1 | 2 | 3 | 4
   /** True for two-handed weapons (THF / Strikethrough). */
   twoHanded?: boolean
+  /** Off-hand weapon is a light weapon (reduces TWF attack penalty by 2). */
+  offhandIsLight?: boolean
+  /** Oversized Two Weapon Fighting feat trained (reduces TWF penalty by 2). */
+  oversizedTwf?: boolean
+  /** Character is non-proficient with the main-hand weapon (−4 to-hit). */
+  nonProficient?: boolean
 }
 
 export interface AttackEntryResult {
@@ -104,7 +110,29 @@ export function buildAttackEntry(
   const sneakBonus = sneakDice * 3.5 // 1d6 = 3.5
   const hitDmgRaw = (baseDamage + sneakBonus) * meleePowerMult
 
-  const attackBonus = bab + meleeToHit + abilityMod
+  // V2 BreakdownItemWeaponAttackBonus.cpp:139-191. `meleeToHit` already folds
+  // in BAB-independent bonuses plus the global negative-level / armor-check
+  // penalties (added in useBuildStats). Here we add the weapon-specific
+  // non-proficiency penalty and the per-hand Two Weapon Fighting penalties.
+  const nonProfPenalty = opts.nonProficient ? -4 : 0
+  const rawAttackBonus = bab + meleeToHit + abilityMod + nonProfPenalty
+
+  // TWF attack penalty (only when dual-wielding, i.e. an off-hand is present):
+  //   main hand: −4 with the TWF feat, else −6;  off hand: −4 with TWF, else −10
+  //   +2 to both if the off-hand is light or Oversized TWF is trained.
+  let mainTwfPenalty = 0
+  let offhandTwfPenalty = 0
+  if (opts.offhand) {
+    const hasTwfFeat = (opts.twoWeaponFightingTier ?? 0) >= 1
+    mainTwfPenalty = hasTwfFeat ? -4 : -6
+    offhandTwfPenalty = hasTwfFeat ? -4 : -10
+    if (opts.offhandIsLight || opts.oversizedTwf) {
+      mainTwfPenalty += 2
+      offhandTwfPenalty += 2
+    }
+  }
+
+  const attackBonus = rawAttackBonus + mainTwfPenalty
   const hitC = hitChanceVsAC(attackBonus, opts.foeAC)
 
   // Crit math: threat range = (21 - critThreatRange) .. 20
@@ -134,7 +162,9 @@ export function buildAttackEntry(
       Math.min(1, TWF_OFFHAND_CHANCE[offhandTier] + offhandAttackBonus + offhandDoublestrike)
     const ohDie = avgDie(opts.offhand.diceNum, opts.offhand.diceSides)
     const ohRaw = (ohDie + meleeDamage + abilityMod * (damageAbilMult / 2) + sneakBonus) * meleePowerMult
-    offhandDPR = ohRaw * hitC * offhandChance * helplessFactor
+    // Off-hand swings roll against the off-hand attack bonus (larger TWF penalty).
+    const offhandHitC = hitChanceVsAC(rawAttackBonus + offhandTwfPenalty, opts.foeAC)
+    offhandDPR = ohRaw * offhandHitC * offhandChance * helplessFactor
   }
 
   const fortMitigation = 1 - (opts.foeFortification ?? 0) / 100

@@ -61,6 +61,41 @@ the PR number, so this file doubles as a changelog.
 | 40 | **Genuine round-trip test** — `__tests__/v2RoundTripExport.test.ts` imports a real `.DDOBuild`, exports it, re-imports, and asserts every V3-modeled field survives (identity, classes, abilities, tomes, feats, per-level skills, enhancement/destiny/reaper spend, gear + augments + named sets, stances, notes, guild, past lives). The old `v2RoundTrip*` tests only imported + computed stats — they never re-serialised. | this PR |
 | 41 | **`CompletedQuests` import node-bug fix** — V2 stores `<CompletedQuests>` on the `Build` node (`Build.h`), but `v2Import.ts` read it from the `Life` node, so quest completions never imported. Now reads from `buildNode`. | this PR |
 | 42 | **AC dex cap includes `Effect_MaxDexBonus`** — V2 `BreakdownItemMDB` sums the armor's printed `MaximumDexterityBonus` AND every `Effect_MaxDexBonus` (armor-mastery enhancements, etc.) into one `Breakdown_MaxDexBonus->Total()`. V3 only used the printed item value, so enhancements that raise the dex-to-AC cap were ignored. Now adds the resolved `mdb` stat to the armor cap (no double-count — the printed field is not part of the `mdb` stat). | this PR |
+| 43 | **N1 — AC percentage armor/shield bonuses + armor enchantment** — `Effect_ArmorACBonus`/`Effect_ACBonusShield` now route to dedicated `armorACPercent`/`shieldACPercent` stats; `useBuildStats` applies them as a **percentage** of (armor + armor-enchantment) / shield AC (`trunc()` per V2 `BreakdownItemAC.cpp:115-157`), gating the shield % on an equipped shield. Also folds the armor enchantment (`armor.enchantment`, previously a dangling unused stat) into AC — V2 registers `Effect_EnchantArmor` directly on the AC breakdown. Was: flat AC points + dropped enchantment. | this PR |
+| 44 | **N2 (partial) — combat to-hit penalties** — `useBuildStats` now emits the −1/neg-level and armor-check-penalty to-hit penalties into `melee.attack`/`ranged.attack`; `attackEntry.ts` adds the −4 non-proficiency penalty and the per-hand Two Weapon Fighting penalty (−4 with TWF feat else −6 main / −10 off, +2 for a light off-hand or Oversized TWF), and the off-hand now rolls against its own (larger-penalty) attack bonus. `CombatPanel` wires the off-hand weapon, light-weapon detection (weapon groups) and Oversized TWF. Matches V2 `BreakdownItemWeaponAttackBonus.cpp:70-191`. Remaining: weapon-proficiency *detection* (the `nonProficient` flag is plumbed but `CombatPanel` assumes proficiency — needs the proficiency-group engine). | this PR |
+| 45 | **N4 — FvS/Sorcerer SP multiplier scope** — the `1 + (FvS+Sorc)/min(level,20)` multiplier now applies **only to gear-sourced** spell points (`fromGear` SP), matching V2 `BreakdownItem::Total` which calls `SumItems(m_itemEffects, /*bApplyMultiplier*/ true)` while class/casting-ability/feat SP use `false`. The Sorc/FvS class SP tables are already larger than Wizard/Cleric (base doubling baked into the data). V3 had been multiplying the whole subtotal, over-counting class + ability SP. | this PR |
+| 46 | **N3 — corrected, not a bug** — re-reading `BreakdownItem::Total` (line 207, `SumItems(m_effects, false)`) shows V2 applies `RemoveNonStacking` **only** to `m_itemEffects` (gear); feat/enhancement effects always stack. That is exactly V3's `fromGear` model, so V3's False Life handling already matches V2. The old "highest-only across ALL sources" claim misread the C++; no change made. | this PR |
+| 47 | **BAB override** — `BreakdownItemBAB.cpp:43-55`: an `OverrideBAB` effect boosts BAB up to the character level (capped at `MAX_BAB`=25). V3 parsed it into `babOverride` but never applied it; now folds the positive boost back into `bab`. | this PR |
+| 48 | **Maximum Ki base** — `BreakdownItemMaximumKi.cpp:31-58`: Max Ki = base 40 + WIS mod × 5 (plus `KiMaximum` effects). V3 surfaced only the effect-sourced `ki.max`; now adds the base + WIS contribution. | this PR |
+| 49 | **Ability-driven AType resolution** — `Effect.cpp:1316-1416`: `AbilityValue`/`AbilityTotal`/`AbilityTotalIndex`/`AbilityMod`/`HalfAbilityMod`/`ThirdAbilityMod` read the ability from `StackSource` (e.g. `SnapshotCharisma`), **not** `Item` (which holds the target list), and return the ability total/mod directly, ignoring `Amount`. V3 read `Item[0]` and multiplied by `Amount[0]`, so effects with no `Amount` + a `StackSource` ability resolved to 0. **Broad impact: 32 effects across the data used this pattern** — Monk **AC Bonus: Wisdom** (WIS→AC, class-inline feat), Sacred Fist **AC Bonus: Charisma**, Warpriest **Divine Might** (CHA mod/2 → tactical DCs + attack/damage), and many "stat-to-X" enhancements — all were silently 0. Now reads `StackSource` (strips `Snapshot`) and returns the value/mod. | this PR |
+| 50 | **Percentage effects** (`<Percent/>`) — `BreakdownItem::DoPercentageEffects`: ~186 effects (86 Hitpoints, 63 ACBonus, 17 Weapon_Attack, 10 SpellPoints, …) tag their amount as a **percentage of the stat base total** (e.g. Frenzied Berserker +25% HP). V3 ignored the flag and added them flat. Now `ParsedBonus`/`RawBonus` carry a `percent` flag (set from `effect.Percent`/`buff.Percent`), and a post-pass in `buildStatMap` replaces each stat's percent markers with `trunc(base × Σpercent / 100)` (gear percents still obey Highest-Only via the `fromGear` split). | this PR |
+| 51 | **Auto-acquired feat effects** (`Build::AutomaticFeats` via `<AutomaticAcquisition>`) — V2 grants some feats purely through the per-feat acquisition mechanism (not class `AutomaticFeats` / race `GrantedFeat`), so V3 never applied their **effects**: **Heroic Durability** (`SpecificLevel 1` → **+30 HP for every character** — universal HP under-count) and **Completionist / Racial Completionist** (`AbilityBonus Item="All"` +2 → +2 all abilities for fully past-lifed builds, which V3 listed for display but never applied). Added a targeted pass in `buildStatMap` that applies these (Attack and Defensive Fighting deliberately excluded — already modeled as hardcoded defaults / a stance). Also fixed `Item="All"` `AbilityBonus`/`AbilityScore`/`SkillBonus` to expand to all six abilities / all skills (were dead `ability.All`/`skill.All` keys). | this PR |
+| 52 | **Universal combat base values from the "Attack" feat** — the universal `Attack` feat (no stance gating) grants base **+50% helpless damage** and **+20% strikethrough**. V3 parsed `HelplessDamage`/`Strikethrough` effects but had no base, so the combat estimator under-stated helpless and two-handed multi-target DPS. Added both as base contributions (Attack's base AC 10 / dodge cap 25 / shield PRR / damage multipliers remain modeled as hardcoded defaults, so only these two non-conflicting combat values were added). | this PR |
+
+| 53 | **Gear-derived weapon / fighting-style stances** — V2's StancesPane auto-activates weapon-type and fighting-style stances from the equipped weapons (default ON when wielded). V3 treated all stances as player-toggled, so effects gated on **"Two Handed Fighting"** (43), **"Two Weapon Fighting"** (29), **"Single Weapon Fighting"** (19), the weapon type itself ("Quarterstaff", "Dwarven Axe", "Handwraps", …), or **"Shield"** (56) never fired unless manually toggled. `buildStatMap` now derives these from `gearItems` (main/off-hand weapon type, two-handed/one-handed via weapon groups, shield presence) and merges them into `ctxStances` alongside the player toggles. | this PR |
+
+### Known approximation (noted, not changed)
+
+`ctx.abilityTotals` (used for effect requirement gating and the ability-mod
+ATypes) is the *inherent* total (base + racial + level-ups), not the full
+breakdown total incl. tomes/gear/enhancements. So ability-mod-driven effect
+*values* (e.g. Divine Might CHA mod) and stat-prereq gating use the chargen-ish
+ability rather than the final score — a two-phase-resolve limitation. The actual
+displayed ability scores and their mods (`resolveAbility`) DO include everything.
+
+### BreakdownItem* suite review (this PR) — verified matching, no change needed
+
+`Save` (class saves, divine-grace cap, half-elf lesser grace, neg-levels, ability
+substitution), `PRR`/`MRR`/`MRRCap` (armor BAB×mult + caps), `Dodge` (dodge-cap +
+armor/tower-shield MDB caps), `MDB`, `DR`, `SpellPower`/`UniversalSpellPower`
+(universal added per element), `SpellPoints`, `CasterLevel`, `Ability`, `Skill`
+(ranks + ability + tomes + armor/shield ACP + neg-levels), `DestinyAps`
+(fate/3 + epic×4 + legendary×4), `TurnUndeadLevel`/`HitDice` (max Cleric/DA/Pal-3
++ CHA), `BAB` class-sum. Minor edge cases intentionally **not** changed (niche /
+non-build): greater↔half-elf divine-grace mutual exclusivity, `Mixed Magics`
+caster-level boost, `UniversalSpellPower` Implement-in-hands bonus, and off-hand
+doublestrike derived from main-hand (combat-sim detail — V3's combat is a
+documented simplified estimator).
 
 ---
 
@@ -116,31 +151,19 @@ Remaining read/write-fidelity gaps:
 
 ## High-priority remaining — numerical correctness
 
-- ❌ **N1 — AC: percentage armor/shield bonuses treated as flat.**
-  `effectParser.ts:795-799,1649-1653` maps `ArmorACBonus`→`ac/Armor` and
-  `ACBonusShield`→`ac/Shield` as **flat** AC points. V2 routes these into
-  `Breakdown_BonusArmorAC`/`Breakdown_BonusShieldAC` and applies them as
-  **percentages** of `(armorValue + armorEnhancement)` (`BreakdownItemAC.cpp:115-157`),
-  with the shield % gated on an active Shield stance. A "+X% armor" enhancement
-  adds `X` flat AC in V3 instead of `X%`. Real mismatch on armored builds.
-- ❌ **N2 — Combat to-hit omits TWF / non-proficiency / ACP penalties.**
-  `attackEntry.ts:107` computes `bab + meleeToHit + abilityMod` only; off-hand
-  is a flat proc-rate table. V2 `BreakdownItemWeaponAttackBonus.cpp:79-211`
-  applies the TWF attack penalty (−4/−6 main, −10 off without OTWF; +2 light
-  off-hand), a non-proficiency penalty, and ACP-to-attack. V3 over-states
-  hit-chance (and DPR) for dual-wielders and non-proficient / heavy-armor builds.
-- ❌ **N3 — False Life not a true non-stacking breakdown.**
-  `effectParser.ts:857-858` folds `FalseLife` into the `hp` stat under bonus
-  type "False Life"; because non-gear bonuses always stack (`bonus.ts:210-214`)
-  and only *gear* False Life gets highest-only, multiple non-gear False Life
-  sources stack in V3. V2 keeps a dedicated `Breakdown_FalseLife`
-  (`BreakdownItemHitpoints.cpp:154-166`) that is highest-only across **all**
-  sources. Lower-frequency but real.
-- 🟡 **N4 — FvS/Sorcerer SP multiplier ordering.** V3 applies the
-  `total/min(level,20)` multiplier to the SP subtotal as an added bonus
-  (`useBuildStats.ts:1184-1205`); V2 multiplies the **entire final** breakdown
-  total (`BreakdownItemSpellPoints::Multiplier()`). SP sources added after the
-  multiplier (e.g. fate-point SP) are not multiplied in V3. Small L20+ delta.
+- ✅ **N1 — AC percentage armor/shield bonuses** — fixed (Done #43).
+- 🟡 **N2 — Combat to-hit penalties** — TWF / ACP / negative-level penalties
+  fixed; the off-hand now rolls against its own attack bonus (Done #44).
+  *Remaining:* weapon-proficiency **detection** — the `nonProficient` flag is
+  plumbed through `attackEntry`, but `CombatPanel` always assumes proficiency.
+  Closing it needs an `IsWeaponInGroup("Proficiency", weapon)` engine (weapon
+  groups + the character's proficiency feats / class auto-grants).
+- ✅ **N3 — False Life** — *not a bug* (Done #46). V2's `BreakdownItem::Total`
+  only applies highest-only to gear (`m_itemEffects`); feat/enhancement False
+  Life always stacks — exactly V3's `fromGear` model. The earlier claim
+  misread the C++.
+- ✅ **N4 — FvS/Sorcerer SP multiplier scope** — fixed (Done #45). The
+  multiplier applies to gear SP only, matching V2.
 - ❌ **N5 — Hireling stat passthrough.** V2 has hireling sliders driving a
   hireling sub-build; V3 surfaces them in BreakdownsPanel but doesn't compute a
   hireling.
@@ -282,6 +305,9 @@ These V2 features won't be ported because they don't make sense in a webapp:
 ---
 
 *Maintained by the parity-pass series. See PRs #53–#74 and the Done table
-above for completed items. Last full V2↔V3 review: 2026-06 (added the
-`.DDOBuild` exporter, round-trip test, `CompletedQuests` import fix, and AC
-MDB-effect fix; refreshed the remaining-gap list with verified findings).*
+above for completed items. Last full V2↔V3 review: 2026-06 — section-by-section
+breakdown comparison closing the verified numerical-correctness gaps: AC
+percentage armor/shield bonuses + armor enchantment (N1), combat to-hit TWF /
+ACP / negative-level penalties (N2, partial — proficiency detection pending),
+and the FvS/Sorcerer SP multiplier scope (N4); plus correcting the N3 False
+Life claim, which was a misreading of V2's `m_effects`/`m_itemEffects` split.*

@@ -46,6 +46,8 @@ export interface Effect {
   StackSource?: string
   ApplyAsItemEffect?: boolean
   Rare?: boolean             // effect only applies when filigree slot is marked rare
+  Cap?: unknown              // V2 Effect Cap() — clamps AbilityTotal/Index amounts
+  Percent?: boolean          // V2 <Percent/> — Amount is a % of the stat base
 }
 
 // ---------------------------------------------------------------------------
@@ -183,6 +185,7 @@ export interface ItemBuff {
   BonusType?: string
   Description1?: string
   Item?: string
+  Percent?: boolean          // V2 <Percent/> — Value1 is a % of the stat base
 }
 
 export interface ItemAugment {

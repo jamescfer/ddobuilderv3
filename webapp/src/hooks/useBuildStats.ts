@@ -24,6 +24,7 @@ import { resolveBonus, emptyResolvedStat } from '../lib/bonus'
 import type { RawBonus, ResolvedStat } from '../lib/bonus'
 import { deriveWeaponClasses } from '../lib/weapons/groups'
 import type { WeaponGroupSpec } from '../lib/weapons/groups'
+import { buildAutomaticFeatGroups } from '../lib/automaticFeats'
 import {
   reaperHpCap, styleBonusHp, effectiveDodgeCap,
   divineGraceCap, halfElfLesserDivineGraceCap,
@@ -58,6 +59,7 @@ export interface WeaponInfo {
   critThreatRange: number   // number of threat faces, e.g. 2 = threatens on 19-20
   critMultiplier: number
   attackModifier: string    // 'Strength' | 'Dexterity'
+  weaponType?: string       // base weapon type, e.g. 'Longsword' (for group lookup)
 }
 
 // ---------------------------------------------------------------------------
@@ -97,7 +99,7 @@ function add(map: StatMap, key: string, bonus: RawBonus): void {
 
 function addParsed(map: StatMap, bonuses: ReturnType<typeof parseEffect>, fromGear = false): void {
   for (const pb of bonuses) {
-    add(map, pb.statKey, { value: pb.value, type: pb.bonusType, source: pb.source, fromGear })
+    add(map, pb.statKey, { value: pb.value, type: pb.bonusType, source: pb.source, fromGear, percent: pb.percent })
   }
 }
 
@@ -565,24 +567,35 @@ function accumulateTrainedSpells(
 // Weapon info extractor
 // ---------------------------------------------------------------------------
 
+/** Builds a WeaponInfo from a weapon item (null if the item is not a weapon). */
+export function weaponInfoFromItem(item: Item | undefined, slot: string): WeaponInfo | null {
+  if (!item?.Weapon) return null
+  const am = toArray(item.AttackModifier as string | string[] | undefined)
+  return {
+    name: item.Name,
+    slot,
+    diceNum: item.BaseDice?.Number ?? 1,
+    diceSides: item.BaseDice?.Sides ?? 6,
+    critThreatRange: item.CriticalThreatRange ?? 1,
+    critMultiplier: item.CriticalMultiplier ?? 2,
+    attackModifier: am.length > 0 ? am[0] : 'Strength',
+    weaponType: typeof item.Weapon === 'string' ? item.Weapon : undefined,
+  }
+}
+
 function extractWeaponInfo(gearItems: Record<string, Item>): WeaponInfo | null {
   for (const slot of ['Weapon1', 'MainHand', 'Weapon']) {
-    const item = gearItems[slot]
-    if (item?.Weapon) {
-      const attackMod = (() => {
-        const am = toArray(item.AttackModifier as string | string[] | undefined)
-        return am.length > 0 ? am[0] : 'Strength'
-      })()
-      return {
-        name: item.Name,
-        slot,
-        diceNum: item.BaseDice?.Number ?? 1,
-        diceSides: item.BaseDice?.Sides ?? 6,
-        critThreatRange: item.CriticalThreatRange ?? 1,
-        critMultiplier: item.CriticalMultiplier ?? 2,
-        attackModifier: attackMod,
-      }
-    }
+    const wi = weaponInfoFromItem(gearItems[slot], slot)
+    if (wi) return wi
+  }
+  return null
+}
+
+/** Off-hand weapon for two-weapon fighting (null if no off-hand weapon). */
+export function extractOffhandWeaponInfo(gearItems: Record<string, Item>): WeaponInfo | null {
+  for (const slot of ['Weapon2', 'OffHand']) {
+    const wi = weaponInfoFromItem(gearItems[slot], slot)
+    if (wi) return wi
   }
   return null
 }
@@ -725,6 +738,31 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     const groups = allWeaponGroups ?? []
     const ctxWeaponClassMain = deriveWeaponClasses(mainWeaponType, groups)
     const ctxWeaponClassOff = deriveWeaponClasses(offWeaponType, groups)
+
+    // V2 parity: the StancesPane auto-activates weapon-type and fighting-style
+    // stances from the equipped weapons (they default ON when the weapon is
+    // wielded). Effects gated on "Two Handed Fighting" / "Two Weapon Fighting" /
+    // "Single Weapon Fighting", the weapon type itself ("Quarterstaff",
+    // "Dwarven Axe", "Handwraps", …), or "Shield" otherwise never fired in V3,
+    // where stances were purely player-toggled (43 THF / 29 TWF / 19 SWF +
+    // weapon-type-gated effects in the live data). Player toggles still merge in
+    // via activeBuffs above; this only adds the gear-derived defaults.
+    if (mainWeaponType) ctxStances.add(mainWeaponType)
+    if (offWeaponType) ctxStances.add(offWeaponType)
+    {
+      const hasShield = ['Tower Shield', 'Heavy Shield', 'Light Shield', 'Buckler']
+        .some(s => ctxStances.has(s))
+      if (hasShield) ctxStances.add('Shield')
+      const twoHandedMain = ctxWeaponClassMain.has('Two Handed')
+      const hasOffhandWeapon = offWeaponType !== ''
+      if (twoHandedMain) {
+        ctxStances.add('Two Handed Fighting')
+      } else if (hasOffhandWeapon) {
+        ctxStances.add('Two Weapon Fighting')
+      } else if (mainWeaponType && !hasShield) {
+        ctxStances.add('Single Weapon Fighting')
+      }
+    }
     const ctxSliderValues: Record<string, number> = {
       ...((build as { sliderValues?: Record<string, number> }).sliderValues ?? {}),
     }
@@ -828,6 +866,37 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       if (!count) continue
       const feat = allFeats.find(f => f.Name === source || f.Name === `Past Life: ${source}`)
       if (feat) accumulateFeat(map, feat, count, `Past life: ${source} ×${count}`, build.totalLevel, ctx)
+    }
+
+    // ── Auto-acquired feats (V2 Build::AutomaticFeats via <AutomaticAcquisition>) ──
+    // V2 grants some feats purely through the per-feat AutomaticAcquisition
+    // mechanism — they are in no class AutomaticFeats list nor race GrantedFeat,
+    // so V3's accumulation above never applied their *effects*. The ones with
+    // real stat effects:
+    //   • Heroic Durability — AutomaticAcquisition SpecificLevel 1 → +30 HP for
+    //     every character (universal; V3 was under-counting HP by 30).
+    //   • Completionist / Racial Completionist — +2 to all ability scores when
+    //     every heroic class / race past life is at 3 (gating reused from
+    //     buildAutomaticFeatGroups, which already lists them for display/export).
+    // The other auto-acquired stat feats are deliberately excluded: Attack
+    // (base AC 10, dodge cap 25, shield PRR, damage multipliers — already
+    // modeled as hardcoded defaults / the combat estimator in V3) and Defensive
+    // Fighting (a player-toggled stance).
+    {
+      const alreadyApplied = new Set<string>(Object.values(build.featChoices).filter(Boolean))
+      const autoNames = new Set<string>(['Heroic Durability'])
+      const groups = buildAutomaticFeatGroups(build, allClasses, allRaces ?? [])
+      for (const g of groups) {
+        for (const f of g.feats) {
+          if (f === 'Completionist' || f === 'Racial Completionist') autoNames.add(f)
+        }
+      }
+      for (const fn of autoNames) {
+        if (alreadyApplied.has(fn)) continue
+        if (fn === 'Heroic Durability' && build.totalLevel < 1) continue
+        const feat = allFeats.find(f => f.Name === fn)
+        if (feat) accumulateFeat(map, feat, 1, `Automatic: ${fn}`, build.totalLevel, ctx)
+      }
     }
 
     // ── Heroic enhancements ───────────────────────────────────────────────
@@ -1012,6 +1081,49 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       })
     }
 
+    // V2 BreakdownItemAC.cpp:19-20,115-157 — armor enchantment + percentage
+    // armor/shield AC.
+    //
+    // (1) The AC breakdown registers Effect_EnchantArmor, so an armor's magical
+    //     enchantment ("Armor Enhancement" bonus type) adds to AC directly. V3
+    //     parked it in the unused `armor.enchantment` stat — fold it into AC.
+    // (2) Effect_ArmorACBonus / Effect_ACBonusShield are PERCENTAGE bonuses
+    //     (Breakdown_BonusArmorAC / Breakdown_BonusShieldAC):
+    //       armor amount  = trunc((armorAC + armorEnhancement) * pct / 100)
+    //       shield amount = trunc(shieldAC * pct / 100)   [only with a shield]
+    //     V3 previously added them as flat AC points — wrong on armored builds.
+    const armorEnchantment = resolveBonus(map.get('armor.enchantment') ?? []).total
+    if (armorEnchantment !== 0) {
+      add(map, 'ac', { value: armorEnchantment, type: 'Armor Enhancement', source: 'Armor enchantment' })
+    }
+    {
+      const acBonuses = map.get('ac') ?? []
+      const armorBaseAC = resolveBonus(acBonuses.filter(b => b.type === 'Armor')).total
+      const armorEnhAC  = resolveBonus(acBonuses.filter(b => b.type === 'Armor Enhancement')).total
+      const armorPct = resolveBonus(map.get('armorACPercent') ?? []).total
+      if (armorPct !== 0) {
+        const base = armorBaseAC + armorEnhAC
+        const amount = Math.trunc((base * armorPct) / 100)
+        if (amount !== 0) {
+          add(map, 'ac', { value: amount, type: 'Stacking', source: `Armor ${armorPct}% of ${base}` })
+        }
+      }
+      // Shield % bonus is gated on a shield being equipped (V2 "Shield" stance)
+      // and uses only the printed shield AC as its base.
+      const hasShield = armorStances.has('Tower Shield') || armorStances.has('Heavy Shield')
+        || armorStances.has('Light Shield') || armorStances.has('Buckler')
+      if (hasShield) {
+        const shieldBaseAC = resolveBonus(acBonuses.filter(b => b.type === 'Shield')).total
+        const shieldPct = resolveBonus(map.get('shieldACPercent') ?? []).total
+        if (shieldPct > 0) {
+          const amount = Math.trunc((shieldBaseAC * shieldPct) / 100)
+          if (amount !== 0) {
+            add(map, 'ac', { value: amount, type: 'Stacking', source: `Shield ${shieldPct}% of ${shieldBaseAC}` })
+          }
+        }
+      }
+    }
+
     // HP: CON mod correction if gear changed CON
     if (conModFull !== conMod && build.totalLevel > 0) {
       const delta = (conModFull - conMod) * build.totalLevel
@@ -1022,6 +1134,22 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
 
     // Speed base
     add(map, 'speed', { value: 100, type: 'Base', source: 'Base movement speed' })
+
+    // V2 "Attack" feat (universal, no stance gating) grants base combat values
+    // that V3 otherwise lacked a default for: +50% damage vs helpless foes and
+    // +20% strikethrough. (The Attack feat's other base effects — base AC 10,
+    // dodge cap 25, shield PRR, damage multipliers — are modeled elsewhere as
+    // hardcoded defaults, so only these two are added here.)
+    add(map, 'helpless', { value: 50, type: 'Base', source: 'Attack (base helpless damage)' })
+    add(map, 'melee.strikethrough', { value: 20, type: 'Base', source: 'Attack (base strikethrough)' })
+
+    // V2 BreakdownItemMaximumKi.cpp:31-58 — Maximum Ki = base 40 + WIS mod × 5
+    // (plus any KiMaximum effects, parsed into ki.max). V2 adds the base + WIS
+    // contribution unconditionally; V3 had only the effect-sourced ki.max.
+    add(map, 'ki.max', { value: 40, type: 'Base', source: 'Standard Max Ki' })
+    if (wisMod !== 0) {
+      add(map, 'ki.max', { value: wisMod * 5, type: 'Ability', source: 'Wisdom bonus ×5' })
+    }
 
     // ── Skill points ──────────────────────────────────────────────────────
     // V2 Class::SkillPoints: max(1, classBase + raceSkillBonus + intModForLevel),
@@ -1128,6 +1256,21 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       }
     }
 
+    // V2 BreakdownItemBAB.cpp:43-55 — an OverrideBAB effect (e.g. Tenser's
+    // Transformation, certain enhancements) boosts BAB up to the character
+    // level, capped at MAX_BAB. V3 parsed the effect into `babOverride` but
+    // never applied it; fold the positive boost back into `bab`.
+    {
+      const babOverride = resolveBonus(map.get('babOverride') ?? []).total
+      if (babOverride > 0) {
+        const classBabSum = resolveBonus(map.get('bab') ?? []).total
+        const boost = Math.min(MAX_BAB, build.totalLevel) - classBabSum
+        if (boost > 0) {
+          add(map, 'bab', { value: boost, type: 'Stacking', source: 'BAB boost to character level (max 25)' })
+        }
+      }
+    }
+
     // ── Armor PRR (BAB × armor multiplier) ───────────────────────────────
     // V2 BreakdownItemPRR::CreateOtherEffects (BreakdownItemPRR.cpp:43-122):
     //   Light Armor + Light Armor Proficiency: BAB × 1
@@ -1194,6 +1337,17 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
 
     // V2 Favored Soul / Sorcerer SP multiplier = 1 + (FvS+Sorc levels) / min(buildLevel, 20).
     // Pure FvS/Sorc 20 → 2x SP; multiclass → partial multiplier.
+    //
+    // V2 parity (BreakdownItemSpellPoints::Multiplier + BreakdownItem::Total):
+    // the multiplier is applied ONLY to item (gear) spell-point effects —
+    // SumItems(m_itemEffects, /*bApplyMultiplier*/ true) — while class SP,
+    // casting-ability SP and feat/enhancement SP (m_otherEffects / m_effects)
+    // are summed with bApplyMultiplier = false. The class SP tables for
+    // Sorcerer/Favored Soul are already larger than the Wizard/Cleric tables,
+    // so the base doubling is baked into the data; the run-time multiplier only
+    // boosts SP granted by equipment. Multiplying the whole subtotal (as V3 did
+    // previously) over-counted class and ability SP. (V2 comment:
+    // "favored souls and sorcerers get up to double spell points from item effects".)
     {
       const fvsLv  = build.classes.filter(c => c.name === 'Favored Soul').reduce((s, c) => s + c.levels, 0)
       const sorcLv = build.classes.filter(c => c.name === 'Sorcerer').reduce((s, c) => s + c.levels, 0)
@@ -1202,13 +1356,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
         const lvCap = Math.min(build.totalLevel, 20)
         if (lvCap > 0) {
           const factor = total / lvCap
-          const baseSP = resolveBonus(map.get('spellPoints') ?? []).total
-          const bonus = Math.round(baseSP * factor)
+          // Only the gear-sourced SP contributions are multiplied (V2 m_itemEffects).
+          const gearSP = resolveBonus((map.get('spellPoints') ?? []).filter(b => b.fromGear)).total
+          const bonus = Math.round(gearSP * factor)
           if (bonus !== 0) {
             add(map, 'spellPoints', {
               value: bonus,
               type: 'Multiplier',
-              source: `Favored Soul/Sorcerer SP multiplier (×${(1 + factor).toFixed(2)})`,
+              source: `Favored Soul/Sorcerer item-SP multiplier (×${(1 + factor).toFixed(2)})`,
             })
           }
         }
@@ -1233,6 +1388,22 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
         type: 'Stacking',
         source: `Negative levels (-5 × ${negLevels})`,
       })
+    }
+
+    // V2 BreakdownItemWeaponAttackBonus.cpp:82-115 — weapon attack bonus takes
+    // -1 per negative level and the (positive-clamped) armor check penalty.
+    // Both apply to melee and ranged to-hit; flow into the `*.attack` keys that
+    // attackEntry adds onto the attack bonus.  (Non-proficiency and TWF
+    // penalties are weapon-specific and handled in attackEntry / below.)
+    if (negLevels > 0) {
+      const src = `Negative levels (-1 × ${negLevels})`
+      add(map, 'melee.attack',  { value: -negLevels, type: 'Penalty', source: src })
+      add(map, 'ranged.attack', { value: -negLevels, type: 'Penalty', source: src })
+    }
+    if (armorACP < 0) {
+      // V2 applies the armor check penalty to attack regardless of weapon.
+      add(map, 'melee.attack',  { value: armorACP, type: 'Penalty', source: 'Armor check penalty' })
+      add(map, 'ranged.attack', { value: armorACP, type: 'Penalty', source: 'Armor check penalty' })
     }
 
     // V2 fate points (BreakdownItemHitpoints.cpp:88-105 +2 HP each;
@@ -1389,6 +1560,47 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
           })
         }
       }
+    }
+
+    // V2 SkillBonus with Item="All" applies to every skill (e.g. Completionist
+    // +2 all skills). Distribute any skill.All contributions onto each skill,
+    // then drop the marker key (which is otherwise never read).
+    {
+      const skillAll = map.get('skill.All')
+      if (skillAll && skillAll.length > 0) {
+        for (const { name } of SKILLS) {
+          const key = `skill.${name}`
+          const list = map.get(key) ?? []
+          for (const b of skillAll) list.push({ ...b })
+          map.set(key, list)
+        }
+        map.delete('skill.All')
+      }
+    }
+
+    // ── Percentage effects (V2 BreakdownItem::DoPercentageEffects) ────────
+    // Effects tagged <Percent/> add (base × percent / 100) of the stat's own
+    // base total rather than a flat amount (e.g. Frenzied Berserker +25% HP).
+    // V2 applies them last, against the pre-percentage base, summing all active
+    // percent contributions (gear percents still obey Highest-Only via the
+    // fromGear split in resolveBonus). Rewrite each affected stat's bonus list:
+    // drop the raw percent markers and append the single computed contribution.
+    for (const [key, bonuses] of map) {
+      const pctBonuses = bonuses.filter(b => b.percent)
+      if (pctBonuses.length === 0) continue
+      const flatBonuses = bonuses.filter(b => !b.percent)
+      const base = resolveBonus(flatBonuses).total
+      const percentSum = resolveBonus(pctBonuses.map(b => ({ ...b, percent: false }))).total
+      const contribution = Math.trunc((base * percentSum) / 100)
+      const rebuilt = flatBonuses
+      if (contribution !== 0) {
+        rebuilt.push({
+          value: contribution,
+          type: 'Stacking',
+          source: `${percentSum}% of ${base}`,
+        })
+      }
+      map.set(key, rebuilt)
     }
 
   return map
