@@ -1311,15 +1311,19 @@ export function parseEffect(
       return [make('weapon.critMultiplier19to20')]
     case 'Weapon_CriticalRange':
       return [make('weapon.critRange')]
+    // Crit-only damage bonuses (V2 BreakdownItemWeaponDamageBonus.cpp:184-202):
+    // extra damage that lands only on a confirmed crit. Surfaced as
+    // `melee.crit.damage` so the DPR estimator can add it on crits.
+    case 'Weapon_DamageCritical':
+    case 'Weapon_AttackAndDamageCritical':
+    case 'WeaponOtherDamageBonusCritical':
+      return [make('melee.crit.damage')]
     case 'Weapon_AttackAbility':
     case 'Weapon_BaseDamage':
     case 'Weapon_DamageAbility':
     case 'Weapon_Enchantment':
     case 'Weapon_AttackCritical':
-    case 'Weapon_DamageCritical':
-    case 'Weapon_AttackAndDamageCritical':
     case 'WeaponOtherDamageBonus':
-    case 'WeaponOtherDamageBonusCritical':
     case 'WeaponOtherDamageBonusClass':
     case 'WeaponOtherDamageBonusCriticalClass':
     case 'WeaponAlacrityClass':
@@ -2139,19 +2143,22 @@ export function parseItemBuff(
       return [make('weapon.critMultiplier19to20')]
     case 'Weapon_CriticalRange':
       return [make('weapon.critRange')]
+    // Crit-only damage bonuses (V2 BreakdownItemWeaponDamageBonus.cpp:184-202):
+    // surfaced as `melee.crit.damage` for the DPR estimator's crit term.
+    case 'Weapon_AttackAndDamageCritical':
+    case 'Weapon_DamageCritical':
+    case 'WeaponOtherDamageBonusCritical':
+      return [make('melee.crit.damage')]
     case 'Weapon_Attack':
     case 'Weapon_AttackAbility':
     case 'Weapon_AttackAndDamage':
-    case 'Weapon_AttackAndDamageCritical':
     case 'Weapon_AttackCritical':
     case 'Weapon_BaseDamage':
     case 'Weapon_Damage':
     case 'Weapon_DamageAbility':
-    case 'Weapon_DamageCritical':
     case 'Weapon_Enchantment':
     case 'Weapon_OtherDamageBonus':
     case 'WeaponOtherDamageBonus':
-    case 'WeaponOtherDamageBonusCritical':
     case 'WeaponOtherDamageBonusClass':
     case 'WeaponOtherDamageBonusCriticalClass':
     case 'WeaponAlacrityClass':
