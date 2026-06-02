@@ -129,6 +129,19 @@ describe('computeCasterLevel', () => {
     // base cl = 10 + 3(cl.All) = 13; max = 10 + 3(maxCl.All) = 13 (max(13,10)=13)
     expect(computeCasterLevel(spell, wizard, 10, stats)).toBe(13)
   })
+  it('Mixed Magics raises class CL to character level — V2 BreakdownItemCasterLevel.cpp:77-100', () => {
+    // A Sorcerer/Wild Mage 12 splash on a level-20 character: without Mixed Magics
+    // the class CL is 12; with it, CL becomes min(20, 20)=20.
+    const spell: Spell = { Name: 'Fireball', MaxCasterLevel: 30, School: 'Evocation' }
+    const stats = makeStats({})
+    expect(computeCasterLevel(spell, wizard, 12, stats)).toBe(12)
+    expect(computeCasterLevel(spell, wizard, 12, stats, { mixedMagicsCharacterLevel: 20 })).toBe(20)
+  })
+  it('Mixed Magics never lowers CL when class level already exceeds char level', () => {
+    const spell: Spell = { Name: 'Fireball', MaxCasterLevel: 30, School: 'Evocation' }
+    // classLevel 20, character level cap 20 → delta 0, no change.
+    expect(computeCasterLevel(spell, wizard, 20, makeStats({}), { mixedMagicsCharacterLevel: 20 })).toBe(20)
+  })
 })
 
 describe('computeSpellCost', () => {

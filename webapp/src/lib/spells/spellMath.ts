@@ -132,14 +132,27 @@ export function computeSpellDC(
 /**
  * Caster level for a spell. Mirrors V2 Spell.cpp:174-197.
  * Result is capped at MaxCasterLevel.
+ *
+ * `options.mixedMagicsCharacterLevel`: when the build has trained the
+ * "Mixed Magics" enhancement (Wild Mage `WMUnstableSorcery` or Arcane
+ * Trickster `ATMoreMagicMoreFun`), V2 raises that class's caster level to
+ * min(20, character level) — implemented in BreakdownItemCasterLevel.cpp:77-100
+ * as an extra (maxLevel - classLevels) "other effect" on the class CL
+ * breakdown. We pass min(20, totalLevel) here and add the same delta.
  */
 export function computeCasterLevel(
   spell: Spell,
   cls: DDOClass | undefined,
   classLevel: number,
   stats: BuildStats,
+  options: { mixedMagicsCharacterLevel?: number } = {},
 ): number {
   let cl = classLevel
+  // V2 BreakdownItemCasterLevel.cpp:77-100: Mixed Magics adds (min(20,charLvl)
+  // - classLevels) so effective class CL becomes the character level.
+  if (options.mixedMagicsCharacterLevel != null) {
+    cl += Math.max(0, options.mixedMagicsCharacterLevel - classLevel)
+  }
   if (cls) cl += stats.total(`cl.${cls.Name}`)
   for (const sch of toArray(spell.School)) {
     cl += stats.total(`clSchool.${sch}`)
