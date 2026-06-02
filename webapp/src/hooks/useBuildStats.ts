@@ -45,6 +45,9 @@ export interface BuildStats {
   weapon: WeaponInfo | null
   /** Armor max-DEX cap (null = no cap) */
   armorMaxDex: number | null
+  /** Sorted list of SLA spell names derived from SpellLikeAbility effects
+   *  (V2 CSLAControl parity — replaces manual build.slaCharges for display). */
+  slaList: string[]
 }
 
 export interface WeaponInfo {
@@ -1400,6 +1403,10 @@ export function computeBuildStats(input: BuildStatsInput, build: CharacterBuild)
   const map = buildStatMap(input, build)
   const weaponInfo = extractWeaponInfo(input.gearItems)
   const armorMaxDex = extractArmorMaxDex(input.gearItems)
+  const slaList = Array.from(map.keys())
+    .filter(k => k.startsWith('sla.'))
+    .sort()
+    .map(k => k.slice(4))
   return {
     resolve: (key: string): ResolvedStat => {
       const bonuses = map.get(key)
@@ -1412,6 +1419,7 @@ export function computeBuildStats(input: BuildStatsInput, build: CharacterBuild)
     keys: () => Array.from(map.keys()),
     weapon: weaponInfo,
     armorMaxDex,
+    slaList,
   }
 }
 
@@ -1433,19 +1441,26 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
   const weaponInfo = useMemo(() => extractWeaponInfo(input.gearItems), [input.gearItems])
   const armorMaxDex = useMemo(() => extractArmorMaxDex(input.gearItems), [input.gearItems])
 
-  return useMemo<BuildStats>(() => ({
-    resolve: (key: string): ResolvedStat => {
-      const bonuses = statMap.get(key)
-      return bonuses?.length ? resolveBonus(bonuses) : emptyResolvedStat()
-    },
-    total: (key: string): number => {
-      const bonuses = statMap.get(key)
-      return bonuses?.length ? resolveBonus(bonuses).total : 0
-    },
-    keys: () => Array.from(statMap.keys()),
-    weapon: weaponInfo,
-    armorMaxDex,
-  }), [statMap, weaponInfo, armorMaxDex])
+  return useMemo<BuildStats>(() => {
+    const slaList = Array.from(statMap.keys())
+      .filter(k => k.startsWith('sla.'))
+      .sort()
+      .map(k => k.slice(4))
+    return {
+      resolve: (key: string): ResolvedStat => {
+        const bonuses = statMap.get(key)
+        return bonuses?.length ? resolveBonus(bonuses) : emptyResolvedStat()
+      },
+      total: (key: string): number => {
+        const bonuses = statMap.get(key)
+        return bonuses?.length ? resolveBonus(bonuses).total : 0
+      },
+      keys: () => Array.from(statMap.keys()),
+      weapon: weaponInfo,
+      armorMaxDex,
+      slaList,
+    }
+  }, [statMap, weaponInfo, armorMaxDex])
 }
 
 // ---------------------------------------------------------------------------
