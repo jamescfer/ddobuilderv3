@@ -1529,6 +1529,22 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       }
     }
 
+    // V2 SkillBonus with Item="All" applies to every skill (e.g. Completionist
+    // +2 all skills). Distribute any skill.All contributions onto each skill,
+    // then drop the marker key (which is otherwise never read).
+    {
+      const skillAll = map.get('skill.All')
+      if (skillAll && skillAll.length > 0) {
+        for (const { name } of SKILLS) {
+          const key = `skill.${name}`
+          const list = map.get(key) ?? []
+          for (const b of skillAll) list.push({ ...b })
+          map.set(key, list)
+        }
+        map.delete('skill.All')
+      }
+    }
+
     // ── Percentage effects (V2 BreakdownItem::DoPercentageEffects) ────────
     // Effects tagged <Percent/> add (base × percent / 100) of the stat's own
     // base total rather than a flat amount (e.g. Frenzied Berserker +25% HP).

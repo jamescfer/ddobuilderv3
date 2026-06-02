@@ -36,6 +36,7 @@ const completionist = {
   Name: 'Completionist', Acquire: 'Automatic',
   Effect: [
     { Type: 'AbilityBonus', Bonus: 'Feat', AType: 'Simple', Amount: '2', Item: 'All' },
+    { Type: 'SkillBonus', Bonus: 'Feat', AType: 'Simple', Amount: '2', Item: 'All' },
   ],
 } as unknown as Feat
 
@@ -103,5 +104,13 @@ describe('Completionist — +2 to every ability when fully past-lifed', () => {
     expect(stats.total('ability.Strength')).toBe(12)
     expect(stats.total('ability.Wisdom')).toBe(12)
     expect(stats.total('ability.Charisma')).toBe(12)
+  })
+
+  it('also applies +2 to every skill (SkillBonus Item="All" expansion)', () => {
+    const stats = computeBuildStats(input([completionist]), fighter(20, { Fighter: 3 }))
+    // Completionist raises the governing ability to 12 (+1 mod) AND grants +2 to
+    // all skills: Heal (WIS) = +1 mod + 2 = 3; Jump (STR) = +1 mod + 2 = 3.
+    expect(stats.total('skill.Heal')).toBe(3)
+    expect(stats.total('skill.Jump')).toBe(3)
   })
 })
