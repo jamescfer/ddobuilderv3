@@ -56,6 +56,7 @@ the PR number, so this file doubles as a changelog.
 | 35 | Stance requirement evaluation against activeBuffs — `RequirementContext` gains an optional `activeBuffs?: string[]` field; the `Stance` case in `meetsSingleRequirement` now checks `ctx.activeBuffs.includes(item)` when the field is provided, and passes conservatively when it is absent (V2 `Requirement.cpp:1062-1072 EvaluateStance` parity). | #71 |
 | 36 | Reaper XP required for n RAPs — `reaperXpRequired(n)` in `lib/v2Formulas.ts` implements V2 `ReaperEnhancementsPane.cpp:248-255` loop (sum of first n odd numbers = n²); `ReaperPanel` now shows "Requires Nk Reaper XP" next to RAPs spent, matching V2's panel title. | #72 |
 | 37 | Player-toggled stances in effect-context stances — `buildStatMap` now merges `build.activeBuffs` into `ctxStances` so all 1 000+ enhancement effects gated on non-armor stances (Mountain Stance, Favored Weapon, Power Attack, Rage, Two Handed Fighting, Action Boost, …) correctly fire or not based on the player's current stance selection (V2 `Build::IsStanceActive` parity). | #73 |
+| 38 | SLA list auto-derived from SpellLikeAbility effects — `parseEffect` now emits `sla.<spellName>` markers for `SpellLikeAbility` effects (feats, race grants, enhancements, augments); `BuildStats.slaList` exposes the sorted list of derived SLA names; forum export `slas` section now uses `stats.slaList` instead of the manual `build.slaCharges` fallback, matching V2 `CSLAControl`/`ForumExportDlg::AddSLAs` parity. | #74 |
 
 ---
 
@@ -116,8 +117,11 @@ the PR number, so this file doubles as a changelog.
   when absent (V2 `Requirement.cpp:1062 EvaluateStance` parity). (#71)
   `Skill` and `EnemyType` remain permissive (runtime-only conditions).
 
-- ❌ **`SLA` (Spell-Like Ability)** effects are partial — caster level +
-  charges + recharge are read but charge consumption isn't simulated.
+- ✅ **`SLA` (Spell-Like Ability)** effects — `parseEffect` now emits
+  `sla.<spellName>` markers for `SpellLikeAbility` effects; `BuildStats.slaList`
+  exposes the sorted derived SLA name list; forum export `slas` section uses
+  `stats.slaList` (V2 `CSLAControl`/`ForumExportDlg::AddSLAs` parity). Charge
+  consumption is not simulated (runtime-only, out of scope for a stat planner). (#74)
 - ✅ **`Slider` effects with stance gating** — `buildStatMap` now merges
   `build.activeBuffs` into `ctxStances`; all Stance-gated SliderValue effects
   (e.g. Blessed Purpose / Favored Weapon) now correctly fire. (#73)
@@ -247,4 +251,4 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#72 for completed items.*
+*Maintained by the parity-pass series. See PRs #53–#74 for completed items.*

@@ -384,11 +384,17 @@ const notes: SectionDef = {
 const slas: SectionDef = {
   id: 'SLAs',
   label: 'Spell-Like Abilities',
-  emit: ({ build }) => {
-    const entries = Object.entries(build.slaCharges).filter(([, c]) => c > 0)
-    if (entries.length === 0) return []
-    const out = ['[b]SLAs[/b]:']
-    for (const [name, charges] of entries) out.push(`  ${name}: ${charges} charges`)
+  // V2 ForumExportDlg.cpp:1648-1679 (AddSLAs): lists names from CSLAControl,
+  // which is auto-populated from SpellLikeAbility effects.  Use stats.slaList
+  // when available; fall back to manually-set slaCharges for older callers.
+  emit: ({ build, stats }) => {
+    const names = stats?.slaList?.length
+      ? stats.slaList
+      : Object.keys(build.slaCharges).filter(k => (build.slaCharges[k] ?? 0) > 0)
+    if (names.length === 0) return []
+    const out = ['Spell Like / Special Abilities', '[HR][/HR]']
+    for (const name of names) out.push(`  ${name}`)
+    out.push('[HR][/HR]')
     return out
   },
 }
