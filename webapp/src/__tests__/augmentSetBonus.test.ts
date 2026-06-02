@@ -141,3 +141,41 @@ describe('augment-granted set bonuses (V2 Item::HasSetBonus parity)', () => {
     expect(stats.total('prr')).toBe(10)
   })
 })
+
+describe('filigree rare-effect gating (V2 Filigree::RareEffects parity)', () => {
+  // A filigree whose normal effect is +2 Fire spell power and whose RARE effect
+  // adds a further +3. V2 Filigree.cpp:56-80 + Effect_Rare DL_FLAG: the rare
+  // effect applies only when the slot is marked rare.
+  const filigree: Filigree = {
+    Name: 'Test Filigree',
+    Effect: [
+      { Type: 'SpellPower', Bonus: 'Artifact', AType: 'Simple', Amount: 2, Item: 'Fire' },
+      { Type: 'SpellPower', Bonus: 'Artifact', AType: 'Simple', Amount: 3, Item: 'Fire', Rare: true },
+    ],
+  } as unknown as Filigree
+
+  function statsFor(rare: boolean) {
+    const build = {
+      ...makeEmptyBuild(),
+      filigreeSlots: [{ name: 'Test Filigree', rare }],
+    }
+    return computeBuildStats({ ...emptyInput(), allFiligrees: [filigree] }, build)
+  }
+
+  // Note: a small Spellcraft governing-skill bonus is auto-applied to spell
+  // power (section A), so we assert via the active-bonus list from the
+  // filigree source rather than the raw total.
+  function filigreeSpBonuses(rare: boolean): number[] {
+    return statsFor(rare).resolve('sp.Fire').bonuses
+      .filter(b => b.active && b.source.startsWith('Filigree:'))
+      .map(b => b.value)
+  }
+
+  it('non-rare slot applies ONLY the normal effect', () => {
+    expect(filigreeSpBonuses(false)).toEqual([2])
+  })
+
+  it('rare slot applies normal + rare effects', () => {
+    expect(filigreeSpBonuses(true).sort((a, b) => a - b)).toEqual([2, 3])
+  })
+})

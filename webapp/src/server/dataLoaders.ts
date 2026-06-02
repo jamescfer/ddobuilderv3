@@ -338,7 +338,20 @@ export function loadFiligreeSets(dataDir: string): Filigree[] {
   return files.flatMap(f => {
     try {
       const parsed = readXml(path.join(dir, f)) as { Filigrees?: { Filigree?: unknown[] } }
-      return (parsed?.Filigrees?.Filigree ?? []) as Filigree[]
+      const filigrees = (parsed?.Filigrees?.Filigree ?? []) as Filigree[]
+      // V2 Effect_Rare is a DL_FLAG (Effect.h:623) splitting normal vs rare
+      // effects (Filigree::NormalEffects/RareEffects). The XML self-closing
+      // <Rare/> parses to "" (falsy), so the rare-slot gate in useBuildStats
+      // never fired. Promote presence to an explicit boolean.
+      return filigrees.map(fil => {
+        const effects = fil.Effect
+        if (effects === undefined) return fil
+        const list = Array.isArray(effects) ? effects : [effects]
+        const normEffects = list.map(e =>
+          'Rare' in (e as object) ? { ...e, Rare: true } : e,
+        )
+        return { ...fil, Effect: Array.isArray(effects) ? normEffects : normEffects[0] }
+      })
     } catch { return [] }
   })
 }
