@@ -1110,6 +1110,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     // Speed base
     add(map, 'speed', { value: 100, type: 'Base', source: 'Base movement speed' })
 
+    // V2 "Attack" feat (universal, no stance gating) grants base combat values
+    // that V3 otherwise lacked a default for: +50% damage vs helpless foes and
+    // +20% strikethrough. (The Attack feat's other base effects — base AC 10,
+    // dodge cap 25, shield PRR, damage multipliers — are modeled elsewhere as
+    // hardcoded defaults, so only these two are added here.)
+    add(map, 'helpless', { value: 50, type: 'Base', source: 'Attack (base helpless damage)' })
+    add(map, 'melee.strikethrough', { value: 20, type: 'Base', source: 'Attack (base strikethrough)' })
+
     // V2 BreakdownItemMaximumKi.cpp:31-58 — Maximum Ki = base 40 + WIS mod × 5
     // (plus any KiMaximum effects, parsed into ki.max). V2 adds the base + WIS
     // contribution unconditionally; V3 had only the effect-sourced ki.max.
