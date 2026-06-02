@@ -278,9 +278,22 @@ function getOptions(
         return updateList.includes(f.Name)
       }
 
-      // Otherwise: match feat group to slot type (V2 behavior)
+      // Otherwise: match feat group to slot type (V2 behavior, Build.cpp:1523-1527)
       const featGroups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
-      return slotMatchesFeat(slot.featType, featGroups)
+      if (slotMatchesFeat(slot.featType, featGroups)) return true
+
+      // V2 Build.cpp:1528-1538: ConditionalGroup adds extra group memberships when
+      // its RequirementsToUse (here the nested Requirements) are met.
+      const cg = f.ConditionalGroup
+      if (cg) {
+        const condGroups = Array.isArray(cg.Group) ? cg.Group : cg.Group ? [cg.Group] : []
+        if (condGroups.length > 0
+          && slotMatchesFeat(slot.featType, condGroups)
+          && sharedMeetsRequirements(cg.Requirements, { build: snap, allClasses, race })) {
+          return true
+        }
+      }
+      return false
     })
     .map(f => ({ feat: f, prereqsMet: sharedMeetsRequirements(f.Requirements, { build: snap, allClasses, race }) }))
     .sort((a, b) => {

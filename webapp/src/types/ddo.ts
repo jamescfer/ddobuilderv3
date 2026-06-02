@@ -119,11 +119,23 @@ export interface DDOClass {
 // ---------------------------------------------------------------------------
 // Feat
 // ---------------------------------------------------------------------------
+/**
+ * V2 ConditionalGroup (ConditionalGroup.h): a list of additional feat-selection
+ * groups a feat is offered under when RequirementsToUse is met (Build.cpp:1528-1538).
+ * XML element is <ConditionalGroup> with nested <Group> entries + <Requirements>.
+ */
+export interface ConditionalGroup {
+  Group?: string | string[]
+  Requirements?: Requirements
+}
+
 export interface Feat {
   Name: string
   Description?: string
   Icon?: string
   Group?: string | string[]
+  /** V2 Feat::ConditionalGroups — extra Group memberships gated by Requirements. */
+  ConditionalGroup?: ConditionalGroup
   Acquire?: string
   /** V2 Feat::Sphere — used to categorise epic past lives (Arcane / Divine / Martial / Primal). */
   Sphere?: string
