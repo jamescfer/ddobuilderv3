@@ -802,11 +802,15 @@ export function parseEffect(
     // Bonus-type-coded variants flow into the same 'ac' stat key with the
     // appropriate exclusive-stack type per V2.
     // -----------------------------------------------------------------------
+    // V2 routes Effect_ArmorACBonus → Breakdown_BonusArmorAC ("Armor % Bonus")
+    // and Effect_ACBonusShield → Breakdown_BonusShieldAC ("Shield % Bonus");
+    // BreakdownItemAC.cpp:115-157 applies these as a PERCENTAGE of the printed
+    // armor (+ enchantment) / shield AC, not as flat AC points.
     case 'ArmorACBonus':
-      return [make('ac', 'Armor')]
+      return [make('armorACPercent', 'Stacking')]
 
     case 'ACBonusShield':
-      return [make('ac', 'Shield')]
+      return [make('shieldACPercent', 'Stacking')]
 
     case 'ArmorCheckPenalty':
       return [make('armorCheckPenalty', 'Penalty')]
@@ -1654,13 +1658,19 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
     // -----------------------------------------------------------------------
     // V2 parity: armor / shield specific
     // -----------------------------------------------------------------------
-    case 'ArmorACBonus':
+    // ArmorBonus/ShieldBonus = flat printed AC; ArmorACBonus/ACBonusShield =
+    // percentage of base armor/shield AC (V2 Breakdown_BonusArmorAC/ShieldAC).
     case 'ArmorBonus':
       return [make('ac', 'Armor')]
 
-    case 'ACBonusShield':
     case 'ShieldBonus':
       return [make('ac', 'Shield')]
+
+    case 'ArmorACBonus':
+      return [make('armorACPercent', 'Stacking')]
+
+    case 'ACBonusShield':
+      return [make('shieldACPercent', 'Stacking')]
 
     case 'ArmorCheckPenalty':
       return [make('armorCheckPenalty', 'Penalty')]

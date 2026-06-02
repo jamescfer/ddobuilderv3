@@ -58,6 +58,7 @@ export interface WeaponInfo {
   critThreatRange: number   // number of threat faces, e.g. 2 = threatens on 19-20
   critMultiplier: number
   attackModifier: string    // 'Strength' | 'Dexterity'
+  weaponType?: string       // base weapon type, e.g. 'Longsword' (for group lookup)
 }
 
 // ---------------------------------------------------------------------------
@@ -565,24 +566,35 @@ function accumulateTrainedSpells(
 // Weapon info extractor
 // ---------------------------------------------------------------------------
 
+/** Builds a WeaponInfo from a weapon item (null if the item is not a weapon). */
+export function weaponInfoFromItem(item: Item | undefined, slot: string): WeaponInfo | null {
+  if (!item?.Weapon) return null
+  const am = toArray(item.AttackModifier as string | string[] | undefined)
+  return {
+    name: item.Name,
+    slot,
+    diceNum: item.BaseDice?.Number ?? 1,
+    diceSides: item.BaseDice?.Sides ?? 6,
+    critThreatRange: item.CriticalThreatRange ?? 1,
+    critMultiplier: item.CriticalMultiplier ?? 2,
+    attackModifier: am.length > 0 ? am[0] : 'Strength',
+    weaponType: typeof item.Weapon === 'string' ? item.Weapon : undefined,
+  }
+}
+
 function extractWeaponInfo(gearItems: Record<string, Item>): WeaponInfo | null {
   for (const slot of ['Weapon1', 'MainHand', 'Weapon']) {
-    const item = gearItems[slot]
-    if (item?.Weapon) {
-      const attackMod = (() => {
-        const am = toArray(item.AttackModifier as string | string[] | undefined)
-        return am.length > 0 ? am[0] : 'Strength'
-      })()
-      return {
-        name: item.Name,
-        slot,
-        diceNum: item.BaseDice?.Number ?? 1,
-        diceSides: item.BaseDice?.Sides ?? 6,
-        critThreatRange: item.CriticalThreatRange ?? 1,
-        critMultiplier: item.CriticalMultiplier ?? 2,
-        attackModifier: attackMod,
-      }
-    }
+    const wi = weaponInfoFromItem(gearItems[slot], slot)
+    if (wi) return wi
+  }
+  return null
+}
+
+/** Off-hand weapon for two-weapon fighting (null if no off-hand weapon). */
+export function extractOffhandWeaponInfo(gearItems: Record<string, Item>): WeaponInfo | null {
+  for (const slot of ['Weapon2', 'OffHand']) {
+    const wi = weaponInfoFromItem(gearItems[slot], slot)
+    if (wi) return wi
   }
   return null
 }
@@ -1012,6 +1024,49 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       })
     }
 
+    // V2 BreakdownItemAC.cpp:19-20,115-157 — armor enchantment + percentage
+    // armor/shield AC.
+    //
+    // (1) The AC breakdown registers Effect_EnchantArmor, so an armor's magical
+    //     enchantment ("Armor Enhancement" bonus type) adds to AC directly. V3
+    //     parked it in the unused `armor.enchantment` stat — fold it into AC.
+    // (2) Effect_ArmorACBonus / Effect_ACBonusShield are PERCENTAGE bonuses
+    //     (Breakdown_BonusArmorAC / Breakdown_BonusShieldAC):
+    //       armor amount  = trunc((armorAC + armorEnhancement) * pct / 100)
+    //       shield amount = trunc(shieldAC * pct / 100)   [only with a shield]
+    //     V3 previously added them as flat AC points — wrong on armored builds.
+    const armorEnchantment = resolveBonus(map.get('armor.enchantment') ?? []).total
+    if (armorEnchantment !== 0) {
+      add(map, 'ac', { value: armorEnchantment, type: 'Armor Enhancement', source: 'Armor enchantment' })
+    }
+    {
+      const acBonuses = map.get('ac') ?? []
+      const armorBaseAC = resolveBonus(acBonuses.filter(b => b.type === 'Armor')).total
+      const armorEnhAC  = resolveBonus(acBonuses.filter(b => b.type === 'Armor Enhancement')).total
+      const armorPct = resolveBonus(map.get('armorACPercent') ?? []).total
+      if (armorPct !== 0) {
+        const base = armorBaseAC + armorEnhAC
+        const amount = Math.trunc((base * armorPct) / 100)
+        if (amount !== 0) {
+          add(map, 'ac', { value: amount, type: 'Stacking', source: `Armor ${armorPct}% of ${base}` })
+        }
+      }
+      // Shield % bonus is gated on a shield being equipped (V2 "Shield" stance)
+      // and uses only the printed shield AC as its base.
+      const hasShield = armorStances.has('Tower Shield') || armorStances.has('Heavy Shield')
+        || armorStances.has('Light Shield') || armorStances.has('Buckler')
+      if (hasShield) {
+        const shieldBaseAC = resolveBonus(acBonuses.filter(b => b.type === 'Shield')).total
+        const shieldPct = resolveBonus(map.get('shieldACPercent') ?? []).total
+        if (shieldPct > 0) {
+          const amount = Math.trunc((shieldBaseAC * shieldPct) / 100)
+          if (amount !== 0) {
+            add(map, 'ac', { value: amount, type: 'Stacking', source: `Shield ${shieldPct}% of ${shieldBaseAC}` })
+          }
+        }
+      }
+    }
+
     // HP: CON mod correction if gear changed CON
     if (conModFull !== conMod && build.totalLevel > 0) {
       const delta = (conModFull - conMod) * build.totalLevel
@@ -1194,6 +1249,17 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
 
     // V2 Favored Soul / Sorcerer SP multiplier = 1 + (FvS+Sorc levels) / min(buildLevel, 20).
     // Pure FvS/Sorc 20 → 2x SP; multiclass → partial multiplier.
+    //
+    // V2 parity (BreakdownItemSpellPoints::Multiplier + BreakdownItem::Total):
+    // the multiplier is applied ONLY to item (gear) spell-point effects —
+    // SumItems(m_itemEffects, /*bApplyMultiplier*/ true) — while class SP,
+    // casting-ability SP and feat/enhancement SP (m_otherEffects / m_effects)
+    // are summed with bApplyMultiplier = false. The class SP tables for
+    // Sorcerer/Favored Soul are already larger than the Wizard/Cleric tables,
+    // so the base doubling is baked into the data; the run-time multiplier only
+    // boosts SP granted by equipment. Multiplying the whole subtotal (as V3 did
+    // previously) over-counted class and ability SP. (V2 comment:
+    // "favored souls and sorcerers get up to double spell points from item effects".)
     {
       const fvsLv  = build.classes.filter(c => c.name === 'Favored Soul').reduce((s, c) => s + c.levels, 0)
       const sorcLv = build.classes.filter(c => c.name === 'Sorcerer').reduce((s, c) => s + c.levels, 0)
@@ -1202,13 +1268,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
         const lvCap = Math.min(build.totalLevel, 20)
         if (lvCap > 0) {
           const factor = total / lvCap
-          const baseSP = resolveBonus(map.get('spellPoints') ?? []).total
-          const bonus = Math.round(baseSP * factor)
+          // Only the gear-sourced SP contributions are multiplied (V2 m_itemEffects).
+          const gearSP = resolveBonus((map.get('spellPoints') ?? []).filter(b => b.fromGear)).total
+          const bonus = Math.round(gearSP * factor)
           if (bonus !== 0) {
             add(map, 'spellPoints', {
               value: bonus,
               type: 'Multiplier',
-              source: `Favored Soul/Sorcerer SP multiplier (×${(1 + factor).toFixed(2)})`,
+              source: `Favored Soul/Sorcerer item-SP multiplier (×${(1 + factor).toFixed(2)})`,
             })
           }
         }
@@ -1233,6 +1300,22 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
         type: 'Stacking',
         source: `Negative levels (-5 × ${negLevels})`,
       })
+    }
+
+    // V2 BreakdownItemWeaponAttackBonus.cpp:82-115 — weapon attack bonus takes
+    // -1 per negative level and the (positive-clamped) armor check penalty.
+    // Both apply to melee and ranged to-hit; flow into the `*.attack` keys that
+    // attackEntry adds onto the attack bonus.  (Non-proficiency and TWF
+    // penalties are weapon-specific and handled in attackEntry / below.)
+    if (negLevels > 0) {
+      const src = `Negative levels (-1 × ${negLevels})`
+      add(map, 'melee.attack',  { value: -negLevels, type: 'Penalty', source: src })
+      add(map, 'ranged.attack', { value: -negLevels, type: 'Penalty', source: src })
+    }
+    if (armorACP < 0) {
+      // V2 applies the armor check penalty to attack regardless of weapon.
+      add(map, 'melee.attack',  { value: armorACP, type: 'Penalty', source: 'Armor check penalty' })
+      add(map, 'ranged.attack', { value: armorACP, type: 'Penalty', source: 'Armor check penalty' })
     }
 
     // V2 fate points (BreakdownItemHitpoints.cpp:88-105 +2 HP each;
