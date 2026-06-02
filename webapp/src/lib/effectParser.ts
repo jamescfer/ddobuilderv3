@@ -475,6 +475,16 @@ export function parseEffect(
     return []
   }
 
+  // V2 parity: SpellLikeAbility effects register the SLA in CSLAControl
+  // (SLAControl.cpp::AddSLA).  Emit a sla.<spellName> marker so buildStatMap
+  // accumulates the full SLA list for the build (displayed in the SLA panel
+  // and the forum export AddSLAs section).
+  if (effect.Type === 'SpellLikeAbility') {
+    const spellName = toStringArray(effect.Item)[0]
+    if (!spellName || spellName === 'None') return []
+    return [{ statKey: `sla.${spellName}`, value: 1, bonusType: 'SLA', source }]
+  }
+
   if (resolved === null) return []
   const value: number = resolved
 
