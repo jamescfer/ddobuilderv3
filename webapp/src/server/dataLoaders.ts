@@ -56,7 +56,12 @@ export function loadRaces(dataDir: string): Race[] {
   return files.flatMap(f => {
     try {
       const parsed = readXml(path.join(dir, f)) as { Races?: { Race?: unknown[] } }
-      return (parsed?.Races?.Race ?? []) as Race[]
+      const races = (parsed?.Races?.Race ?? []) as Race[]
+      // V2 Race::IsIconic() == HasIconicClass() (Race.cpp:84-87): there is no
+      // <IsIconic> XML tag — a race is iconic iff it declares an <IconicClass>.
+      // Derive it here so consumers (past-life gating, race pickers, exporter)
+      // can test r.IsIconic the way V2 does.
+      return races.map(r => ({ ...r, IsIconic: r.IconicClass != null && r.IconicClass !== '' }))
     } catch { return [] }
   })
 }
@@ -68,7 +73,12 @@ export function loadClasses(dataDir: string): DDOClass[] {
   return files.flatMap(f => {
     try {
       const parsed = readXml(path.join(dir, f)) as { Classes?: { Class?: unknown[] } }
-      return (parsed?.Classes?.Class ?? []) as DDOClass[]
+      const classes = (parsed?.Classes?.Class ?? []) as DDOClass[]
+      // <NotHeroic /> is a presence-only flag (Class.h DL_FLAG); the XML parser
+      // delivers it as "" which is falsy, so `!c.NotHeroic` wrongly treated
+      // Epic/Legendary as heroic. Normalise to an explicit boolean (matches the
+      // tree-flag normalisation below).
+      return classes.map(c => ({ ...c, NotHeroic: 'NotHeroic' in (c as object) ? true : undefined }))
     } catch { return [] }
   })
 }
@@ -81,25 +91,52 @@ export function loadFeats(dataDir: string): Feat[] {
     const feats = parsed?.Feats?.Feat ?? []
     out.push(...((Array.isArray(feats) ? feats : [feats]) as Feat[]))
   } catch { /* no Feats.xml */ }
-  // Class-defined feats (Epic destinies, Legendary, etc.)
+  // Class-defined inline feats (Epic destinies, Monk bonus feats, etc.).
+  // V2 folds these into the global feat catalogue (Class.h ClassFeats list,
+  // referenced by name from <AutomaticFeats>).
   const classDir = path.join(dataDir, 'Classes')
-  if (!fs.existsSync(classDir)) return out
-  try {
-    const classFiles = fs.readdirSync(classDir).filter(f => f.endsWith('.class.xml'))
-    for (const f of classFiles) {
-      try {
-        const parsed = readXml(path.join(classDir, f)) as { Classes?: { Class?: unknown } }
-        const classes = parsed?.Classes?.Class
-        const classList = Array.isArray(classes) ? classes : classes ? [classes] : []
-        for (const cls of classList) {
-          const classFeats = (cls as Record<string, unknown>)?.Feat
-          if (!classFeats) continue
-          const list = Array.isArray(classFeats) ? classFeats : [classFeats]
-          out.push(...(list as Feat[]))
-        }
-      } catch { /* skip bad file */ }
-    }
-  } catch { /* no Classes dir */ }
+  if (fs.existsSync(classDir)) {
+    try {
+      const classFiles = fs.readdirSync(classDir).filter(f => /\.class\.xml$/i.test(f))
+      for (const f of classFiles) {
+        try {
+          const parsed = readXml(path.join(classDir, f)) as { Classes?: { Class?: unknown } }
+          const classes = parsed?.Classes?.Class
+          const classList = Array.isArray(classes) ? classes : classes ? [classes] : []
+          for (const cls of classList) {
+            const classFeats = (cls as Record<string, unknown>)?.Feat
+            if (!classFeats) continue
+            const list = Array.isArray(classFeats) ? classFeats : [classFeats]
+            out.push(...(list as Feat[]))
+          }
+        } catch { /* skip bad file */ }
+      }
+    } catch { /* no Classes dir */ }
+  }
+  // Race-defined inline feats. V2 parses these into Race::RacialFeats and they
+  // resolve against the global feat catalogue when a race grants them by name
+  // (e.g. Drow <GrantedFeat>Drow Spell Resistance</GrantedFeat> + matching
+  // <Feat> in Drow.race.xml:15-36). V3 previously folded only class-inline
+  // feats, so the *effects* of race-granted inline feats were silently missing.
+  const raceDir = path.join(dataDir, 'Races')
+  if (fs.existsSync(raceDir)) {
+    try {
+      const raceFiles = fs.readdirSync(raceDir).filter(f => /\.race\.xml$/i.test(f))
+      for (const f of raceFiles) {
+        try {
+          const parsed = readXml(path.join(raceDir, f)) as { Races?: { Race?: unknown } }
+          const races = parsed?.Races?.Race
+          const raceList = Array.isArray(races) ? races : races ? [races] : []
+          for (const race of raceList) {
+            const raceFeats = (race as Record<string, unknown>)?.Feat
+            if (!raceFeats) continue
+            const list = Array.isArray(raceFeats) ? raceFeats : [raceFeats]
+            out.push(...(list as Feat[]))
+          }
+        } catch { /* skip bad file */ }
+      }
+    } catch { /* no Races dir */ }
+  }
   return out
 }
 
