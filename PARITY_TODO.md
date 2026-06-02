@@ -73,6 +73,7 @@ the PR number, so this file doubles as a changelog.
 | 52 | **Universal combat base values from the "Attack" feat** — the universal `Attack` feat (no stance gating) grants base **+50% helpless damage** and **+20% strikethrough**. V3 parsed `HelplessDamage`/`Strikethrough` effects but had no base, so the combat estimator under-stated helpless and two-handed multi-target DPS. Added both as base contributions (Attack's base AC 10 / dodge cap 25 / shield PRR / damage multipliers remain modeled as hardcoded defaults, so only these two non-conflicting combat values were added). | this PR |
 
 | 53 | **Gear-derived weapon / fighting-style stances** — V2's StancesPane auto-activates weapon-type and fighting-style stances from the equipped weapons (default ON when wielded). V3 treated all stances as player-toggled, so effects gated on **"Two Handed Fighting"** (43), **"Two Weapon Fighting"** (29), **"Single Weapon Fighting"** (19), the weapon type itself ("Quarterstaff", "Dwarven Axe", "Handwraps", …), or **"Shield"** (56) never fired unless manually toggled. `buildStatMap` now derives these from `gearItems` (main/off-hand weapon type, two-handed/one-handed via weapon groups, shield presence) and merges them into `ctxStances` alongside the player toggles. | this PR |
+| 54 | **Section C file-compat F1–F5** — see the "File compatibility" section below; F1 (multi-life/multi-build document import + export), F3 (FavorFeats / TrainedSpells / AttackChains / GearSetSnapshot+Snapshot\*), F4 (ContentIDontOwn + Life SpecialFeats), F5 (past-life Type round-trip), F2 (gear-effect embedding seam) all closed. | this PR |
 
 ### Known approximation (noted, not changed)
 
@@ -117,35 +118,42 @@ The user's headline requirement: V3 must read **and write** V2 files and behave
 like V2. Import + a build-skeleton exporter now exist (Done #15, #38–#41).
 Remaining read/write-fidelity gaps:
 
-- ❌ **F1 — Multi-life / multi-build import.** `importV2Build` collapses the
-  whole `Character → Life[] → Build[]` tree to the *active* life's *active*
-  build (`v2Import.ts:339-349`); all other lives and builds are silently
-  dropped with no warning. The model to hold them already exists
-  (`CharacterDocument`/`Life` in `ddo.ts:543-567`, helpers in `multiLife.ts`)
-  but the importer never produces a document. Fix: import every life/build,
-  preserve `ActiveLifeIndex`/`ActiveBuildIndex`, and have the exporter emit all
-  of them.
-- 🟡 **F2 — Gear-effect embedding in the exporter.** V2 stores the *full* item
-  definition (all `<Buff>` effects) inside each `<EquippedGear>` slot and trusts
-  the embedded copy on load (it does not re-resolve by name). `exportV2Build`
-  currently emits `<Name>` + augments only, so a V3-exported file re-opens in V2
-  with the right item names but no item effects until re-resolved. Fix: pass the
-  item catalogue to the exporter and emit each equipped item's full definition.
-- ❌ **F3 — Dropped Build fields that carry real effects.** Import drops
-  `<FavorFeats>` (House Deneith/Twelve/etc. favor rewards — populated in the
-  example files), `<TrainedSpells>` (caster spell selections), stance slider
-  values (`build.sliderValues` never populated — V2 `StanceSliderChanged`),
-  `<AttackChains>`/`<ActiveAttackChain>`, and `<GearSetSnapshot>` + the
-  `<Snapshot*>` ability values. Targets exist in `ddo.ts`
-  (`trainedSpells:496`, `attackChains:525`, `sliderValues:494`).
-- ❌ **F4 — `ContentIDontOwn` + Life-level `SpecialFeats`.** `ContentIDontOwn`
-  (Character-level) and Life-level `SpecialFeats` (beyond past lives) are not
-  imported; `CharacterDocument.contentIDontOwn` and `Life.specialFeats` stay
-  empty.
-- 🟡 **F5 — Past-life Type round-trip.** The exporter reconstructs past-life
-  feat `<Type>` from the class/race name (best-effort). Counts round-trip, but a
-  rich V2 `SpecialFeats` list (Granted, Favor, etc.) is not fully reproduced.
-  Pairs with F3/F4.
+- ✅ **F1 — Multi-life / multi-build import (DATA layer).** `importV2Document`
+  (`v2Import.ts`) now imports EVERY `<Life>` and its EVERY `<Build>` into the
+  `CharacterDocument` model, preserving `ActiveLifeIndex`/`ActiveBuildIndex`
+  (verified against Maetrim's 35-build life, ActiveBuildIndex=34).
+  `exportV2Document`/`exportV2DocumentModel` emit all of them. `importV2Build`
+  still returns the active build (back-compat) and now also exposes the full
+  `document`. **Remaining:** the left-rail life-picker UI is **U1** (out of
+  scope here — data layer only).
+- ✅ **F2 — Gear-effect embedding in the exporter.** The exporters accept an
+  optional `ItemCatalogue` (name → Item); when supplied, each equipped item's
+  full V2 definition (Icon/Description/DropLocation/MinLevel, `<EquipmentSlot>`,
+  `<Material>`, every `<Buff>`, `<SetBonus>`) is embedded inside
+  `<EquippedGear>`, matching what V2 writes/trusts on load. `usePersistence.
+  exportDDOBuild` accepts an optional catalogue as a clean seam — the app does
+  not fetch the large `/api/items` list solely for export, so embedding is
+  opt-in (pass items from a component that already loaded them).
+- ✅ **F3 — Dropped Build fields.** `<FavorFeats>` (→ `build.favorFeats`),
+  `<TrainedSpell>` (→ `build.trainedSpells`), `<AttackChain>`/
+  `<ActiveAttackChain>` (→ `build.attackChains`/`activeAttackChain`), and
+  `<GearSetSnapshot>` + per-set `<Snapshot{Ability}>` (→ `build.gearSetSnapshot`
+  / `gearSetSnapshots`) all import + export + round-trip. **Note:** stance
+  slider values are **NOT persisted by V2** — `Build::StanceSliderChanged` only
+  notifies the runtime `StancesPane` (slider `m_position` lives in
+  `StancesPane.h`, never in `Build_PROPERTIES`). So there is no `.DDOBuild`
+  source for `build.sliderValues`; the field remains a V3-runtime stat input
+  only (the F3 line above mis-described it as persisted).
+- ✅ **F4 — `ContentIDontOwn` + Life-level `SpecialFeats`.** Character-level
+  `<ContentIDontOwn>` (DL_STRING_LIST, `Character.h:114`) →
+  `CharacterDocument.contentIDontOwn`; Life-level `<SpecialFeats>` beyond past
+  lives (`Life.h:120`) → `Life.specialFeats`. Both round-trip via
+  `exportV2Document`.
+- ✅ **F5 — Past-life Type round-trip.** The importer captures each past-life
+  feat's original V2 `<Type>` (`build.pastLifeTypes`) so the exporter
+  reproduces HeroicPastLife/RacialPastLife/EpicPastLife/IconicPastLife exactly
+  (Iconic vs Epic are otherwise name-ambiguous); falls back to name-based
+  class/race inference for V3-authored builds.
 
 ---
 
