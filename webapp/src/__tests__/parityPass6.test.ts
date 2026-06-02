@@ -241,8 +241,12 @@ describe('Centered stance — derived for cloth-armor Monk', () => {
       allFeats: [sentinelFeat as never],
     }
     const stats = computeBuildStats(input, build)
-    // If Centered is set AND the formula is correct: ki.max = Amount[10] = 100
-    expect(stats.total('ki.max')).toBe(100)
+    // If Centered is set AND the formula is correct, the KiMaximum effect
+    // contributes Amount[10] = 100 on top of the V2 base Max Ki
+    // (BreakdownItemMaximumKi: 40 + WIS mod × 5; default WIS 8 → mod −1 → 35).
+    // Total = 35 + 100 = 135. (If Centered were NOT derived, the effect would be
+    // filtered and ki.max would be just the 35 base.)
+    expect(stats.total('ki.max')).toBe(135)
   })
 })
 

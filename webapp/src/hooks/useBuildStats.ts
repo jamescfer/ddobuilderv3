@@ -1078,6 +1078,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     // Speed base
     add(map, 'speed', { value: 100, type: 'Base', source: 'Base movement speed' })
 
+    // V2 BreakdownItemMaximumKi.cpp:31-58 — Maximum Ki = base 40 + WIS mod × 5
+    // (plus any KiMaximum effects, parsed into ki.max). V2 adds the base + WIS
+    // contribution unconditionally; V3 had only the effect-sourced ki.max.
+    add(map, 'ki.max', { value: 40, type: 'Base', source: 'Standard Max Ki' })
+    if (wisMod !== 0) {
+      add(map, 'ki.max', { value: wisMod * 5, type: 'Ability', source: 'Wisdom bonus ×5' })
+    }
+
     // ── Skill points ──────────────────────────────────────────────────────
     // V2 Class::SkillPoints: max(1, classBase + raceSkillBonus + intModForLevel),
     // ×4 at character level 1. INT-for-level uses base+race+levelup only (no
@@ -1180,6 +1188,21 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
           type: 'Stacking',
           source: `Negative levels (-1 × ${negLevels})`,
         })
+      }
+    }
+
+    // V2 BreakdownItemBAB.cpp:43-55 — an OverrideBAB effect (e.g. Tenser's
+    // Transformation, certain enhancements) boosts BAB up to the character
+    // level, capped at MAX_BAB. V3 parsed the effect into `babOverride` but
+    // never applied it; fold the positive boost back into `bab`.
+    {
+      const babOverride = resolveBonus(map.get('babOverride') ?? []).total
+      if (babOverride > 0) {
+        const classBabSum = resolveBonus(map.get('bab') ?? []).total
+        const boost = Math.min(MAX_BAB, build.totalLevel) - classBabSum
+        if (boost > 0) {
+          add(map, 'bab', { value: boost, type: 'Stacking', source: 'BAB boost to character level (max 25)' })
+        }
       }
     }
 
