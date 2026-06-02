@@ -98,7 +98,7 @@ function add(map: StatMap, key: string, bonus: RawBonus): void {
 
 function addParsed(map: StatMap, bonuses: ReturnType<typeof parseEffect>, fromGear = false): void {
   for (const pb of bonuses) {
-    add(map, pb.statKey, { value: pb.value, type: pb.bonusType, source: pb.source, fromGear })
+    add(map, pb.statKey, { value: pb.value, type: pb.bonusType, source: pb.source, fromGear, percent: pb.percent })
   }
 }
 
@@ -1495,6 +1495,31 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
           })
         }
       }
+    }
+
+    // ── Percentage effects (V2 BreakdownItem::DoPercentageEffects) ────────
+    // Effects tagged <Percent/> add (base × percent / 100) of the stat's own
+    // base total rather than a flat amount (e.g. Frenzied Berserker +25% HP).
+    // V2 applies them last, against the pre-percentage base, summing all active
+    // percent contributions (gear percents still obey Highest-Only via the
+    // fromGear split in resolveBonus). Rewrite each affected stat's bonus list:
+    // drop the raw percent markers and append the single computed contribution.
+    for (const [key, bonuses] of map) {
+      const pctBonuses = bonuses.filter(b => b.percent)
+      if (pctBonuses.length === 0) continue
+      const flatBonuses = bonuses.filter(b => !b.percent)
+      const base = resolveBonus(flatBonuses).total
+      const percentSum = resolveBonus(pctBonuses.map(b => ({ ...b, percent: false }))).total
+      const contribution = Math.trunc((base * percentSum) / 100)
+      const rebuilt = flatBonuses
+      if (contribution !== 0) {
+        rebuilt.push({
+          value: contribution,
+          type: 'Stacking',
+          source: `${percentSum}% of ${base}`,
+        })
+      }
+      map.set(key, rebuilt)
     }
 
   return map

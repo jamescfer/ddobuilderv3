@@ -162,6 +162,9 @@ export interface ParsedBonus {
   value: number
   bonusType: string  // from Effect.Bonus or ItemBuff.BonusType
   source: string
+  // V2 <Percent/> flag: the value is a percentage of the stat's base total
+  // (BreakdownItem::DoPercentageEffects), not a flat amount.
+  percent?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -521,7 +524,7 @@ export function parseEffect(
   const items = toStringArray(effect.Item)
 
   function make(statKey: string, bt = bonusType): ParsedBonus {
-    return { statKey, value, bonusType: bt, source }
+    return { statKey, value, bonusType: bt, source, percent: effect.Percent === true }
   }
 
   const type = effect.Type
@@ -1397,7 +1400,7 @@ export function parseItemBuff(buff: ItemBuff, source: string): ParsedBonus[] {
   }
 
   function make(statKey: string, bt = bonusType): ParsedBonus {
-    return { statKey, value, bonusType: bt, source }
+    return { statKey, value, bonusType: bt, source, percent: buff.Percent === true }
   }
 
   const type = buff.Type

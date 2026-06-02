@@ -24,6 +24,9 @@ export interface RawBonus {
   // bonus-type stacking rules; only item effects (m_itemEffects) have
   // "Highest Only" applied. Set fromGear=true for item-sourced bonuses.
   fromGear?: boolean
+  // V2 <Percent/> flag: value is a percentage of the stat's base total
+  // (applied in a post-pass in useBuildStats), not a flat amount.
+  percent?: boolean
 }
 
 export interface ResolvedBonus extends RawBonus {
