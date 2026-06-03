@@ -35,6 +35,7 @@ type Action =
   | { type: 'TOGGLE_UNLOCKED_DESTINY'; name: string }
   | { type: 'SET_TWIST_CHOICE'; slot: number; value: string }
   | { type: 'SET_REAPER_CHOICE'; treeName: string; itemName: string; rank: number }
+  | { type: 'SET_REAPER_AP'; ap: number }
   | { type: 'SET_ABILITY_TOME'; ability: Ability; bonus: number }
   | { type: 'SET_SKILL_TOME'; skill: string; bonus: number }
   | { type: 'TOGGLE_BUFF'; buffName: string }
@@ -112,6 +113,7 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     destinyChoices: raw.destinyChoices ?? {},
     destinySelections: (raw as unknown as { destinySelections?: CharacterBuild['destinySelections'] }).destinySelections ?? {},
     reaperChoices: raw.reaperChoices ?? {},
+    reaperAP: raw.reaperAP ?? 0,
     activeEpicDestiny: raw.activeEpicDestiny ?? '',
     selectedDestinyTrees: raw.selectedDestinyTrees ?? ['', '', ''],
     unlockedDestinyTrees: raw.unlockedDestinyTrees ?? [],
@@ -322,6 +324,8 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
       const treeChoices = { ...(state.reaperChoices[action.treeName] ?? {}), [action.itemName]: action.rank }
       return { ...state, reaperChoices: { ...state.reaperChoices, [action.treeName]: treeChoices } }
     }
+    case 'SET_REAPER_AP':
+      return { ...state, reaperAP: action.ap }
     case 'SET_ABILITY_TOME':
       return { ...state, abilityTomes: { ...state.abilityTomes, [action.ability]: action.bonus } }
     case 'SET_SKILL_TOME':

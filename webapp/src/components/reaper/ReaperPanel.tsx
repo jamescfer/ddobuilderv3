@@ -59,8 +59,7 @@ export default function ReaperPanel() {
   const [activeTreeName, setActiveTreeName] = useState<string | null>(null)
   const [reaperSelections, setReaperSelections] = useState<Record<string, TreeSelections>>({})
 
-  // Session-only AP budget (not persisted)
-  const [reaperAP, setReaperAP] = useState(0)
+  const reaperAP = build.reaperAP
 
   // Load all enhancement trees once and filter to reaper trees
   useEffect(() => {
@@ -171,7 +170,7 @@ export default function ReaperPanel() {
                 max={1000}
                 step={1}
                 value={reaperAP}
-                onChange={e => setReaperAP(Number(e.target.value))}
+                onChange={e => dispatch({ type: 'SET_REAPER_AP', ap: Number(e.target.value) })}
               />
               <div className={styles.budgetNote}>
                 You have {reaperAP} Reaper Enhancement Points available. Set above to plan your build.
