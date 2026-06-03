@@ -74,6 +74,7 @@ the PR number, so this file doubles as a changelog.
 
 | 53 | **Gear-derived weapon / fighting-style stances** — V2's StancesPane auto-activates weapon-type and fighting-style stances from the equipped weapons (default ON when wielded). V3 treated all stances as player-toggled, so effects gated on **"Two Handed Fighting"** (43), **"Two Weapon Fighting"** (29), **"Single Weapon Fighting"** (19), the weapon type itself ("Quarterstaff", "Dwarven Axe", "Handwraps", …), or **"Shield"** (56) never fired unless manually toggled. `buildStatMap` now derives these from `gearItems` (main/off-hand weapon type, two-handed/one-handed via weapon groups, shield presence) and merges them into `ctxStances` alongside the player toggles. | this PR |
 | 54 | **Section C file-compat F1–F5** — see the "File compatibility" section below; F1 (multi-life/multi-build document import + export), F3 (FavorFeats / TrainedSpells / AttackChains / GearSetSnapshot+Snapshot\*), F4 (ContentIDontOwn + Life SpecialFeats), F5 (past-life Type round-trip), F2 (gear-effect embedding seam) all closed. | this PR |
+| 55 | **Reaper AP budget persisted (U3)** — `reaperAP: number` added to `CharacterBuild` and `emptyBuild()` (default 0); `SET_REAPER_AP` action added to the reducer; `migrateLoad` defaults old saves to 0; `ReaperPanel` slider now dispatches `SET_REAPER_AP` and reads `build.reaperAP` instead of local `useState`, so the budget survives page refresh like V2. | #75 |
 
 ### Known approximation (noted, not changed)
 
@@ -208,9 +209,7 @@ Remaining read/write-fidelity gaps:
   twist abilities from other destinies) has no UI — "Twist of Fate" appears only
   in `lib/export/sections.ts`, not in `EpicDestiniesPanel.tsx`. `twistChoices`
   exists on the model but is not editable.
-- 🟡 **U3 — Reaper AP not persisted.** `ReaperPanel.tsx:62-63` keeps the reaper
-  AP budget as session-only React state; selections persist via `reaperChoices`
-  but the budget resets, unlike V2 where reaper XP/AP is part of the saved build.
+- ✅ **U3 — Reaper AP persisted.** `reaperAP` added to `CharacterBuild`; `SET_REAPER_AP` action wired through the reducer; `ReaperPanel` reads/writes `build.reaperAP` (Done #55).
 - 🟡 **U4 — Spells known-per-level limit.** `SpellsPanel.tsx` lets you check any
   number of spells per level (it caps the spell *level* but not the *count* of
   known spells per level), reading more like a full spellbook than V2's limited

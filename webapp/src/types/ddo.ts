@@ -482,6 +482,8 @@ export interface CharacterBuild {
   destinySelections: Record<string, Record<string, string>>
   /** reaper enhancement choices: treeName → itemName → ranks */
   reaperChoices: Record<string, Record<string, number>>
+  /** player's available Reaper Enhancement Points budget (persisted, like V2) */
+  reaperAP: number
   /** which of the 3 selected destiny trees is the active (primary) destiny */
   activeEpicDestiny: string
   /** the 3 chosen destiny tree names (empty string = slot unused) */
@@ -650,6 +652,7 @@ export function emptyBuild(): CharacterBuild {
     destinyChoices: {},
     destinySelections: {},
     reaperChoices: {},
+    reaperAP: 0,
     activeEpicDestiny: '',
     selectedDestinyTrees: ['', '', ''],
     unlockedDestinyTrees: [],
