@@ -75,6 +75,7 @@ the PR number, so this file doubles as a changelog.
 | 53 | **Gear-derived weapon / fighting-style stances** — V2's StancesPane auto-activates weapon-type and fighting-style stances from the equipped weapons (default ON when wielded). V3 treated all stances as player-toggled, so effects gated on **"Two Handed Fighting"** (43), **"Two Weapon Fighting"** (29), **"Single Weapon Fighting"** (19), the weapon type itself ("Quarterstaff", "Dwarven Axe", "Handwraps", …), or **"Shield"** (56) never fired unless manually toggled. `buildStatMap` now derives these from `gearItems` (main/off-hand weapon type, two-handed/one-handed via weapon groups, shield presence) and merges them into `ctxStances` alongside the player toggles. | this PR |
 | 54 | **Section C file-compat F1–F5** — see the "File compatibility" section below; F1 (multi-life/multi-build document import + export), F3 (FavorFeats / TrainedSpells / AttackChains / GearSetSnapshot+Snapshot\*), F4 (ContentIDontOwn + Life SpecialFeats), F5 (past-life Type round-trip), F2 (gear-effect embedding seam) all closed. | this PR |
 | 55 | **Reaper AP budget persisted (U3)** — `reaperAP: number` added to `CharacterBuild` and `emptyBuild()` (default 0); `SET_REAPER_AP` action added to the reducer; `migrateLoad` defaults old saves to 0; `ReaperPanel` slider now dispatches `SET_REAPER_AP` and reads `build.reaperAP` instead of local `useState`, so the budget survives page refresh like V2. | #75 |
+| 56 | **Weapon proficiency detection (N2 complete)** — `buildRuntimeGroupAdds()` collects `AddGroupWeapon`/`MergeGroups` effects from all trained feats (player + auto + race grants) and enhancements into `RuntimeGroupAdd[]`; `BuildStats.isWeaponProficient(weaponType)` calls `deriveWeaponClasses(...).has('Proficiency')`; `CombatPanel` passes `nonProficient: !stats.isWeaponProficient(weaponType)` to `buildAttackEntry` so non-proficient characters take the V2 −4 to-hit penalty. Also improves `ctxWeaponClassMain`/`ctxWeaponClassOff` in `buildStatMap` with the runtime adds so weapon-class requirement gates are accurate for Kensei focus weapons, etc. (V2 `Build::IsWeaponInGroup("Proficiency")` / `BreakdownItemWeaponAttackBonus.cpp:70-79` parity). | this PR |
 
 ### Known approximation (noted, not changed)
 
@@ -161,12 +162,12 @@ Remaining read/write-fidelity gaps:
 ## High-priority remaining — numerical correctness
 
 - ✅ **N1 — AC percentage armor/shield bonuses** — fixed (Done #43).
-- 🟡 **N2 — Combat to-hit penalties** — TWF / ACP / negative-level penalties
-  fixed; the off-hand now rolls against its own attack bonus (Done #44).
-  *Remaining:* weapon-proficiency **detection** — the `nonProficient` flag is
-  plumbed through `attackEntry`, but `CombatPanel` always assumes proficiency.
-  Closing it needs an `IsWeaponInGroup("Proficiency", weapon)` engine (weapon
-  groups + the character's proficiency feats / class auto-grants).
+- ✅ **N2 — Combat to-hit penalties** — TWF / ACP / negative-level penalties
+  fixed (Done #44); weapon-proficiency detection complete (Done #56).
+  `buildRuntimeGroupAdds` collects `AddGroupWeapon` effects from all trained
+  feats and enhancements; `BuildStats.isWeaponProficient` checks the resulting
+  dynamic "Proficiency" group; `CombatPanel` passes the −4 non-proficiency
+  penalty to `buildAttackEntry`.
 - ✅ **N3 — False Life** — *not a bug* (Done #46). V2's `BreakdownItem::Total`
   only applies highest-only to gear (`m_itemEffects`); feat/enhancement False
   Life always stacks — exactly V3's `fromGear` model. The earlier claim

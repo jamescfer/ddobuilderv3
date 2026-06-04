@@ -23,7 +23,7 @@ import type { EffectContext, ItemBuffTemplate } from '../lib/effectParser'
 import { resolveBonus, emptyResolvedStat } from '../lib/bonus'
 import type { RawBonus, ResolvedStat } from '../lib/bonus'
 import { deriveWeaponClasses } from '../lib/weapons/groups'
-import type { WeaponGroupSpec } from '../lib/weapons/groups'
+import type { WeaponGroupSpec, RuntimeGroupAdd, RuntimeGroupMerge } from '../lib/weapons/groups'
 import { buildAutomaticFeatGroups } from '../lib/automaticFeats'
 import {
   reaperHpCap, styleBonusHp, effectiveDodgeCap,
@@ -49,6 +49,14 @@ export interface BuildStats {
   /** Sorted list of SLA spell names derived from SpellLikeAbility effects
    *  (V2 CSLAControl parity — replaces manual build.slaCharges for display). */
   slaList: string[]
+  /**
+   * Returns true if the character has weapon proficiency for the given weapon
+   * type (V2 Build::IsWeaponInGroup("Proficiency", wt) parity).
+   * Proficiency is granted by AddGroupWeapon effects on trained feats and
+   * enhancements (e.g. "Simple Weapon Proficiency: Club" adds Club to the
+   * dynamic "Proficiency" group).
+   */
+  isWeaponProficient: (weaponType: string) => boolean
 }
 
 export interface WeaponInfo {
@@ -116,6 +124,105 @@ function toArray<T>(val: T | T[] | undefined): T[] {
 
 function abMod(score: number): number {
   return Math.floor((score - 10) / 2)
+}
+
+// ---------------------------------------------------------------------------
+// Runtime weapon-group adds (proficiency + Kensei focus weapons, etc.)
+// ---------------------------------------------------------------------------
+
+/**
+ * Collects AddGroupWeapon / MergeGroups effects from all trained feats and
+ * enhancements. Returns the runtime adds that must be passed to
+ * deriveWeaponClasses so that dynamically-built groups (most importantly
+ * "Proficiency") are correctly resolved.
+ *
+ * V2 parity: Build::AddWeaponToGroup (Build.cpp:5407) populates m_weaponGroups
+ * from Effect_AddGroupWeapon effects on every active feat/enhancement.
+ * Build::IsWeaponInGroup then searches that runtime list.
+ */
+export function buildRuntimeGroupAdds(
+  input: BuildStatsInput,
+  build: CharacterBuild,
+): { adds: RuntimeGroupAdd[], merges: RuntimeGroupMerge[] } {
+  const { allFeats, allTrees, allClasses, allRaces } = input
+  const adds: RuntimeGroupAdd[] = []
+  const merges: RuntimeGroupMerge[] = []
+
+  // Collect all trained feat names (player choices + auto-feats + race grants)
+  const featNames = new Set<string>()
+  for (const f of Object.values(build.featChoices)) if (f) featNames.add(f)
+  const race = allRaces.find(r => r.Name === build.race)
+  if (race) for (const f of toArray(race.GrantedFeat)) featNames.add(f as string)
+  for (const bc of build.classes) {
+    if (!bc.name || bc.levels <= 0) continue
+    const cls = allClasses.find(c => c.Name === bc.name)
+    if (!cls) continue
+    for (const af of toArray(cls.AutomaticFeats)) {
+      if ((af.Level ?? 0) > bc.levels) continue
+      const names = af.Feats
+      if (typeof names === 'string') featNames.add(names)
+      else if (Array.isArray(names)) for (const n of names) featNames.add(n)
+    }
+  }
+
+  function extractFromEffects(effects: Effect[]): void {
+    for (const eff of effects) {
+      const its = toArray(eff.Item) as string[]
+      if (eff.Type === 'AddGroupWeapon' && its.length >= 2) {
+        const group = its[0]
+        for (let i = 1; i < its.length; i++) {
+          if (its[i]) adds.push({ group, weaponType: its[i] })
+        }
+      } else if (eff.Type === 'MergeGroups' && its.length >= 2) {
+        merges.push({ baseGroup: its[0], mergedGroup: its[1] })
+      }
+    }
+  }
+
+  // Feats
+  for (const featName of featNames) {
+    const feat = allFeats.find(f => f.Name === featName)
+    if (feat) extractFromEffects(toArray(feat.Effect))
+  }
+
+  // Enhancements (heroic, destiny, reaper)
+  const selectedDestinySet = new Set((build.selectedDestinyTrees ?? []).filter(Boolean))
+
+  function collectEnhTree(
+    treeName: string,
+    choices: Record<string, number>,
+    selections: Record<string, string>,
+  ): void {
+    const tree = allTrees.find(t => t.Name === treeName)
+    if (!tree) return
+    for (const item of (tree.EnhancementTreeItem ?? [])) {
+      const rank = choices[item.Name] ?? 0
+      if (rank <= 0) continue
+      const selectedOption = selections[item.Name]
+      if (selectedOption) {
+        const options = getSelectorOptions(item)
+        const opt = options.find(o => o.Name === selectedOption)
+        if (opt) {
+          extractFromEffects(toArray(opt.Effect as Effect | Effect[] | undefined))
+          continue
+        }
+      }
+      extractFromEffects(toArray(item.Effect))
+    }
+  }
+
+  for (const [treeName, choices] of Object.entries(build.enhancementChoices)) {
+    collectEnhTree(treeName, choices, build.enhancementSelections[treeName] ?? {})
+  }
+  for (const [treeName, choices] of Object.entries(build.destinyChoices)) {
+    if (!selectedDestinySet.has(treeName)) continue
+    collectEnhTree(treeName, choices, build.destinySelections?.[treeName] ?? {})
+  }
+  for (const [treeName, choices] of Object.entries(build.reaperChoices ?? {})) {
+    collectEnhTree(treeName, choices, {})
+  }
+
+  return { adds, merges }
 }
 
 // tomeCapAtLevel is imported from lib/levelProgression so the rule is shared
@@ -797,8 +904,13 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       }
     }
     const groups = allWeaponGroups ?? []
-    const ctxWeaponClassMain = deriveWeaponClasses(mainWeaponType, groups)
-    const ctxWeaponClassOff = deriveWeaponClasses(offWeaponType, groups)
+    // V2 parity: Build::AddWeaponToGroup populates runtime group membership from
+    // AddGroupWeapon effects on all trained feats/enhancements. Build the same
+    // runtime adds here so weapon-class requirement gates (WeaponClassMainHand /
+    // WeaponClassOffHand) and proficiency checks are accurate.
+    const { adds: runtimeGroupAdds, merges: runtimeGroupMerges } = buildRuntimeGroupAdds(input, build)
+    const ctxWeaponClassMain = deriveWeaponClasses(mainWeaponType, groups, runtimeGroupAdds, runtimeGroupMerges)
+    const ctxWeaponClassOff = deriveWeaponClasses(offWeaponType, groups, runtimeGroupAdds, runtimeGroupMerges)
 
     // V2 parity: the StancesPane auto-activates weapon-type and fighting-style
     // stances from the equipped weapons (they default ON when the weapon is
@@ -1737,6 +1849,8 @@ export function computeBuildStats(input: BuildStatsInput, build: CharacterBuild)
     .filter(k => k.startsWith('sla.'))
     .sort()
     .map(k => k.slice(4))
+  const groups = input.allWeaponGroups ?? []
+  const { adds: groupAdds, merges: groupMerges } = buildRuntimeGroupAdds(input, build)
   return {
     resolve: (key: string): ResolvedStat => {
       const bonuses = map.get(key)
@@ -1750,6 +1864,8 @@ export function computeBuildStats(input: BuildStatsInput, build: CharacterBuild)
     weapon: weaponInfo,
     armorMaxDex,
     slaList,
+    isWeaponProficient: (weaponType: string) =>
+      deriveWeaponClasses(weaponType, groups, groupAdds, groupMerges).has('Proficiency'),
   }
 }
 
@@ -1771,11 +1887,16 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
   const weaponInfo = useMemo(() => extractWeaponInfo(input.gearItems), [input.gearItems])
   const armorMaxDex = useMemo(() => extractArmorMaxDex(input.gearItems), [input.gearItems])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const groupAddsResult = useMemo(() => buildRuntimeGroupAdds(input, build), [build, input.allFeats, input.allTrees, input.allClasses, input.allRaces])
+
   return useMemo<BuildStats>(() => {
     const slaList = Array.from(statMap.keys())
       .filter(k => k.startsWith('sla.'))
       .sort()
       .map(k => k.slice(4))
+    const groups = input.allWeaponGroups ?? []
+    const { adds: groupAdds, merges: groupMerges } = groupAddsResult
     return {
       resolve: (key: string): ResolvedStat => {
         const bonuses = statMap.get(key)
@@ -1789,8 +1910,10 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
       weapon: weaponInfo,
       armorMaxDex,
       slaList,
+      isWeaponProficient: (weaponType: string) =>
+        deriveWeaponClasses(weaponType, groups, groupAdds, groupMerges).has('Proficiency'),
     }
-  }, [statMap, weaponInfo, armorMaxDex])
+  }, [statMap, weaponInfo, armorMaxDex, input.allWeaponGroups, groupAddsResult])
 }
 
 // ---------------------------------------------------------------------------
