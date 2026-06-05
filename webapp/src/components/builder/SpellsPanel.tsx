@@ -9,6 +9,7 @@ import { useBuildStats } from '../../hooks/useBuildStats'
 import {
   computeSpellDC, computeCasterLevel, computeMaxCasterLevel,
   computeSpellCost, computeMaxSpellLevel, availableMetamagics, METAMAGIC_KEYS,
+  knownSpellCount,
 } from '../../lib/spells/spellMath'
 import styles from './SpellsPanel.module.css'
 
@@ -186,10 +187,15 @@ export default function SpellsPanel() {
                   .map(Number).sort((a, b) => a - b)
                   .map(lvl => {
                     const trainedCount = (build.trainedSpells[activeTabData.className]?.[lvl] ?? []).length
+                    const cap = knownSpellCount(activeTabData.cls, activeTabData.classLevel, lvl)
+                    const hasCap = Number.isFinite(cap)
+                    const atCap = hasCap && trainedCount >= cap
                     return (
                       <div key={lvl} className={styles.levelGroup}>
                         <div className={styles.levelHeader}>
-                          Level {lvl} <span className={styles.levelCount}>({trainedCount} trained)</span>
+                          Level {lvl} <span className={styles.levelCount}>
+                            {hasCap ? `(${trainedCount}/${cap} trained)` : `(${trainedCount} trained)`}
+                          </span>
                         </div>
                         {activeTabData.byLevel[lvl]
                           .slice().sort((a, b) => a.Name.localeCompare(b.Name))
@@ -209,7 +215,7 @@ export default function SpellsPanel() {
                             const mmList = availableMetamagics(spell)
                             return (
                               <div key={spell.Name} className={styles.spellRow}>
-                                <input type="checkbox" checked={trained} onChange={() => toggleTrain(activeTabData.className, lvl, spell.Name)} className={styles.trainCheckbox} title={trained ? 'Untrain' : 'Train'} />
+                                <input type="checkbox" checked={trained} onChange={() => toggleTrain(activeTabData.className, lvl, spell.Name)} className={styles.trainCheckbox} disabled={!trained && atCap} title={trained ? 'Untrain' : atCap ? `Spell slots full (${cap}/${cap})` : 'Train'} />
                                 <span className={styles.spellName} title={spell.Description ?? spell.Name}>{spell.Name}</span>
                                 {spell.School && <span className={styles.spellSchool}>{Array.isArray(spell.School) ? spell.School.join('/') : spell.School}</span>}
                                 <span className={styles.spellStat} title="Caster Level">CL {cl}{mcl !== Infinity ? `/${mcl}` : ''}</span>

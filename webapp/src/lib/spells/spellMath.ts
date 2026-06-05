@@ -27,6 +27,25 @@ function abilityTotal(stats: BuildStats, ab: string): number {
 }
 
 /**
+ * Returns the number of spells a character can have trained (known/prepared)
+ * for the given spell level at the specified class level.
+ * Mirrors V2 Class::SpellSlotsAtLevel (SpellsPane.cpp:248).
+ *
+ * Returns Infinity when the class has no Level<N> data (no cap enforced).
+ * Returns 0 when the row exists but the given spell level has no slots yet.
+ */
+export function knownSpellCount(cls: DDOClass | undefined, classLevel: number, spellLevel: number): number {
+  if (!cls) return Infinity
+  const idx = Math.min(Math.max(classLevel, 0), 20)
+  const row = (cls as unknown as Record<string, unknown>)[`Level${idx}`]
+  if (typeof row === 'string') {
+    const slots = row.trim().split(/\s+/).map(Number)
+    return slots[spellLevel - 1] ?? 0
+  }
+  return Infinity
+}
+
+/**
  * Returns the highest spell level the character can cast for the given class
  * at the supplied number of class levels. Mirrors V2 Class::MaxSpellLevel.
  *
