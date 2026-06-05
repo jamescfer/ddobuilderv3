@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computeSpellDC, computeCasterLevel, computeMaxCasterLevel,
   computeSpellCost, computeMaxSpellLevel, availableMetamagics, METAMAGIC_KEYS,
+  knownSpellCount,
 } from '../lib/spells/spellMath'
 import type { Spell, DDOClass } from '../types/ddo'
 import type { BuildStats } from '../hooks/useBuildStats'
@@ -193,5 +194,46 @@ describe('METAMAGIC_KEYS', () => {
       'Extend', 'Heighten', 'Intensify', 'Maximize', 'Quicken',
     ].sort())
     expect(METAMAGIC_KEYS).not.toContain('EschewMaterials')
+  })
+})
+
+// U4: known spell count per level — V2 Class::SpellSlotsAtLevel parity
+// (SpellsPane.cpp:248; SpellsControl.cpp:425-433)
+describe('knownSpellCount', () => {
+  const wizardFull: DDOClass = ({
+    Name: 'Wizard',
+    // Wizard at class level 5: 4×L1, 3×L2, 2×L3, 0×L4+
+    Level5: '4 3 2 0 0 0 0 0 0',
+    // Wizard at class level 10: 5×L1, 5×L2, 4×L3, 4×L4, 3×L5
+    Level10: '5 5 4 4 3 0 0 0 0',
+    Level20: '5 5 5 5 5 5 5 5 5',
+  } as unknown) as DDOClass
+
+  it('returns slot count for spell level 1 at class level 5', () => {
+    expect(knownSpellCount(wizardFull, 5, 1)).toBe(4)
+  })
+  it('returns slot count for spell level 2 at class level 5', () => {
+    expect(knownSpellCount(wizardFull, 5, 2)).toBe(3)
+  })
+  it('returns slot count for spell level 3 at class level 5', () => {
+    expect(knownSpellCount(wizardFull, 5, 3)).toBe(2)
+  })
+  it('returns 0 for a spell level beyond the class cap at class level 5', () => {
+    expect(knownSpellCount(wizardFull, 5, 4)).toBe(0)
+  })
+  it('returns updated counts at a higher class level', () => {
+    expect(knownSpellCount(wizardFull, 10, 5)).toBe(3)
+    expect(knownSpellCount(wizardFull, 10, 6)).toBe(0)
+  })
+  it('returns Infinity when class has no Level data (no cap)', () => {
+    const cls = ({ Name: 'Cleric' } as unknown) as DDOClass
+    expect(knownSpellCount(cls, 10, 1)).toBe(Infinity)
+  })
+  it('returns Infinity for undefined class', () => {
+    expect(knownSpellCount(undefined, 10, 1)).toBe(Infinity)
+  })
+  it('clamps classLevel to [0, 20]', () => {
+    expect(knownSpellCount(wizardFull, 20, 1)).toBe(5)
+    expect(knownSpellCount(wizardFull, 25, 1)).toBe(5) // clamped to Level20
   })
 })
