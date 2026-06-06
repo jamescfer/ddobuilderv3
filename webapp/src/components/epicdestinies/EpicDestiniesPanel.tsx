@@ -7,6 +7,7 @@ import { useStaticBundle } from '../../hooks/useStaticBundle'
 import { useBuildStats } from '../../hooks/useBuildStats'
 import { destinyPointPool } from '../../lib/v2Formulas'
 import { tier5LockedTree, availableDestinyTrees } from '../../lib/destiny'
+import { availableTwistItems } from '../../lib/twists'
 import styles from './EpicDestiniesPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -261,6 +262,44 @@ export default function EpicDestiniesPanel() {
             </div>
           )}
         </div>
+
+        {/* ── Twists of Fate ───────────────────────────────────────────── */}
+        {selectedSlots.length > 0 && (() => {
+          const candidates = availableTwistItems(availableForSelect)
+          const byTree = availableForSelect.map(t => ({
+            treeName: t.Name,
+            items: candidates.filter(c => c.treeName === t.Name),
+          })).filter(g => g.items.length > 0)
+          const twistChoices = build.twistChoices ?? ['', '', '', '', '']
+          return (
+            <div className={styles.twistsSection}>
+              <div className={styles.slotSectionTitle} style={{ padding: '8px 12px 4px' }}>
+                Twists of Fate (up to 5)
+              </div>
+              <div className={styles.slotRows} style={{ padding: '0 12px 8px' }}>
+                {([0, 1, 2, 3, 4] as const).map(slot => (
+                  <div key={slot} className={styles.slotRow}>
+                    <span className={styles.slotLabel}>Twist {slot + 1}</span>
+                    <select
+                      className={styles.slotSelect}
+                      value={twistChoices[slot] ?? ''}
+                      onChange={e => dispatch({ type: 'SET_TWIST_CHOICE', slot, value: e.target.value })}
+                    >
+                      <option value="">— None —</option>
+                      {byTree.map(g => (
+                        <optgroup key={g.treeName} label={g.treeName}>
+                          {g.items.map(c => (
+                            <option key={c.key} value={c.key}>{c.item.Name}</option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── 3. Tabs + Tree Grid ───────────────────────────────────────── */}
         {selectedSlots.length > 0 && (

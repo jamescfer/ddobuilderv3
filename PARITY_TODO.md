@@ -77,6 +77,7 @@ the PR number, so this file doubles as a changelog.
 | 55 | **Reaper AP budget persisted (U3)** — `reaperAP: number` added to `CharacterBuild` and `emptyBuild()` (default 0); `SET_REAPER_AP` action added to the reducer; `migrateLoad` defaults old saves to 0; `ReaperPanel` slider now dispatches `SET_REAPER_AP` and reads `build.reaperAP` instead of local `useState`, so the budget survives page refresh like V2. | #75 |
 | 56 | **Weapon proficiency detection (N2 complete)** — `buildRuntimeGroupAdds()` collects `AddGroupWeapon`/`MergeGroups` effects from all trained feats (player + auto + race grants) and enhancements into `RuntimeGroupAdd[]`; `BuildStats.isWeaponProficient(weaponType)` calls `deriveWeaponClasses(...).has('Proficiency')`; `CombatPanel` passes `nonProficient: !stats.isWeaponProficient(weaponType)` to `buildAttackEntry` so non-proficient characters take the V2 −4 to-hit penalty. Also improves `ctxWeaponClassMain`/`ctxWeaponClassOff` in `buildStatMap` with the runtime adds so weapon-class requirement gates are accurate for Kensei focus weapons, etc. (V2 `Build::IsWeaponInGroup("Proficiency")` / `BreakdownItemWeaponAttackBonus.cpp:70-79` parity). | this PR |
 | 57 | **U4 — Spells known-per-level limit** — `knownSpellCount(cls, classLevel, spellLevel)` added to `lib/spells/spellMath.ts`; reads `Level${classLevel}` row on the DDOClass (the same `Level1`–`Level20` XML fields already used by `computeMaxSpellLevel`) and returns the slot count for the requested spell level, `Infinity` when no row exists (no cap). `SpellsPanel` now shows `(N/max trained)` per spell level and disables the train checkbox for untrained spells once the level is full, matching V2 `SpellsControl.cpp:425-433` / `SpellsPane.cpp:248` which renders exactly N spell slots per spell level. | this PR |
+| 58 | **U2 — Twists of Fate editor** — `lib/twists.ts` exports `availableTwistItems(trees)` returning all non-Tier5 `EnhancementTreeItem`s from the provided epic destiny trees (Tier-5 abilities are exclusively bound to the active destiny and cannot be twisted, matching V2 `TwistsOfFateDlg`). `EpicDestiniesPanel` now renders a "Twists of Fate (up to 5)" section with 5 labeled dropdowns grouped by destiny tree; each dispatches `SET_TWIST_CHOICE` (already wired in the reducer) and persists to `build.twistChoices`. Forum export of twists was already complete (`sections.ts:268-270`). | this PR |
 
 ### Known approximation (noted, not changed)
 
@@ -207,10 +208,9 @@ Remaining read/write-fidelity gaps:
   localStorage array, and V2 import keeps only the active build. V2's core model
   is a Character document with a left-rail life picker and per-life build
   snapshots. Pairs with **F1**. Highest-impact UI gap.
-- ❌ **U2 — Twists of Fate editor.** Epic-destiny twisting (fate-point spend to
-  twist abilities from other destinies) has no UI — "Twist of Fate" appears only
-  in `lib/export/sections.ts`, not in `EpicDestiniesPanel.tsx`. `twistChoices`
-  exists on the model but is not editable.
+- ✅ **U2 — Twists of Fate editor** — fixed (Done #58). `availableTwistItems()` in
+  `lib/twists.ts` filters non-Tier5 items from available destiny trees; five labeled
+  dropdowns in `EpicDestiniesPanel` dispatch `SET_TWIST_CHOICE` to set `build.twistChoices`.
 - ✅ **U3 — Reaper AP persisted.** `reaperAP` added to `CharacterBuild`; `SET_REAPER_AP` action wired through the reducer; `ReaperPanel` reads/writes `build.reaperAP` (Done #55).
 - ✅ **U4 — Spells known-per-level limit** — fixed (Done #57). `knownSpellCount()`
   reads `Level${N}` rows from the class data; `SpellsPanel` shows `(N/max
