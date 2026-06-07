@@ -1163,6 +1163,28 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       add(map, `skill.${skill}`, { value: bonus, type: 'Tome', source: `${skill} tome` })
     }
 
+    // ── GrantFeat effects: apply the granted feats' stat effects ─────────
+    // V2 Build::ApplyFeatEffects / RevokeFeatEffects: when any source
+    // (enhancement, item, augment) grants a feat via Effect_GrantFeat, V2
+    // looks up the feat and applies all of its effects to the build. V3
+    // previously returned [] for GrantFeat effects; parseEffect now emits
+    // grantedFeat.<FeatName> markers, and this post-pass picks them up.
+    // Skip feats already in ctxFeats (player-trained, race-granted, class
+    // auto feats) to match V2's RequiresNoneOf-based double-count prevention.
+    {
+      const grantedFeatNames = new Set<string>()
+      for (const [key] of map.entries()) {
+        if (key.startsWith('grantedFeat.')) {
+          grantedFeatNames.add(key.slice('grantedFeat.'.length))
+        }
+      }
+      for (const featName of grantedFeatNames) {
+        if (ctxFeats.has(featName)) continue
+        const feat = allFeats.find(f => f.Name === featName)
+        if (feat) accumulateFeat(map, feat, 1, `Granted: ${featName}`, build.totalLevel, ctx)
+      }
+    }
+
     // ── Armor stance derivation ──────────────────────────────────────────
     // V2 derives the armor stance from the equipped armor's <Armor> field.
     // Used for: PRR derivation (BAB×multiplier), MRR cap (Cloth=50, Light=100),
