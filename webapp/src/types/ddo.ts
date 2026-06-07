@@ -48,6 +48,7 @@ export interface Effect {
   Rare?: boolean             // effect only applies when filigree slot is marked rare
   Cap?: unknown              // V2 Effect Cap() — clamps AbilityTotal/Index amounts
   Percent?: boolean          // V2 <Percent/> — Amount is a % of the stat base
+  Rank?: number              // V2 Effect Rank() — minimum enhancement rank required to fire
 }
 
 // ---------------------------------------------------------------------------

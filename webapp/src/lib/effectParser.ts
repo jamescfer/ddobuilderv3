@@ -540,6 +540,22 @@ export function parseEffect(
     return [{ statKey: `sla.${spellName}`, value: 1, bonusType: 'SLA', source }]
   }
 
+  // V2 parity: GrantFeat effects (Build::ApplyFeatEffects) cause V2 to look up
+  // the feat and apply all of its effects to the build stats. Emit a
+  // grantedFeat.<FeatName> marker so buildStatMap can collect them and apply the
+  // feat's own effects in a post-pass. The optional <Rank> field gates the grant
+  // to ranks ≥ that value (e.g. "Magical Training" only at rank 3 of
+  // "Magical Studies"). AType is always NotNeeded (no Amount), so this must
+  // fire before the `resolved === null` early-return below.
+  if (effect.Type === 'GrantFeat') {
+    const effectMinRank = effect.Rank ?? 1
+    if (rank < effectMinRank) return []
+    const featNames = toStringArray(effect.Item)
+    return featNames
+      .filter(n => n && n !== 'None')
+      .map(n => ({ statKey: `grantedFeat.${n}`, value: 1, bonusType: 'GrantFeat', source }))
+  }
+
   if (resolved === null) return []
   const value: number = resolved
 
@@ -2210,7 +2226,17 @@ export function parseItemBuff(
     case 'MergeGroups':
     case 'ExclusionGroup':
     case 'ExcludeFeatSelection':
-    case 'GrantFeat':
+    case 'GrantFeat': {
+      // V2 parity: item buffs that grant a feat cause Build::ApplyFeatEffects
+      // to apply the feat's effects. Emit a grantedFeat.<FeatName> marker so
+      // buildStatMap's post-pass can look up the feat and apply its effects.
+      // Items are either equipped or not — no rank gating.
+      const grantItems = toStringArray(buff.Item as string | string[] | undefined)
+      const grants = grantItems.filter(n => n && n !== 'None')
+        .map(n => ({ statKey: `grantedFeat.${n}`, value: 1, bonusType: 'GrantFeat', source }))
+      if (grants.length > 0) return grants
+      return []
+    }
     case 'GrantSpell':
     case 'SpellListAddition':
     case 'SpellLikeAbility':

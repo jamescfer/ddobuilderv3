@@ -78,6 +78,7 @@ the PR number, so this file doubles as a changelog.
 | 56 | **Weapon proficiency detection (N2 complete)** — `buildRuntimeGroupAdds()` collects `AddGroupWeapon`/`MergeGroups` effects from all trained feats (player + auto + race grants) and enhancements into `RuntimeGroupAdd[]`; `BuildStats.isWeaponProficient(weaponType)` calls `deriveWeaponClasses(...).has('Proficiency')`; `CombatPanel` passes `nonProficient: !stats.isWeaponProficient(weaponType)` to `buildAttackEntry` so non-proficient characters take the V2 −4 to-hit penalty. Also improves `ctxWeaponClassMain`/`ctxWeaponClassOff` in `buildStatMap` with the runtime adds so weapon-class requirement gates are accurate for Kensei focus weapons, etc. (V2 `Build::IsWeaponInGroup("Proficiency")` / `BreakdownItemWeaponAttackBonus.cpp:70-79` parity). | this PR |
 | 57 | **U4 — Spells known-per-level limit** — `knownSpellCount(cls, classLevel, spellLevel)` added to `lib/spells/spellMath.ts`; reads `Level${classLevel}` row on the DDOClass (the same `Level1`–`Level20` XML fields already used by `computeMaxSpellLevel`) and returns the slot count for the requested spell level, `Infinity` when no row exists (no cap). `SpellsPanel` now shows `(N/max trained)` per spell level and disables the train checkbox for untrained spells once the level is full, matching V2 `SpellsControl.cpp:425-433` / `SpellsPane.cpp:248` which renders exactly N spell slots per spell level. | this PR |
 | 58 | **U2 — Twists of Fate editor** — `lib/twists.ts` exports `availableTwistItems(trees)` returning all non-Tier5 `EnhancementTreeItem`s from the provided epic destiny trees (Tier-5 abilities are exclusively bound to the active destiny and cannot be twisted, matching V2 `TwistsOfFateDlg`). `EpicDestiniesPanel` now renders a "Twists of Fate (up to 5)" section with 5 labeled dropdowns grouped by destiny tree; each dispatches `SET_TWIST_CHOICE` (already wired in the reducer) and persists to `build.twistChoices`. Forum export of twists was already complete (`sections.ts:268-270`). | this PR |
+| 59 | **GrantFeat effects applied to build stats** — `parseEffect` now emits `grantedFeat.<FeatName>` markers for `GrantFeat` effects (gated by the optional `<Rank>` field on the effect — e.g. Bard Spellsinger "Magical Studies" rank 3 grants "Magical Training" only at rank ≥ 3); `parseItemBuff` emits the same markers for item-buff `GrantFeat` types; a new post-pass in `buildStatMap` collects all `grantedFeat.*` stat-map entries, looks up each feat in `allFeats`, and applies its effects via `accumulateFeat` (skipping feats already in `ctxFeats` to prevent double-counting). Impact: 143+ `GrantFeat` effects across enhancement trees + item buffs now apply their granted feats' stat contributions — e.g. Bard Spellsinger "Magical Studies" rank 3 correctly adds +80 SP and +5% spell crit from "Magical Training", Barbarian Frenzied Berserker grants "Diehard", Bard Swashbuckler grants "Evasion" and "Uncanny Dodge", etc. `Effect.Rank?: number` added to the `Effect` interface in `types/ddo.ts`. V2 source: `Build::ApplyFeatEffects` / `RevokeFeatEffects`. | this PR |
 
 ### Known approximation (noted, not changed)
 
@@ -217,12 +218,18 @@ Remaining read/write-fidelity gaps:
   trained)` and disables the train checkbox once a spell level is full.
 - 🟡 **U5 — Granted / Special / Automatic feats consolidated.** V2 has three
   panes (Automatic/Granted/Special); V3 folds them into one `AutomaticFeats.tsx`.
+  **Numerical parity restored (Done #59)**: `GrantFeat` effects from enhancements
+  and item buffs now apply the granted feat's stat effects in `buildStatMap`.
+  Remaining: the UI does not yet show a separate "Granted Feats" subsection
+  (active vs inactive) nor a "Special Feats" panel for past-life icon grids /
+  favor feats management.
 - 🟡 **U6 — Build comparison scope.** V3 compares two *saved* builds via dropdown
   (`BuildCompare.tsx`); V2 compares simultaneously-active builds within a life.
 - ❌ **U7 — Per-level training UI** — flat list at L4/L8/… rather than V2's
   `LevelTraining` view of feats/skills/spells trained at a specific level.
-- ❌ **U8 — Spell metamagic class-gating** — V3 lists metamagics per spell but
-  doesn't enforce class-specific availability (Wizard Maximize @L3, Sorc @L4…).
+- ➖ **U8 — Spell metamagic class-gating** — Investigation shows V2's `Spell.h`
+  also uses only per-spell binary metamagic flags with no class-level gating.
+  Both V2 and V3 treat metamagics as spell-wide properties; no gap exists.
 - ❌ **U9 — Content-ownership filtering UI** (`ContentPane`), Find-Gear-by-effect
   (`FindGearDialog`), help docs / tooltips — no equivalents in V3.
 
@@ -230,8 +237,9 @@ Remaining read/write-fidelity gaps:
 
 ## High-priority remaining — forum export
 
-- ❌ **X1 — Image embedding** — V2 export inserts `[img]` tags for class /
-  destiny / racial icons. V3 export is text-only.
+- ➖ **X1 — Image embedding** — Investigation shows V2's `ForumExportDlg.cpp`
+  uses no `[img]` BBCode tags; V2's forum export is also purely text-based.
+  The original claim was incorrect — no gap exists here.
 
 ---
 
