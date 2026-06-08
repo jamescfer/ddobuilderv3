@@ -49,6 +49,10 @@ export interface BuildStats {
   /** Sorted list of SLA spell names derived from SpellLikeAbility effects
    *  (V2 CSLAControl parity — replaces manual build.slaCharges for display). */
   slaList: string[]
+  /** Sorted list of feat names granted by GrantFeat effects from enhancements,
+   *  items, or augments (V2 GrantedFeatsPane parity). Does not include feats
+   *  already present in the player-trained / auto-granted set. */
+  grantedFeatsList: string[]
   /**
    * Returns true if the character has weapon proficiency for the given weapon
    * type (V2 Build::IsWeaponInGroup("Proficiency", wt) parity).
@@ -1867,10 +1871,15 @@ export function computeBuildStats(input: BuildStatsInput, build: CharacterBuild)
   const map = buildStatMap(input, build)
   const weaponInfo = extractWeaponInfo(input.gearItems)
   const armorMaxDex = extractArmorMaxDex(input.gearItems)
-  const slaList = Array.from(map.keys())
+  const mapKeys = Array.from(map.keys())
+  const slaList = mapKeys
     .filter(k => k.startsWith('sla.'))
     .sort()
     .map(k => k.slice(4))
+  const grantedFeatsList = mapKeys
+    .filter(k => k.startsWith('grantedFeat.'))
+    .sort()
+    .map(k => k.slice('grantedFeat.'.length))
   const groups = input.allWeaponGroups ?? []
   const { adds: groupAdds, merges: groupMerges } = buildRuntimeGroupAdds(input, build)
   return {
@@ -1886,6 +1895,7 @@ export function computeBuildStats(input: BuildStatsInput, build: CharacterBuild)
     weapon: weaponInfo,
     armorMaxDex,
     slaList,
+    grantedFeatsList,
     isWeaponProficient: (weaponType: string) =>
       deriveWeaponClasses(weaponType, groups, groupAdds, groupMerges).has('Proficiency'),
   }
@@ -1913,10 +1923,15 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
   const groupAddsResult = useMemo(() => buildRuntimeGroupAdds(input, build), [build, input.allFeats, input.allTrees, input.allClasses, input.allRaces])
 
   return useMemo<BuildStats>(() => {
-    const slaList = Array.from(statMap.keys())
+    const statMapKeys = Array.from(statMap.keys())
+    const slaList = statMapKeys
       .filter(k => k.startsWith('sla.'))
       .sort()
       .map(k => k.slice(4))
+    const grantedFeatsList = statMapKeys
+      .filter(k => k.startsWith('grantedFeat.'))
+      .sort()
+      .map(k => k.slice('grantedFeat.'.length))
     const groups = input.allWeaponGroups ?? []
     const { adds: groupAdds, merges: groupMerges } = groupAddsResult
     return {
@@ -1932,6 +1947,7 @@ export function useBuildStats(input: BuildStatsInput, buildOverride?: CharacterB
       weapon: weaponInfo,
       armorMaxDex,
       slaList,
+      grantedFeatsList,
       isWeaponProficient: (weaponType: string) =>
         deriveWeaponClasses(weaponType, groups, groupAdds, groupMerges).has('Proficiency'),
     }
