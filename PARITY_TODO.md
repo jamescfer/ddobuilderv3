@@ -79,6 +79,7 @@ the PR number, so this file doubles as a changelog.
 | 57 | **U4 — Spells known-per-level limit** — `knownSpellCount(cls, classLevel, spellLevel)` added to `lib/spells/spellMath.ts`; reads `Level${classLevel}` row on the DDOClass (the same `Level1`–`Level20` XML fields already used by `computeMaxSpellLevel`) and returns the slot count for the requested spell level, `Infinity` when no row exists (no cap). `SpellsPanel` now shows `(N/max trained)` per spell level and disables the train checkbox for untrained spells once the level is full, matching V2 `SpellsControl.cpp:425-433` / `SpellsPane.cpp:248` which renders exactly N spell slots per spell level. | this PR |
 | 58 | **U2 — Twists of Fate editor** — `lib/twists.ts` exports `availableTwistItems(trees)` returning all non-Tier5 `EnhancementTreeItem`s from the provided epic destiny trees (Tier-5 abilities are exclusively bound to the active destiny and cannot be twisted, matching V2 `TwistsOfFateDlg`). `EpicDestiniesPanel` now renders a "Twists of Fate (up to 5)" section with 5 labeled dropdowns grouped by destiny tree; each dispatches `SET_TWIST_CHOICE` (already wired in the reducer) and persists to `build.twistChoices`. Forum export of twists was already complete (`sections.ts:268-270`). | this PR |
 | 59 | **GrantFeat effects applied to build stats** — `parseEffect` now emits `grantedFeat.<FeatName>` markers for `GrantFeat` effects (gated by the optional `<Rank>` field on the effect — e.g. Bard Spellsinger "Magical Studies" rank 3 grants "Magical Training" only at rank ≥ 3); `parseItemBuff` emits the same markers for item-buff `GrantFeat` types; a new post-pass in `buildStatMap` collects all `grantedFeat.*` stat-map entries, looks up each feat in `allFeats`, and applies its effects via `accumulateFeat` (skipping feats already in `ctxFeats` to prevent double-counting). Impact: 143+ `GrantFeat` effects across enhancement trees + item buffs now apply their granted feats' stat contributions — e.g. Bard Spellsinger "Magical Studies" rank 3 correctly adds +80 SP and +5% spell crit from "Magical Training", Barbarian Frenzied Berserker grants "Diehard", Bard Swashbuckler grants "Evasion" and "Uncanny Dodge", etc. `Effect.Rank?: number` added to the `Effect` interface in `types/ddo.ts`. V2 source: `Build::ApplyFeatEffects` / `RevokeFeatEffects`. | this PR |
+| 60 | **U5 (complete) — Granted Feats subsection in Automatic Feats panel** — `BuildStats` gains `grantedFeatsList: string[]` (parallel to `slaList`), populated from `grantedFeat.*` stat-map keys in both `computeBuildStats` and `useBuildStats`. `AutomaticFeats.tsx` now loads full stats data, calls `useBuildStats`, and renders a separate "Granted Feats" collapsible group below the race/class automatic feats when any effect-granted feats are active (e.g. Bard "Magical Training" from Spellsinger, Barbarian "Diehard" from Frenzied Berserker). Matches V2 `GrantedFeatsPane` parity. | this PR |
 
 ### Known approximation (noted, not changed)
 
@@ -216,13 +217,14 @@ Remaining read/write-fidelity gaps:
 - ✅ **U4 — Spells known-per-level limit** — fixed (Done #57). `knownSpellCount()`
   reads `Level${N}` rows from the class data; `SpellsPanel` shows `(N/max
   trained)` and disables the train checkbox once a spell level is full.
-- 🟡 **U5 — Granted / Special / Automatic feats consolidated.** V2 has three
+- ✅ **U5 — Granted / Special / Automatic feats consolidated.** V2 has three
   panes (Automatic/Granted/Special); V3 folds them into one `AutomaticFeats.tsx`.
   **Numerical parity restored (Done #59)**: `GrantFeat` effects from enhancements
   and item buffs now apply the granted feat's stat effects in `buildStatMap`.
-  Remaining: the UI does not yet show a separate "Granted Feats" subsection
-  (active vs inactive) nor a "Special Feats" panel for past-life icon grids /
-  favor feats management.
+  **UI parity restored (Done #60)**: `BuildStats.grantedFeatsList` exposes the
+  sorted list of effect-granted feat names; `AutomaticFeats.tsx` renders a
+  "Granted Feats" subsection when any are active. Remaining (out of scope here):
+  a "Special Feats" panel for past-life icon grids / favor feats management.
 - 🟡 **U6 — Build comparison scope.** V3 compares two *saved* builds via dropdown
   (`BuildCompare.tsx`); V2 compares simultaneously-active builds within a life.
 - ❌ **U7 — Per-level training UI** — flat list at L4/L8/… rather than V2's
