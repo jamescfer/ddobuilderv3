@@ -2,33 +2,12 @@ import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { CharacterBuild, DDOClass, Feat, Race, Requirement } from '../../types/ddo'
-import {
-  buildSnapshotAtCharacterLevel,
-  characterLevelForClassLevel,
-} from '../../lib/levelProgression'
+import { buildSnapshotAtCharacterLevel } from '../../lib/levelProgression'
 import { meetsRequirements as sharedMeetsRequirements } from '../../lib/requirements'
+import { buildSlots } from '../../lib/levelTraining'
+import type { SlotEntry } from '../../lib/levelTraining'
 import DdoIcon from '../DdoIcon'
 import styles from './FeatSlots.module.css'
-
-interface SlotEntry {
-  key: string
-  /**
-   * Display & ordering level. For race/class/epic/legendary slots this is the
-   * resolved character level (V2 parity); for the universal heroic slots it is
-   * the character level the slot is awarded at.
-   */
-  level: number
-  /**
-   * V2 parity: the *class-internal* level at which the slot is granted (e.g.
-   * Fighter Bonus Feat at class level 4). For race/universal slots this
-   * equals `level`; for class slots it differs from `level` if the class is
-   * not taken at every character level.
-   */
-  classLevel: number
-  featType: string
-  className: string
-  featUpdateList?: string[]   // whitelist from class XML FeatUpdateList
-}
 
 // V2 behavior: feats with <Group>X</Group> can be trained in slots whose
 // FeatType is X. The "Heroic" universal slot is treated as type "Standard".
@@ -45,125 +24,6 @@ function toArray<T>(v: T | T[] | undefined): T[] {
   if (v == null) return []
   return Array.isArray(v) ? v : [v]
 }
-
-function buildSlots(
-  build: CharacterBuild,
-  allClasses: DDOClass[],
-  allRaces: Race[],
-): SlotEntry[] {
-  const slots: SlotEntry[] = []
-  const epicLevels = build.epicLevels ?? 0
-  const legendaryLevels = build.legendaryLevels ?? 0
-
-  // 1. Race feat slots (e.g. Human Bonus Feat at char level 1)
-  // Key uses a per-(level, type) counter so imports can reconstruct it without
-  // needing the global FeatSlot array index. In practice every (level, type)
-  // pair is unique within a race, so the counter is always 0.
-  const race = allRaces.find(r => r.Name === build.race)
-  const raceFeatTypeCount: Record<string, number> = {}
-  toArray(race?.FeatSlot).forEach(fs => {
-    const counterKey = `${fs.Level}-${fs.FeatType}`
-    const localIdx = raceFeatTypeCount[counterKey] ?? 0
-    raceFeatTypeCount[counterKey] = localIdx + 1
-    const featUpdateList = fs.FeatUpdateList
-      ? toArray(fs.FeatUpdateList).filter(Boolean)
-      : undefined
-    slots.push({
-      key: `race-${fs.Level}-${fs.FeatType}-${localIdx}`,
-      level: fs.Level,
-      classLevel: fs.Level,
-      featType: fs.FeatType,
-      className: build.race,
-      featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
-    })
-  })
-
-  // 2. Universal standard feats (heroic levels 1, 3, 6, 9, 12, 15, 18)
-  const universalLevels = [1, 3, 6, 9, 12, 15, 18]
-  universalLevels.forEach(lvl => {
-    slots.push({ key: `heroic-${lvl}`, level: lvl, classLevel: lvl, featType: 'Heroic', className: 'Universal' })
-  })
-
-  // 3. Class-specific heroic feat slots — position at the *character level*
-  //    where the Nth level of that class is taken (V2 parity).
-  for (const bc of build.classes) {
-    if (!bc.name || bc.levels === 0) continue
-    const cls = allClasses.find(c => c.Name === bc.name)
-    if (!cls?.FeatSlot) continue
-    const classFeatTypeCount: Record<string, number> = {}
-    toArray(cls.FeatSlot).forEach(fs => {
-      if (fs.Level > bc.levels) return
-      const charLevel = characterLevelForClassLevel(build, bc.name, fs.Level)
-      if (!charLevel) return
-      const counterKey = `${fs.Level}-${fs.FeatType}`
-      const localIdx = classFeatTypeCount[counterKey] ?? 0
-      classFeatTypeCount[counterKey] = localIdx + 1
-      const featUpdateList = fs.FeatUpdateList
-        ? toArray(fs.FeatUpdateList).filter(Boolean)
-        : undefined
-      slots.push({
-        key: `${bc.name}-${fs.Level}-${fs.FeatType}-${localIdx}`,
-        level: charLevel,
-        classLevel: fs.Level,
-        featType: fs.FeatType,
-        className: bc.name,
-        featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
-      })
-    })
-  }
-
-  // 4. Epic feat slots — Epic.class.xml; epic class level N → character level 20+N
-  if (epicLevels > 0) {
-    const epicClass = allClasses.find(c => c.Name === 'Epic')
-    const epicFeatTypeCount: Record<string, number> = {}
-    toArray(epicClass?.FeatSlot).forEach(fs => {
-      if (fs.Level <= epicLevels) {
-        const counterKey = `${fs.Level}-${fs.FeatType}`
-        const localIdx = epicFeatTypeCount[counterKey] ?? 0
-        epicFeatTypeCount[counterKey] = localIdx + 1
-        const featUpdateList = fs.FeatUpdateList
-          ? toArray(fs.FeatUpdateList).filter(Boolean)
-          : undefined
-        slots.push({
-          key: `epic-${fs.Level}-${fs.FeatType}-${localIdx}`,
-          level: 20 + fs.Level,
-          classLevel: fs.Level,
-          featType: fs.FeatType,
-          className: 'Epic',
-          featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
-        })
-      }
-    })
-  }
-
-  // 5. Legendary feat slots — Legendary.class.xml; legendary class level N → character level 30+N
-  if (legendaryLevels > 0) {
-    const legendaryClass = allClasses.find(c => c.Name === 'Legendary')
-    const legendaryFeatTypeCount: Record<string, number> = {}
-    toArray(legendaryClass?.FeatSlot).forEach(fs => {
-      if (fs.Level <= legendaryLevels) {
-        const counterKey = `${fs.Level}-${fs.FeatType}`
-        const localIdx = legendaryFeatTypeCount[counterKey] ?? 0
-        legendaryFeatTypeCount[counterKey] = localIdx + 1
-        const featUpdateList = fs.FeatUpdateList
-          ? toArray(fs.FeatUpdateList).filter(Boolean)
-          : undefined
-        slots.push({
-          key: `legendary-${fs.Level}-${fs.FeatType}-${localIdx}`,
-          level: 30 + fs.Level,
-          classLevel: fs.Level,
-          featType: fs.FeatType,
-          className: 'Legendary',
-          featUpdateList: featUpdateList?.length ? featUpdateList : undefined,
-        })
-      }
-    })
-  }
-
-  slots.sort((a, b) => a.level - b.level || a.className.localeCompare(b.className))
-  return slots
-}
-
 
 // ---------------------------------------------------------------------------
 // Prerequisite label formatting

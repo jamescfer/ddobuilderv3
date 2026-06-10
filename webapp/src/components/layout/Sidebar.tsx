@@ -7,6 +7,7 @@ export type NavItem =
   | 'Builder'
   | 'Ability Ups'
   | 'Skills'
+  | 'Level Training'
   | 'Feats'
   | 'Automatic Feats'
   | 'Spells'
@@ -37,7 +38,7 @@ interface NavGroup {
 }
 
 const NAV_GROUPS: NavGroup[] = [
-  { label: 'Character', items: ['Builder', 'Ability Ups', 'Skills'] },
+  { label: 'Character', items: ['Builder', 'Ability Ups', 'Skills', 'Level Training'] },
   { label: 'Combat', items: ['Feats', 'Automatic Feats', 'Spells', 'DCs'] },
   { label: 'Progression', items: ['Enhancements', 'Epic Destinies', 'Reaper'] },
   { label: 'Equipment', items: ['Gear', 'Filigrees', 'Set Bonuses', 'Clickies'] },

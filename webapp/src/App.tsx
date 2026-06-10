@@ -10,6 +10,7 @@ import AbilityLevelUps from './components/builder/AbilityLevelUps'
 import StatsPanel from './components/builder/StatsPanel'
 import FeatSlots from './components/builder/FeatSlots'
 import Skills from './components/builder/Skills'
+import LevelTrainingPanel from './components/builder/LevelTrainingPanel'
 import AutomaticFeats from './components/builder/AutomaticFeats'
 import SpellsPanel from './components/builder/SpellsPanel'
 import EnhancementTreePanel from './components/enhancements/EnhancementTreePanel'
@@ -83,6 +84,12 @@ function AppInner() {
         {activeItem === 'Skills' && (
           <div className={styles.single}>
             <Skills />
+          </div>
+        )}
+
+        {activeItem === 'Level Training' && (
+          <div className={styles.single}>
+            <LevelTrainingPanel />
           </div>
         )}
 
