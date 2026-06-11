@@ -495,6 +495,17 @@ export function parseEffect(
   treeTotalAP = 0,
   ctx?: EffectContext,
 ): ParsedBonus[] {
+  // V2 data uses multiple <Type> elements in a single <Effect> block to grant
+  // two different bonus types from the same amount (e.g. ["PRR","MRR"],
+  // ["MeleePower","RangedPower"]).  fast-xml-parser promotes duplicate child
+  // elements to an array, so effect.Type may be string[] rather than string.
+  // Expand by re-calling with each individual type.
+  if (Array.isArray(effect.Type)) {
+    return (effect.Type as unknown as string[]).flatMap(t =>
+      parseEffect({ ...effect, Type: t }, rank, source, classLevels, treeTotalAP, ctx),
+    )
+  }
+
   // V2 Effect::IsActive → Requirements::Met. Gate the effect entirely if any
   // top-level requirement, OneOf group, or NoneOf group fails.
   // When no ctx is supplied, fall back to the legacy stance-only check.
