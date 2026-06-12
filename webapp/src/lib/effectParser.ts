@@ -38,6 +38,8 @@ export interface EffectContext {
   sliderValues?: Record<string, number>     // slider name → current value
   weaponClassMain?: Set<string>             // main-hand weapon class memberships
   weaponClassOffhand?: Set<string>          // off-hand weapon class memberships
+  materialBySlot?: Record<string, string>   // V2 slot name (Weapon1, …) → equipped item Material
+  skillTotals?: Record<string, number>      // skill → resolved total (fixed-point pass 2+)
 }
 
 // ---------------------------------------------------------------------------
@@ -113,16 +115,29 @@ function checkRequirement(req: Requirement, ctx: EffectContext): boolean {
       if (!ctx.weaponClassOffhand) return true
       return its.some(i => ctx.weaponClassOffhand!.has(i))
     case 'Skill':
-      // Skill ranks ≥ value — V3 tracks skill totals via build stats not in
-      // ctx; conservative pass to avoid false negatives.
-      return true
+      // V2 Requirement::EvaluateSkill (Requirement.cpp:1040-1048):
+      // SkillAtLevel ≥ Value. Resolved totals arrive via the fixed-point
+      // wrapper (pass 2+); conservative pass until then / for older callers.
+      if (!ctx.skillTotals) return true
+      return (ctx.skillTotals[its[0]] ?? 0) >= (req.Value ?? 0)
+    case 'EnemyType':
+      // V2 Requirement.cpp:467/513: `case Requirement_EnemyType: met = false`.
+      // Favored-enemy-style effects NEVER apply inside the planner.
+      return false
+    case 'MaterialType': {
+      // V2 Requirement::EvaluateMaterialType (Requirement.cpp:1083-1100):
+      // Item = [material, V2 slot name]; met when the equipped item in that
+      // slot has exactly that Material. Conservative pass when the caller
+      // does not supply gear materials.
+      if (!ctx.materialBySlot) return true
+      if (its.length < 2) return false
+      return ctx.materialBySlot[its[1]] === its[0]
+    }
     case 'GroupMember':
     case 'GroupMember2':
     case 'StartingWorld':
-    case 'EnemyType':
     case 'ItemTypeInSlot':
     case 'ItemSlot':
-    case 'MaterialType':
     case 'Exclusive':
       // Not gated client-side; always pass.
       return true

@@ -111,7 +111,7 @@ class Xml {
 
 // Inverse of v2Import.ts V2_TO_V3_SLOT. The V2 EquippedGear node stores one
 // child element per inventory slot using these V2 names.
-const V3_TO_V2_SLOT: Record<string, string> = {
+export const V3_TO_V2_SLOT: Record<string, string> = {
   Helmet: 'Helmet', Necklace: 'Necklace', Trinket: 'Trinket', Cloak: 'Cloak',
   Belt: 'Belt', Goggles: 'Goggles', Gloves: 'Gloves', Boots: 'Boots',
   Bracers: 'Bracers', Armor: 'Armor', Ring: 'Ring1', Ring2: 'Ring2',

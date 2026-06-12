@@ -801,10 +801,20 @@ export function stripCosmeticSlots(gearItems: Record<string, Item>): Record<stri
  * observers re-evaluate against the live ability breakdown totals, not the
  * chargen snapshot).
  */
+// V3 gear slot → V2 InventorySlotTypeMap text (InventorySlotTypes.h:50-73) —
+// the names MaterialType requirements use in their second Item field.
+const V3_SLOT_TO_V2_ENUM: Record<string, string> = {
+  Helmet: 'Helmet', Necklace: 'Necklace', Trinket: 'Trinket', Cloak: 'Cloak',
+  Belt: 'Belt', Goggles: 'Goggles', Gloves: 'Gloves', Boots: 'Boots',
+  Bracers: 'Bracers', Armor: 'Armor', Ring: 'Ring1', Ring2: 'Ring2',
+  'Main Hand': 'Weapon1', 'Off Hand': 'Weapon2', Quiver: 'Quiver', Arrow: 'Arrows',
+}
+
 function buildStatMapOnce(
   input: BuildStatsInput,
   build: CharacterBuild,
   abilityTotalsOverride?: Record<string, number>,
+  skillTotalsOverride?: Record<string, number>,
 ): StatMap {
   const map: StatMap = new Map()
 
@@ -984,6 +994,15 @@ function buildStatMapOnce(
     const ctxSliderValues: Record<string, number> = {
       ...((build as { sliderValues?: Record<string, number> }).sliderValues ?? {}),
     }
+    // V2 Requirement::EvaluateMaterialType inputs: equipped item Material per
+    // V2 slot name (Requirement.cpp:1083-1100).
+    const ctxMaterialBySlot: Record<string, string> = {}
+    for (const [v3Slot, item] of Object.entries(gearItems)) {
+      const v2Slot = V3_SLOT_TO_V2_ENUM[v3Slot]
+      const material = (item as { Material?: string }).Material
+      if (v2Slot && material) ctxMaterialBySlot[v2Slot] = material
+    }
+
     const ctx: EffectContext = {
       race: build.race,
       alignment: build.alignment,
@@ -999,6 +1018,8 @@ function buildStatMapOnce(
       sliderValues: ctxSliderValues,
       weaponClassMain: ctxWeaponClassMain,
       weaponClassOffhand: ctxWeaponClassOff,
+      materialBySlot: ctxMaterialBySlot,
+      skillTotals: skillTotalsOverride,
     }
 
     // ── Ability base scores ───────────────────────────────────────────────
@@ -1929,14 +1950,26 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     for (const ab of ABILITIES) out[ab] = resolveBonus(m.get(`ability.${ab}`) ?? []).total
     return out
   }
+  // Resolved skill totals for V2 EvaluateSkill gates (Requirement.cpp:1040).
+  const skillsOf = (m: StatMap): Record<string, number> => {
+    const out: Record<string, number> = {}
+    for (const key of m.keys()) {
+      if (key.startsWith('skill.')) out[key.slice(6)] = resolveBonus(m.get(key) ?? []).total
+    }
+    return out
+  }
   let map = buildStatMapOnce(input, build)
   let totals = totalsOf(map)
+  let skills = skillsOf(map)
   for (let i = 0; i < 3; i++) {
-    const next = buildStatMapOnce(input, build, totals)
+    const next = buildStatMapOnce(input, build, totals, skills)
     const nextTotals = totalsOf(next)
-    map = next
+    const nextSkills = skillsOf(next)
     const stable = ABILITIES.every(ab => nextTotals[ab] === totals[ab])
+      && Object.keys({ ...skills, ...nextSkills }).every(k => nextSkills[k] === skills[k])
+    map = next
     totals = nextTotals
+    skills = nextSkills
     if (stable) break
   }
   return map

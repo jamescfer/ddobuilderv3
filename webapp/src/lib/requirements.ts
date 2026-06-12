@@ -181,8 +181,10 @@ export function meetsSingleRequirement(req: Requirement, ctx: RequirementContext
       // Evaluate strictly when activeBuffs is provided; pass conservatively otherwise.
       return ctx.activeBuffs ? ctx.activeBuffs.includes(item) : true
     case 'EnemyType':
-      // Runtime condition; treat as met for static prerequisite display.
-      return true
+      // V2 parity: BOTH dispatches hard-fail this type — Requirements::Met
+      // (Requirement.cpp:467) and CanTrainEnhancement (:513) use
+      // `met = false`. Never met inside the planner.
+      return false
     case 'Skill':
       // Skill ranks are character-level dependent; we don't track per-level
       // ranks yet (skillRanksByLevel is in flight). Treat as met to avoid
