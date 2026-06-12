@@ -192,6 +192,11 @@ const V2_TO_V3_SLOT: Record<string, string> = {
   Belt: 'Belt', Goggles: 'Goggles', Gloves: 'Gloves', Boots: 'Boots',
   Bracers: 'Bracers', Armor: 'Armor', Ring1: 'Ring', Ring2: 'Ring2',
   MainHand: 'Main Hand', OffHand: 'Off Hand', Quiver: 'Quiver', Arrow: 'Arrow',
+  // Cosmetic slots (InventorySlotTypes.h:33-38) — display-only in V2; imported
+  // so they round-trip, but useBuildStats strips them from stat aggregation.
+  CosmeticHelm: 'Cosmetic Helmet', CosmeticArmor: 'Cosmetic Armor',
+  CosmeticCloak: 'Cosmetic Cloak', CosmeticWeapon1: 'Cosmetic Weapon',
+  CosmeticWeapon2: 'Cosmetic Off Hand',
 }
 
 function parseGear(equippedGearNode: AnyRec): {

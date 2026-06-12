@@ -17,9 +17,19 @@ const RIGHT_SLOTS = ['Gloves', 'Bracers', 'Boots', 'Goggles', 'Main Hand', 'Off 
 const COSMETIC_SLOTS = ['Cosmetic Helmet', 'Cosmetic Armor', 'Cosmetic Cloak', 'Cosmetic Weapon', 'Cosmetic Off Hand']
 const ALL_SLOTS = [...LEFT_SLOTS, ...RIGHT_SLOTS, ...COSMETIC_SLOTS]
 
+// Display slot → <EquipmentSlot> key used in the item XML (V2
+// InventorySlotTypes.h enum names, e.g. <CosmeticHelm/>).
+const API_SLOT_NAME: Record<string, string> = {
+  Ring2: 'Ring',
+  'Cosmetic Helmet': 'CosmeticHelm',
+  'Cosmetic Armor': 'CosmeticArmor',
+  'Cosmetic Cloak': 'CosmeticCloak',
+  'Cosmetic Weapon': 'CosmeticWeapon1',
+  'Cosmetic Off Hand': 'CosmeticWeapon2',
+}
+
 function apiSlotName(slot: string): string {
-  if (slot === 'Ring2') return 'Ring'
-  return slot
+  return API_SLOT_NAME[slot] ?? slot
 }
 
 function slotLabel(slot: string): string {

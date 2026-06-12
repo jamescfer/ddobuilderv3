@@ -283,10 +283,32 @@ export function loadWeaponGroups(dataDir: string): WeaponGroupSpec[] {
 }
 
 export function loadStances(dataDir: string): Stance[] {
+  let stances: Stance[] = []
   try {
     const parsed = readXml(path.join(dataDir, 'Stances.xml')) as { Stances?: { Stance?: unknown[] } }
-    return (parsed?.Stances?.Stance ?? []) as Stance[]
+    stances = (parsed?.Stances?.Stance ?? []) as Stance[]
   } catch { return [] }
+  // V2 parity: CStancesPane also surfaces <Stance> elements hosted on trained
+  // feats. The "Attack" feat (Feats.xml, Acquire=Automatic at level 1 — every
+  // build has it) hosts the universal user toggles "Reaper", "Action Boost"
+  // and "Blocking". Conditional filigree set-bonus tiers (e.g. Deadly Rain
+  // 5pc: "+20 Ranged Power while an Action Boost is active") are gated on
+  // Requirement Stance:"Action Boost", so without this merge the trigger can
+  // never be toggled in V3.
+  try {
+    const known = new Set(stances.map(s => s.Name))
+    const attackFeat = loadFeats(dataDir).find(f => f.Name === 'Attack') as
+      (Feat & { Stance?: Stance | Stance[] }) | undefined
+    const hosted = attackFeat?.Stance
+    const hostedList = Array.isArray(hosted) ? hosted : hosted ? [hosted] : []
+    for (const s of hostedList) {
+      if (s?.Name && !known.has(s.Name)) {
+        known.add(s.Name)
+        stances.push(s)
+      }
+    }
+  } catch { /* Feats.xml unavailable — base stances only */ }
+  return stances
 }
 
 export function loadItems(dataDir: string): Item[] {
