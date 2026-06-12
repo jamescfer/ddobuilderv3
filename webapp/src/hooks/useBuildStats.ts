@@ -622,8 +622,11 @@ function accumulateFiligreeSlots(
       if (eff.Rare && !slot.rare) continue  // rare effects only apply when slot is marked rare
       addParsed(map, parseEffect(eff, 1, source, 0, 0, ctx))
     }
-    if (fil.SetBonus) {
-      setCounts.set(fil.SetBonus, (setCounts.get(fil.SetBonus) ?? 0) + 1)
+    // The XML loader's isArray list includes 'SetBonus', so catalogue-loaded
+    // filigrees carry ['Deadly Rain'] rather than 'Deadly Rain'. Normalise so
+    // set counting works for both shapes (V2 counts per set-bonus Type name).
+    for (const sb of toArray(fil.SetBonus as string | string[] | undefined)) {
+      if (sb) setCounts.set(sb, (setCounts.get(sb) ?? 0) + 1)
     }
   }
 }
@@ -765,6 +768,23 @@ function extractArmorMaxDex(gearItems: Record<string, Item>): number | null {
 // ---------------------------------------------------------------------------
 
 /**
+ * V2 parity: cosmetic slots never contribute stat effects. In V2 the cosmetic
+ * slots (InventorySlotTypes.h:33-38) are declared AFTER the Inventory_Count
+ * sentinel, and Build::ApplyGearEffects (Build.cpp:4824-4834) only loops
+ * `Inventory_Unknown+1 .. Inventory_Count`, so equipped cosmetic items are
+ * displayed but their effects are never applied. Strip them before any stat
+ * aggregation so V3 matches.
+ */
+export function stripCosmeticSlots(gearItems: Record<string, Item>): Record<string, Item> {
+  const out: Record<string, Item> = {}
+  for (const [slot, item] of Object.entries(gearItems)) {
+    if (slot.startsWith('Cosmetic')) continue
+    out[slot] = item
+  }
+  return out
+}
+
+/**
  * Pure variant of the stat-aggregation pipeline. Builds the same StatMap
  * the hook produces but without React. Use from CLI tools and unit tests
  * to compare V3-computed numbers against V2 (e.g. via the V2 importer).
@@ -773,10 +793,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
   const map: StatMap = new Map()
 
   const {
-    allClasses, allRaces, allFeats, allTrees, gearItems,
+    allClasses, allRaces, allFeats, allTrees,
     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
     allWeaponGroups, allSpells, allGuildBuffs, allItemBuffs,
   } = input
+  // Cosmetic slots are display-only in V2 (effects never applied) — drop them
+  // here so gear buffs, set bonuses, armor stances and weapon detection all
+  // ignore them.
+  const gearItems = stripCosmeticSlots(input.gearItems)
 
   // ItemBuffs.xml template catalogue (Type → template) for resolving
   // flavour-named item Buff Types via parseItemBuff (V2 Item::FindEffect).
@@ -1129,7 +1153,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
 
     // ── Augments ─────────────────────────────────────────────────────────
     // Include sentient-gem augments alongside regular slot augments (Stream 3).
-    const allAugmentChoices = { ...build.augmentChoices } as Record<string, string>
+    // Augments slotted into cosmetic-slot items are dropped: V2 never calls
+    // ApplyItem for cosmetic slots, so their augments (and set-bonus
+    // contributions) are ignored along with the host item.
+    const allAugmentChoices = {} as Record<string, string>
+    for (const [key, name] of Object.entries(build.augmentChoices)) {
+      if (key.startsWith('Cosmetic')) continue
+      allAugmentChoices[key] = name
+    }
     if (build.sentientGem.majorAugment) {
       allAugmentChoices['SentientMajor'] = build.sentientGem.majorAugment
     }

@@ -116,6 +116,10 @@ const V3_TO_V2_SLOT: Record<string, string> = {
   Belt: 'Belt', Goggles: 'Goggles', Gloves: 'Gloves', Boots: 'Boots',
   Bracers: 'Bracers', Armor: 'Armor', Ring: 'Ring1', Ring2: 'Ring2',
   'Main Hand': 'MainHand', 'Off Hand': 'OffHand', Quiver: 'Quiver', Arrow: 'Arrow',
+  // Cosmetic slots (InventorySlotTypes.h:33-38) — display-only, no stat effects.
+  'Cosmetic Helmet': 'CosmeticHelm', 'Cosmetic Armor': 'CosmeticArmor',
+  'Cosmetic Cloak': 'CosmeticCloak', 'Cosmetic Weapon': 'CosmeticWeapon1',
+  'Cosmetic Off Hand': 'CosmeticWeapon2',
 }
 
 const ABILITIES: Ability[] = [
