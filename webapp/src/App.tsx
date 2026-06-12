@@ -34,26 +34,39 @@ import FavorPanel from './components/favor/FavorPanel'
 import NotesPanel from './components/notes/NotesPanel'
 import ForumExportPanel from './components/export/ForumExportPanel'
 import { SaveLoadBar } from './hooks/usePersistence'
-import type { CharacterBuild } from './types/ddo'
+import { DocumentProvider, useDocument } from './context/DocumentContext'
+import LifeBuildBar from './components/layout/LifeBuildBar'
+import { findActiveBuild } from './lib/multiLife'
+import type { CharacterDocument } from './types/ddo'
 import styles from './App.module.css'
 
 export default function App() {
   return (
     <CharacterProvider>
-      <AppInner />
+      <DocumentProvider>
+        <AppInner />
+      </DocumentProvider>
     </CharacterProvider>
   )
 }
 
 function AppInner() {
   const { dispatch } = useCharacter()
+  const { setDoc } = useDocument()
   const [activeItem, setActiveItem] = useState<NavItem>('Builder')
 
-  function handleLoad(build: CharacterBuild) {
-    dispatch({ type: 'LOAD_BUILD', build })
+  function handleLoad(doc: CharacterDocument) {
+    setDoc(doc)
+    const build = findActiveBuild(doc)
+    if (build) dispatch({ type: 'LOAD_BUILD', build })
   }
 
-  const saveBar = <SaveLoadBar onLoad={handleLoad} />
+  const saveBar = (
+    <>
+      <SaveLoadBar onLoad={handleLoad} />
+      <LifeBuildBar />
+    </>
+  )
 
   return (
     <Layout activeItem={activeItem} onNavigate={setActiveItem} saveBar={saveBar}>
