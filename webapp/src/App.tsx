@@ -37,6 +37,7 @@ import { SaveLoadBar } from './hooks/usePersistence'
 import { DocumentProvider, useDocument } from './context/DocumentContext'
 import { SettingsProvider } from './context/SettingsContext'
 import SettingsPanel from './components/layout/SettingsPanel'
+import ContentPanel from './components/layout/ContentPanel'
 import LifeBuildBar from './components/layout/LifeBuildBar'
 import { findActiveBuild } from './lib/multiLife'
 import type { CharacterDocument } from './types/ddo'
@@ -251,6 +252,12 @@ function AppInner() {
         {activeItem === 'Settings' && (
           <div className={styles.single}>
             <SettingsPanel />
+          </div>
+        )}
+
+        {activeItem === 'Content' && (
+          <div className={styles.single}>
+            <ContentPanel />
           </div>
         )}
       </div>

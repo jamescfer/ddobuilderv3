@@ -4,6 +4,8 @@ import { useCharacter } from '../../context/CharacterContext'
 import type { Item, ItemBuff, ItemAugment, Augment } from '../../types/ddo'
 import DdoIcon from '../DdoIcon'
 import FindGearDialog from './FindGearDialog'
+import GearImportDialog from './GearImportDialog'
+import { useDocument } from '../../context/DocumentContext'
 import styles from './GearPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -294,11 +296,13 @@ function AugmentSlot({ slotName, augment, index, choice, onSet, onClear, maxItem
 // ---------------------------------------------------------------------------
 export default function GearPanel() {
   const { build, dispatch } = useCharacter()
+  const { doc } = useDocument()
 
   const [slotItems, setSlotItems] = useState<Record<string, Item[] | null>>({})
   const [itemDetails, setItemDetails] = useState<Record<string, Item | null>>({})
   const [openSlot, setOpenSlot] = useState<string | null>(null)
   const [findGearOpen, setFindGearOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [setNameInput, setSetNameInput] = useState('')
 
   const gear = build.gear
@@ -454,8 +458,11 @@ export default function GearPanel() {
     if (activeSetName) dispatch({ type: 'DELETE_GEAR_SET', setName: activeSetName })
   }
 
-  // For the open picker
-  const pickerSlotItems = openSlot ? (slotItems[openSlot] ?? []) : []
+  // For the open picker. Items from adventure packs the character does not
+  // own are hidden (V2 ItemSelectDialog.cpp:312-318, ContentPane parity).
+  const dontOwn = new Set(doc.contentIDontOwn ?? [])
+  const pickerSlotItems = (openSlot ? (slotItems[openSlot] ?? []) : [])
+    .filter(it => !it.AdventurePack || !dontOwn.has(it.AdventurePack))
   const isPickerLoading = openSlot && slotItems[openSlot] === null
 
   return (
@@ -470,6 +477,14 @@ export default function GearPanel() {
             title="Search all items across every slot by effect type"
           >
             Find Gear by Effect…
+          </button>
+          <button
+            className={styles.findGearBtn}
+            type="button"
+            onClick={() => setImportOpen(true)}
+            title="Import a gear set from a .gearset file or gear-planner website text (V2 Gear menu)"
+          >
+            Import Gear Set…
           </button>
         </div>
         <div className={styles.gearSetRow}>
@@ -554,6 +569,7 @@ export default function GearPanel() {
         </div>
       )}
       {findGearOpen && <FindGearDialog onClose={() => setFindGearOpen(false)} />}
+      {importOpen && <GearImportDialog onClose={() => setImportOpen(false)} />}
     </div>
   )
 }

@@ -23,3 +23,14 @@ describe('loadIgnoredList (V2 IgnoredList.xml)', () => {
     expect(loadIgnoredList('/nonexistent')).toEqual([])
   })
 })
+
+describe('loadAdventurePacks (V2 quests+challenges pack union)', () => {
+  it.skipIf(!existsSync(DATA_DIR))('collects packs from quests and challenges', async () => {
+    const { loadAdventurePacks } = await import('../server/dataLoaders')
+    const packs = loadAdventurePacks(DATA_DIR)
+    expect(packs.length).toBeGreaterThan(20)
+    expect(packs).toContain('Chill of Ravenloft')
+    // No duplicates (V2 push_back guarded by find()).
+    expect(new Set(packs).size).toBe(packs.length)
+  })
+})

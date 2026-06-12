@@ -2,6 +2,7 @@ import { useState, useEffect, useId } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import { findGearByEffect } from '../../lib/findGear'
+import { useDocument } from '../../context/DocumentContext'
 import type { Item, ItemBuff } from '../../types/ddo'
 import styles from './FindGearDialog.module.css'
 
@@ -69,6 +70,7 @@ const MAX_RESULTS = 400
 
 export default function FindGearDialog({ onClose }: FindGearDialogProps) {
   const { build, dispatch } = useCharacter()
+  const { doc } = useDocument()
   const listId = useId()
 
   const maxCharLevel = Math.max(
@@ -106,9 +108,16 @@ export default function FindGearDialog({ onClose }: FindGearDialogProps) {
       .finally(() => setLoading(false))
   }, [])
 
+  // V2 ContentPane parity: hide items from unowned adventure packs
+  // (ItemSelectDialog.cpp:312-318 applies the same filter to FindGearDialog).
+  const dontOwn = new Set(doc.contentIDontOwn ?? [])
+  const ownedItems = allItems
+    ? allItems.filter(it => !it.AdventurePack || !dontOwn.has(it.AdventurePack))
+    : null
+
   const results =
-    allItems && (nameSearch || buffSearch || minLv > 1 || maxLv < maxCharLevel || minVal !== '')
-      ? findGearByEffect(allItems, {
+    ownedItems && (nameSearch || buffSearch || minLv > 1 || maxLv < maxCharLevel || minVal !== '')
+      ? findGearByEffect(ownedItems, {
           nameSearch: nameSearch || undefined,
           buffSearch: buffSearch || undefined,
           minLevel: minLv > 1 ? minLv : undefined,

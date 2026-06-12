@@ -468,6 +468,25 @@ export interface Challenge {
  * DDOBuilder.cpp:1481-1510). User additions/removals layer on top in V3
  * settings (V2 keeps them in the same file in the user data dir).
  */
+/**
+ * Adventure-pack names — the union of <AdventurePack> values from Quests.xml
+ * and Challenges.xml, in first-seen order (V2 CDDOBuilderApp::LoadQuests /
+ * LoadChallenges, DDOBuilder.cpp:1193-1201 + 1238-1246). Drives the
+ * ContentPane ownership list; items from packs in Character.contentIDontOwn
+ * are hidden from item-selection lists (ItemSelectDialog.cpp:312-318).
+ */
+export function loadAdventurePacks(dataDir: string): string[] {
+  const packs: string[] = []
+  const seen = new Set<string>()
+  const add = (p: unknown) => {
+    const name = typeof p === 'string' ? p : ''
+    if (name && !seen.has(name)) { seen.add(name); packs.push(name) }
+  }
+  for (const q of loadQuests(dataDir)) add((q as { AdventurePack?: string }).AdventurePack)
+  for (const c of loadChallenges(dataDir)) add((c as { AdventurePack?: string }).AdventurePack)
+  return packs
+}
+
 export function loadIgnoredList(dataDir: string): string[] {
   try {
     const parsed = readXml(path.join(dataDir, 'IgnoredList.xml')) as { IgnoredList?: { Ignored?: unknown } }
