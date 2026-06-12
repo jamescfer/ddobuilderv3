@@ -28,8 +28,13 @@ function countSetBonuses(slots: FiligreeSlot[], filigrees: Filigree[]): Map<stri
   for (const slot of slots) {
     if (!slot.name) continue
     const f = byName.get(slot.name)
-    if (!f?.SetBonus) continue
-    counts.set(f.SetBonus, (counts.get(f.SetBonus) ?? 0) + 1)
+    // SetBonus is a repeated XML element — the parser delivers an ARRAY with
+    // real catalogue data. Keying the map on the array (pre-fix behaviour)
+    // crashed the whole page on `a.localeCompare` once any filigree was
+    // slotted, and never matched FiligreeSetBonus.Type.
+    for (const sb of toArray(f?.SetBonus)) {
+      counts.set(sb, (counts.get(sb) ?? 0) + 1)
+    }
   }
   return counts
 }
