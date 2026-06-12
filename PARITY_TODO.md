@@ -85,6 +85,12 @@ the PR number, so this file doubles as a changelog.
 | 63 | **N5 — Multi-Type effect expansion (hireling stat passthrough + broad)** — V2 data places multiple `<Type>` elements inside a single `<Effect>` block (e.g. `["PRR","MRR"]`, `["MeleePower","RangedPower"]`, `["DodgeBonus","DodgeCapBonus"]`, `["Doublestrike","Doubleshot"]`, `["HirelingPRR","HirelingMRR"]`). fast-xml-parser promotes duplicate child elements to an array, so `effect.Type` became `string[]`; `parseEffect`'s switch fell through every case and returned `[]` — **464+ effects in enhancement trees and 3 in GuildBuffs.xml were silently dropped**. Fixed: an array-type guard at the top of `parseEffect` fans out to one recursive call per type (V2's multi-type expansion parity). Regression tests in `__tests__/parityPassN5.test.ts` cover all common combinations. | this PR |
 | 64 | **U9 (partial) — Find-Gear-by-effect dialog** — `lib/findGear.ts` exports `findGearByEffect(items, query)` (pure function; supports exact/partial buff-type match, min buff value, level range, name search; returns `FindGearResult[]` sorted by level then name). `FindGearDialog.tsx` is a cross-slot search modal (V2 `FindGearDialog` parity): loads all items on open, filters client-side, shows results in a table with item name / level / slot / matched effects / Equip buttons; ring items get two Equip buttons (Ring 1 / Ring 2). Wired into `GearPanel` via a "Find Gear by Effect…" button at the top of the Gear panel. 14 regression tests in `__tests__/findGear.test.ts` cover all filter combinations. | #76 |
 | 65 | **U1 — Multi-life / multi-build document UI** — the running app now holds the full V2 Character → Life[] → Build[] document. `DocumentContext.tsx` stores the `CharacterDocument` beside the active-build reducer (active build edited in place, siblings stored — V2's model); pure transforms in `lib/multiLife.ts` (`emptyDocument`, `syncBuildIntoDocument`, `setActiveBuild`, `addLifeToDocument`, `addBuildToLife`, `deleteLifeFromDocument`, `deleteBuildFromDocument`, `renameLife`, `findActiveBuild`/`findActiveLife`); `LifeBuildBar.tsx` renders life + build tab rows in the sidebar (switch, add life, add build-snapshot, delete with last-one guards, double-click rename). Persistence rewritten to document storage (`ddo-builder-docs` localStorage key; legacy flat saves auto-migrate, one document per legacy build); Save/Load/Export JSON/Export .DDOBuild/Import all operate on whole documents, so importing a multi-build V2 file (Maetrim, 35 builds) **keeps every life/build** and exports them all back via `exportV2DocumentModel`. Also fixes a runtime crash: `SaveLoadBar`'s "Export .DDOBuild" button referenced `exportDDOBuild` out of scope (never returned from `usePersistence`) — clicking it threw `ReferenceError`; the client tsconfig (`tsconfig.client.json`) had flagged it but only the server tsconfig gates the build. 17 regression tests in `__tests__/parityPassU1.test.ts`. | #93 |
+| 66 | **U6 + build migration + gearset import** — BuildCompare offers every build of the current document grouped per life (V2 simultaneously-active builds); `migrateDocument` runs every stored/imported build through `migrateLoad` (build-version migration); `lib/gearPlannerImport.ts` ports V2 `EquippedGear::ImportFromFile/ImportFromClipboard` (both text formats, first-fit augment placement incl. ChooseLevel value-match) with `GearImportDialog` UI; V2-faithful tests against the real `Example Gear PLanner Website Set.txt`. | #93 |
+| 67 | **V2 Settings menu** — `SettingsContext` + `SettingsPanel`: Show only Epic feats for Epic feat slots (`Build.cpp:1539-1549`), Show Unavailable Feats (`Build::TrainableFeats:1455-1459`), Ignore Lists Active (+ `/api/ignored-list` from `IgnoredList.xml` with user add/remove), Auto Select Single Option Enhancements (`EnhancementTreeDialog::GetAutoSelection`); wired into FeatSlots + TreeGrid. Lamannia/DPI/theme are desktop-only (➖). | #93 |
+| 68 | **ContentPane ownership filtering** — `/api/adventure-packs` (union of Quests+Challenges `<AdventurePack>`, `DDOBuilder.cpp:1193-1246`); `ContentPanel` per-pack toggles writing document-level `contentIDontOwn`; GearPanel pickers + FindGearDialog hide items from unowned packs (`ItemSelectDialog.cpp:312-318`). Gear-import dialog wired into GearPanel. | #93 |
+| 69 | **Polish** — Ctrl+N/O/S accelerators, window drag-and-drop import, auto-save Settings toggle (debounced), print stylesheet, Help & About panel. E1 remainder verified not-a-gap: V2 `SLAControl` tracks no charges. | #93 |
+| 70 | **Attack-chain combat simulator** — `lib/combat/attackChain.ts` ports the V2 model: Attack data from Feats.xml + tree items/selections (`DPSPane.cpp:253-326`), same-name stacking (`:380-419`), timeline with ExecutionTime / 60-per-APM basic swings (`:577-634`), strict buff expiry (`AttackBuff.cpp:18-22`), stance→style mapping, chain mutations (`AttackChain.cpp:62-81`); CombatPanel chain editor UI. **Key finding:** V2's six per-style DPS evaluators are stubs returning 0 (`DPSPane.cpp:990-1060`) — kept verbatim as `evaluateAttackV2` for parity; the UI's damage numbers use a clearly-marked V3 estimator built on the single-weapon baseline. `SET_ACTIVE_ATTACK_CHAIN` action added; `activeAttackChain` no longer dropped on rehydrate. 32 tests. | #93 |
+| 71 | **Gear data edge cases** — Cosmetic slots: picker slot-name map fixed, `stripCosmeticSlots()` excludes their buffs/set-bonuses/augments from stats (V2 loops only to `Inventory_Count`, `Build.cpp:4824-4834`), and they round-trip `.DDOBuild`. Filigree conditional set-bonus tiers correctly gate on toggleable stances — Attack-feat user stances (Action Boost/Reaper/Blocking) now appear in the Stances panel; **fixed a real bug: filigree set bonuses never fired with real catalogue data** (`SetBonus` array used as a map key). Ring1/Ring2 verified. **Not-a-gap findings:** sentient-gem personalities carry no effects in V2 (`Gem.h:31-34`, zero `<Effect>` in Sentient.gems.xml); no trinket-via-augment mechanic exists in V2 (`Augment.h:35-56`). 18 tests. | #93 |
 
 ### Known approximation (noted, not changed)
 
@@ -192,10 +198,10 @@ Remaining read/write-fidelity gaps:
 
 ## High-priority remaining — effect parser coverage
 
-- 🟡 **E1 — `SLA` (Spell-Like Ability)** — the SLA *list* is now auto-derived
-  (`sla.<spellName>` markers + `BuildStats.slaList` + forum export, #74). Charge
-  *consumption* is still not simulated (runtime-only, out of scope for a stat
-  planner).
+- ✅ **E1 — `SLA` (Spell-Like Ability)** — the SLA *list* is auto-derived
+  (`sla.<spellName>` markers + `BuildStats.slaList` + forum export, #74).
+  Charge *consumption* verified not-a-gap (Done #69): V2 `SLAControl.cpp`
+  contains no charge tracking at all; V3's `slaCharges` already exceeds V2.
 - 🟡 **Non-stance runtime gates** (EnemyType, MaterialType, Skill, …) remain
   conservative-pass in the stat planner — intentional (runtime-only), tracked
   here for completeness.
@@ -223,8 +229,9 @@ Remaining read/write-fidelity gaps:
   sorted list of effect-granted feat names; `AutomaticFeats.tsx` renders a
   "Granted Feats" subsection when any are active. Remaining (out of scope here):
   a "Special Feats" panel for past-life icon grids / favor feats management.
-- 🟡 **U6 — Build comparison scope.** V3 compares two *saved* builds via dropdown
-  (`BuildCompare.tsx`); V2 compares simultaneously-active builds within a life.
+- ✅ **U6 — Build comparison scope** — fixed (Done #66). BuildCompare lists
+  every build of the current document (grouped per life) ahead of saved
+  characters.
 - ✅ **U7 — Per-level training UI** — `LevelTrainingPanel.tsx` shows each heroic
   character level as a collapsible card with class, feat choices, and skill
   ranks allocated at that level. `lib/levelTraining.ts` exports `buildSlots()`
@@ -233,11 +240,8 @@ Remaining read/write-fidelity gaps:
 - ➖ **U8 — Spell metamagic class-gating** — Investigation shows V2's `Spell.h`
   also uses only per-spell binary metamagic flags with no class-level gating.
   Both V2 and V3 treat metamagics as spell-wide properties; no gap exists.
-- 🟡 **U9 — Content-ownership filtering UI** (`ContentPane`), Find-Gear-by-effect
-  (`FindGearDialog`), help docs / tooltips. **FindGearDialog done (Done #64)**:
-  cross-slot search by buff type, value, level, name with Equip buttons in
-  results table. Remaining: ContentPane (per-pack ownership toggle) and help
-  docs / tooltips.
+- ✅ **U9 — complete.** FindGearDialog (Done #64), ContentPane per-pack
+  ownership toggles + item filtering (Done #68), Help & About panel (Done #69).
 
 ---
 
@@ -252,25 +256,30 @@ Remaining read/write-fidelity gaps:
 ## Medium-priority remaining
 
 ### Subsystems V3 hasn't ported
-- ❌ **Combat simulator with attack chains** — V2 `AttackChain.cpp` /
-  `Attack.cpp` models a per-swing rotation (main / off / cleave / strikethrough)
-  and a `BreakdownItemWeaponEffects` holder chain; V3 has a single-weapon
-  expected-DPR estimator only.
-- ❌ **Gear optimizer / auto-equip** — V2's "auto-equip" searches the item DB
-  for the best stat result given a goal. Multi-day port.
-- ❌ **Settings dialog** — DPI scaling, auto-update, log-level, data-files-path,
-  file associations. V3 has none.
-- ❌ **Build version migration** — V2 has `Build version="1"`; V3's localStorage
-  version is `_v: 2`. Need a migration path for older `_v` saves.
+- ✅ **Combat simulator with attack chains** — done (#70). NB: V2's own DPS
+  evaluators are stubs returning 0; V3 ports everything V2 actually computes
+  and labels its damage estimator as a V3 extension.
+- ➖ **Gear optimizer / auto-equip** — **phantom item: V2 has no such
+  feature.** Exhaustive grep of `DDOBuilder/` sources and the UTF-16
+  `DDOBuilder.rc` menu resource finds no auto-equip/optimizer/suggest-gear
+  code or menu entry. Removed from the parity path.
+- ✅ **Settings** — done (#67/#69): the four V2 behaviour toggles + auto-save +
+  ignore-list management. DPI/auto-update/log-level/data-path/file-assoc are
+  desktop-only (➖).
+- ✅ **Build version migration** — done (#66): `migrateDocument` normalises
+  every build of every stored/imported document through `migrateLoad`.
 
 ### Data-file edge cases
-- ❌ **Item slot edge cases** — two ring slots, trinket-via-augment, etc.
-- ❌ **Cosmetic gear effects** — V2 ignores cosmetic stat effects but shows them;
-  V3 ignores them entirely.
-- ❌ **Sentient gem augment / personality buffs** — `majorAugment`/`minorAugment`
-  are wired (#53) but personality buffs aren't.
-- ❌ **Filigree set bonuses with conditional triggers** — V2 has triggered set
-  bonuses (e.g. on-crit); V3 always-on.
+- ✅ **Item slot edge cases** — two ring slots verified (#71);
+  trinket-via-augment is **not a V2 mechanic** (`Augment.h:35-56` — augments
+  can only add/grant augment slots, never inventory slots).
+- ✅ **Cosmetic gear effects** — done (#71): cosmetic slots equip/display and
+  round-trip, stats stripped (`stripCosmeticSlots`).
+- ✅ **Sentient gem personality buffs** — **not a gap** (#71): V2 `Gem.h:31-34`
+  personalities have no effects; Sentient.gems.xml contains zero `<Effect>`.
+- ✅ **Filigree set bonuses with conditional triggers** — done (#71): V2 gates
+  them on toggleable stances; the Attack-feat user stances now surface in the
+  Stances panel. Also fixed filigree set bonuses never firing with real data.
 
 ### Editor tools (intentionally out of parity scope)
 - ➖ **Item / enhancement-tree / spell / race / class editors** — V2 ships
@@ -281,9 +290,9 @@ Remaining read/write-fidelity gaps:
 
 ## Low-priority polish
 
-- ❌ **Keyboard shortcuts** (V2 `KeybindEditor`), **print layout**, **auto-save
-  toggle**, **recent-files menu**, **drag-and-drop / file-association import**.
-  None present in V3.
+- ✅ **Keyboard shortcuts / print layout / auto-save / drag-and-drop import** —
+  done (#69). Recent-files is covered by the Load picker (documents persist in
+  localStorage); Win32 file associations are desktop-only (➖).
 
 ---
 
