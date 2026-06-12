@@ -3,6 +3,7 @@ import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
 import type { Item, ItemBuff, ItemAugment, Augment } from '../../types/ddo'
 import DdoIcon from '../DdoIcon'
+import FindGearDialog from './FindGearDialog'
 import styles from './GearPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -287,6 +288,7 @@ export default function GearPanel() {
   const [slotItems, setSlotItems] = useState<Record<string, Item[] | null>>({})
   const [itemDetails, setItemDetails] = useState<Record<string, Item | null>>({})
   const [openSlot, setOpenSlot] = useState<string | null>(null)
+  const [findGearOpen, setFindGearOpen] = useState(false)
   const [setNameInput, setSetNameInput] = useState('')
 
   const gear = build.gear
@@ -450,6 +452,16 @@ export default function GearPanel() {
     <div className="panel">
       <div className="panel-header">Gear</div>
       <div className="panel-body">
+        <div className={styles.findGearRow}>
+          <button
+            className={styles.findGearBtn}
+            type="button"
+            onClick={() => setFindGearOpen(true)}
+            title="Search all items across every slot by effect type"
+          >
+            Find Gear by Effect…
+          </button>
+        </div>
         <div className={styles.gearSetRow}>
           <input
             type="text"
@@ -531,6 +543,7 @@ export default function GearPanel() {
           </div>
         </div>
       )}
+      {findGearOpen && <FindGearDialog onClose={() => setFindGearOpen(false)} />}
     </div>
   )
 }
