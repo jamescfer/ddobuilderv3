@@ -456,6 +456,31 @@
 }
 
 /* -----------------------------------------------------------------------
+   Find Gear button row
+   ----------------------------------------------------------------------- */
+
+.findGearRow {
+  margin-bottom: 8px;
+}
+
+.findGearBtn {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--color-bg-active);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.findGearBtn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-gold-dark);
+  color: var(--color-text-primary);
+}
+
+/* -----------------------------------------------------------------------
    Gear set management row
    ----------------------------------------------------------------------- */
 
