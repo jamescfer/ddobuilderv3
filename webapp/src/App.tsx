@@ -35,6 +35,8 @@ import NotesPanel from './components/notes/NotesPanel'
 import ForumExportPanel from './components/export/ForumExportPanel'
 import { SaveLoadBar } from './hooks/usePersistence'
 import { DocumentProvider, useDocument } from './context/DocumentContext'
+import { SettingsProvider } from './context/SettingsContext'
+import SettingsPanel from './components/layout/SettingsPanel'
 import LifeBuildBar from './components/layout/LifeBuildBar'
 import { findActiveBuild } from './lib/multiLife'
 import type { CharacterDocument } from './types/ddo'
@@ -44,7 +46,9 @@ export default function App() {
   return (
     <CharacterProvider>
       <DocumentProvider>
-        <AppInner />
+        <SettingsProvider>
+          <AppInner />
+        </SettingsProvider>
       </DocumentProvider>
     </CharacterProvider>
   )
@@ -241,6 +245,12 @@ function AppInner() {
         {activeItem === 'Forum Export' && (
           <div className={styles.single}>
             <ForumExportPanel />
+          </div>
+        )}
+
+        {activeItem === 'Settings' && (
+          <div className={styles.single}>
+            <SettingsPanel />
           </div>
         )}
       </div>
