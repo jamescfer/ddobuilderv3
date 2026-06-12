@@ -4,6 +4,7 @@ import type { CharacterBuild, Item } from '../types/ddo'
 import { useCharacter } from '../context/CharacterContext'
 import { isCharacterDocument, flattenDocument } from '../lib/multiLife'
 import { importV2Build } from '../lib/v2Import'
+import { importV1Build, isV1CharacterXml } from '../lib/v1Import'
 import { exportV2Build } from '../lib/v2Export'
 import type { ItemCatalogue } from '../lib/v2Export'
 
@@ -138,6 +139,24 @@ export function usePersistence(): PersistenceAPI {
       reader.onload = () => {
         try {
           const text = reader.result as string
+          // V1 .ddocp XML support — detect by file extension or the V1 root
+          // tag <DDOCharacterData> (CDDOBuilderApp::OnFileImport reads these
+          // with that expected root, DDOBuilder.cpp:294-325). Must be checked
+          // before the generic V2 XML branch below, which would otherwise
+          // swallow any '<'-prefixed text.
+          const isV1 = file.name.toLowerCase().endsWith('.ddocp') ||
+                       isV1CharacterXml(text)
+          if (isV1) {
+            const { document: doc, warnings } = importV1Build(text)
+            const life = doc.lives.find(l => l.id === doc.activeLifeId) ?? doc.lives[0]
+            const build = life?.builds.find(b => b.id === doc.activeBuildId) ?? life?.builds[0]
+            if (!build) {
+              reject(new Error(warnings[0] ?? 'V1 import produced no build'))
+              return
+            }
+            resolve(build)
+            return
+          }
           // V2 .DDOBuild XML support — detect by file extension or root tag.
           const isXml = file.name.toLowerCase().endsWith('.ddobuild') ||
                         text.trim().startsWith('<')
@@ -294,7 +313,7 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
   const hiddenInput = h('input', {
     ref: fileInputRef,
     type: 'file',
-    accept: '.json,application/json,.ddobuild,.DDOBuild,application/xml,text/xml',
+    accept: '.json,application/json,.ddobuild,.DDOBuild,.ddocp,application/xml,text/xml',
     style: { display: 'none' },
     onChange: handleFileChange,
   })
