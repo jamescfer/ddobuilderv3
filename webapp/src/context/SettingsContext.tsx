@@ -25,6 +25,8 @@ export interface BuilderSettings {
   ignoreListActive: boolean
   /** Buying an enhancement with exactly one selector option auto-picks it. */
   autoSelectSingleOption: boolean
+  /** Auto-save the document shortly after every change (V2 backup model). */
+  autoSave: boolean
   /** User additions to the ignore list. */
   ignoredAdded: string[]
   /** User removals from the default ignore list. */
@@ -36,6 +38,7 @@ const DEFAULTS: BuilderSettings = {
   showUnavailable: false,
   ignoreListActive: true,
   autoSelectSingleOption: false,
+  autoSave: false,
   ignoredAdded: [],
   ignoredRemoved: [],
 }

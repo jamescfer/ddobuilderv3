@@ -10,7 +10,7 @@ export default function SettingsPanel() {
   const { settings, update, ignoredSet, toggleIgnored } = useSettings()
   const [newIgnored, setNewIgnored] = useState('')
 
-  const toggles: Array<{ key: 'showEpicOnly' | 'showUnavailable' | 'ignoreListActive' | 'autoSelectSingleOption'; label: string; help: string }> = [
+  const toggles: Array<{ key: 'showEpicOnly' | 'showUnavailable' | 'ignoreListActive' | 'autoSelectSingleOption' | 'autoSave'; label: string; help: string }> = [
     {
       key: 'showEpicOnly',
       label: 'Show only Epic feats for Epic feat slots',
@@ -25,6 +25,11 @@ export default function SettingsPanel() {
       key: 'ignoreListActive',
       label: 'Ignore Lists Active',
       help: 'Hide ignore-listed feats/items from selection lists.',
+    },
+    {
+      key: 'autoSave',
+      label: 'Auto-save',
+      help: 'Save the current character automatically shortly after every change.',
     },
     {
       key: 'autoSelectSingleOption',
