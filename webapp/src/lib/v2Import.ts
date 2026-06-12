@@ -684,6 +684,28 @@ function parseRoot(xml: string) {
 }
 
 /**
+ * Parses a standalone <EquippedGear> XML fragment (V2 Gear menu Paste parity
+ * — EquipmentPane::OnGearPaste reads the same XML OnGearCopy wrote). Returns
+ * null when the text is not a gear-set fragment.
+ */
+export function importGearSetXml(xml: string): {
+  name: string
+  gear: Record<string, string>
+  augmentChoices: Record<string, string>
+} | null {
+  try {
+    const parsed = parser.parse(xml) as AnyRec
+    // The parser is configured with EquippedGear in its isArray list.
+    const node = arr(parsed.EquippedGear as AnyRec | AnyRec[] | undefined)[0]
+    if (!node) return null
+    const g = parseGear(node)
+    return { name: asStr(node.Name) || 'Pasted Set', gear: g.gear, augmentChoices: g.augmentChoices }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Import the FULL multi-life / multi-build document (F1). Every <Life> and its
  * every <Build> is imported into the CharacterDocument model, preserving the
  * V2 ActiveLifeIndex / ActiveBuildIndex selection. The exporter

@@ -426,6 +426,24 @@ function emitGearSet(
 }
 
 /**
+ * Standalone <EquippedGear> XML fragment for one gear set — V2 Gear menu
+ * Copy parity (EquipmentPane::OnGearCopy writes exactly this via
+ * EquippedGear::Write to a custom clipboard format). V3 puts it on the text
+ * clipboard so sets can be moved between builds/documents (and pasted from
+ * fragments lifted out of .DDOBuild files).
+ */
+export function exportGearSetXml(
+  setName: string,
+  slots: Record<string, string>,
+  augments: Record<string, string>,
+  itemCatalogue?: ItemCatalogue,
+): string {
+  const xml = new Xml()
+  emitGearSet(xml, setName, slots, augments, undefined, itemCatalogue)
+  return xml.toString()
+}
+
+/**
  * Reconstruct Character-level <SpecialFeats> from V3 pastLives. F5: when the
  * original V2 <Type> was captured on import (`pastLifeTypes`), reproduce it
  * exactly — Iconic vs Epic past lives are otherwise indistinguishable by name.

@@ -22,6 +22,9 @@ import type { ItemCatalogue } from '../lib/v2Export'
 const STORAGE_KEY = 'ddo-builder-saves'
 /** U1 document storage: CharacterDocument[] (Character → Life[] → Build[]). */
 const DOCS_KEY = 'ddo-builder-docs'
+/** One-deep per-document backups (V2 "Revert to Backup": the app keeps the
+ *  previous file contents as a .bak next to the saved file). */
+const BACKUP_KEY = 'ddo-builder-docs-backup'
 
 // ---------------------------------------------------------------------------
 // Storage helpers
@@ -99,6 +102,9 @@ export interface PersistenceAPI {
   saves: CharacterBuild[]
   saveDocument: (doc: CharacterDocument) => void
   deleteDocument: (id: string) => void
+  /** V2 "Revert to Backup": the version of the document before its last save,
+   *  or undefined when it has never been overwritten. */
+  loadBackup: (id: string) => CharacterDocument | undefined
   exportJSON: (doc: CharacterDocument) => void
   exportDDOBuild: (doc: CharacterDocument, itemCatalogue?: ItemCatalogue | Item[]) => void
   /** Parses a V3 JSON (document or single build) or V2 .DDOBuild file. */
@@ -110,16 +116,36 @@ export function usePersistence(): PersistenceAPI {
 
   const saves = docs.flatMap(flattenDocument)
 
-  /** Upsert document by id and flush to localStorage */
+  /** Upsert document by id and flush to localStorage. The overwritten version
+   *  becomes the document's backup (V2 writes a .bak before saving). */
   const saveDocument = useCallback((doc: CharacterDocument) => {
     setDocs(prev => {
       const idx = prev.findIndex(d => d.id === doc.id)
+      if (idx >= 0) {
+        try {
+          const raw = localStorage.getItem(BACKUP_KEY)
+          const backups = (raw ? JSON.parse(raw) : {}) as Record<string, CharacterDocument>
+          backups[doc.id] = prev[idx]
+          localStorage.setItem(BACKUP_KEY, JSON.stringify(backups))
+        } catch { /* backup is best-effort */ }
+      }
       const next = idx >= 0
         ? prev.map((d, i) => (i === idx ? doc : d))
         : [...prev, doc]
       writeDocs(next)
       return next
     })
+  }, [])
+
+  const loadBackup = useCallback((id: string): CharacterDocument | undefined => {
+    try {
+      const raw = localStorage.getItem(BACKUP_KEY)
+      const backups = (raw ? JSON.parse(raw) : {}) as Record<string, unknown>
+      const doc = backups[id]
+      return isCharacterDocument(doc) ? migrateDocument(doc) : undefined
+    } catch {
+      return undefined
+    }
   }, [])
 
   /** Remove a document from the saves list and from localStorage */
@@ -236,7 +262,7 @@ export function usePersistence(): PersistenceAPI {
     })
   }, [])
 
-  return { docs, saves, saveDocument, deleteDocument, exportJSON, exportDDOBuild, importFile }
+  return { docs, saves, saveDocument, deleteDocument, loadBackup, exportJSON, exportDDOBuild, importFile }
 }
 
 // ---------------------------------------------------------------------------
@@ -261,7 +287,7 @@ export interface SaveLoadBarProps {
 export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
   const { build, dispatch } = useCharacter()
   const { doc, setDoc } = useDocument()
-  const { docs, saveDocument, importFile, exportJSON, exportDDOBuild } = usePersistence()
+  const { docs, saveDocument, loadBackup, importFile, exportJSON, exportDDOBuild } = usePersistence()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState(false)
@@ -376,6 +402,22 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
     'Import',
   )
 
+  const revertBtn = h(
+    'button',
+    {
+      type: 'button',
+      title: 'Revert to the version before the last save (V2 "Revert to Backup")',
+      onClick: () => {
+        const backup = loadBackup(doc.id)
+        if (!backup) { window.alert('No backup exists for this character yet.') }
+        else if (window.confirm('Revert to the previous saved version? Current changes will be lost.')) {
+          onLoad(backup)
+        }
+      },
+    },
+    'Revert',
+  )
+
   const errorSpan = importError
     ? h('span', { style: { color: 'var(--color-red)', fontSize: '11px' } }, importError)
     : null
@@ -398,6 +440,7 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
     exportV2Btn,
     hiddenInput,
     importBtn,
+    revertBtn,
     errorSpan,
   )
 }

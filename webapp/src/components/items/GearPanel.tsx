@@ -5,6 +5,8 @@ import type { Item, ItemBuff, ItemAugment, Augment } from '../../types/ddo'
 import DdoIcon from '../DdoIcon'
 import FindGearDialog from './FindGearDialog'
 import GearImportDialog from './GearImportDialog'
+import { exportGearSetXml } from '../../lib/v2Export'
+import { importGearSetXml } from '../../lib/v2Import'
 import { useDocument } from '../../context/DocumentContext'
 import styles from './GearPanel.module.css'
 
@@ -485,6 +487,37 @@ export default function GearPanel() {
             title="Import a gear set from a .gearset file or gear-planner website text (V2 Gear menu)"
           >
             Import Gear Set…
+          </button>
+          <button
+            className={styles.findGearBtn}
+            type="button"
+            title="Copy the current gear set to the clipboard as V2 EquippedGear XML (V2 Gear → Copy)"
+            onClick={() => {
+              const xml = exportGearSetXml(build.activeGearSetName || 'Copied Set', build.gear, build.augmentChoices)
+              void navigator.clipboard?.writeText(xml)
+            }}
+          >
+            Copy Set
+          </button>
+          <button
+            className={styles.findGearBtn}
+            type="button"
+            title="Paste a gear set from the clipboard (V2 Gear → Paste)"
+            onClick={() => {
+              navigator.clipboard?.readText().then(text => {
+                const parsed = importGearSetXml(text)
+                if (!parsed) { window.alert('Clipboard does not contain a V2 gear-set XML fragment.'); return }
+                for (const [slot, itemName] of Object.entries(parsed.gear)) {
+                  dispatch({ type: 'SET_GEAR', slot, itemName })
+                }
+                for (const [key, augmentName] of Object.entries(parsed.augmentChoices)) {
+                  dispatch({ type: 'SET_AUGMENT', key, augmentName })
+                }
+                dispatch({ type: 'SAVE_GEAR_SET', setName: parsed.name })
+              }).catch(() => window.alert('Could not read the clipboard.'))
+            }}
+          >
+            Paste Set
           </button>
         </div>
         <div className={styles.gearSetRow}>
