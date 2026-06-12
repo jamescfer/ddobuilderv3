@@ -793,7 +793,19 @@ export function stripCosmeticSlots(gearItems: Record<string, Item>): Record<stri
  * the hook produces but without React. Use from CLI tools and unit tests
  * to compare V3-computed numbers against V2 (e.g. via the V2 importer).
  */
-export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): StatMap {
+/**
+ * Single resolution pass. `abilityTotalsOverride` (when given) replaces the
+ * inherent chargen-time ability totals in the EffectContext — used by the
+ * fixed-point wrapper below to feed fully-resolved ability scores back into
+ * ability-gated requirements and ability-mod ATypes (V2 parity: BreakdownItem
+ * observers re-evaluate against the live ability breakdown totals, not the
+ * chargen snapshot).
+ */
+function buildStatMapOnce(
+  input: BuildStatsInput,
+  build: CharacterBuild,
+  abilityTotalsOverride?: Record<string, number>,
+): StatMap {
   const map: StatMap = new Map()
 
   const {
@@ -869,14 +881,19 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
         if (rank > 0) ctxEnhancements.add(name)
       }
     }
-    // Inherent-only ability totals (base + race + levelup, no tome at ctx time)
+    // Pass 1: inherent-only ability totals (base + race + levelup). The
+    // fixed-point wrapper re-runs with the fully-resolved totals.
     const ctxAbilityTotals: Record<string, number> = {}
     const ABILITIES_C = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'] as const
-    for (const ab of ABILITIES_C) {
-      const base = build.baseAbilities[ab] ?? 8
-      const racial = ctxRace ? Number((ctxRace as unknown as Record<string, number>)[ab]) || 0 : 0
-      const lv = Object.values(build.abilityLevelUps).filter(v => v === ab).length
-      ctxAbilityTotals[ab] = base + racial + lv
+    if (abilityTotalsOverride) {
+      Object.assign(ctxAbilityTotals, abilityTotalsOverride)
+    } else {
+      for (const ab of ABILITIES_C) {
+        const base = build.baseAbilities[ab] ?? 8
+        const racial = ctxRace ? Number((ctxRace as unknown as Record<string, number>)[ab]) || 0 : 0
+        const lv = Object.values(build.abilityLevelUps).filter(v => v === ab).length
+        ctxAbilityTotals[ab] = base + racial + lv
+      }
     }
     const ctxStances = deriveArmorStances(gearItems)
     // V2 parity: Build::IsStanceActive checks both armor-derived stances AND
@@ -1890,6 +1907,38 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       map.set(key, rebuilt)
     }
 
+  return map
+}
+
+/**
+ * Fixed-point stat-map resolution (V2 parity for ability-driven effects).
+ *
+ * V2's BreakdownItems observe the ability breakdowns: when gear/enhancement/
+ * tome bonuses change an ability total, every dependent breakdown (Divine
+ * Might-style ability-mod ATypes, ability-gated Requirements) re-evaluates
+ * against the LIVE total. V3 resolves in passes instead: pass 1 uses the
+ * inherent chargen totals (previous behaviour, documented as the "known
+ * approximation"), then re-resolves with the fully-resolved totals until they
+ * stop changing (bounded — ability→effect→ability chains in the data settle
+ * in one or two iterations; the bound guards pathological oscillation).
+ */
+export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): StatMap {
+  const ABILITIES = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']
+  const totalsOf = (m: StatMap): Record<string, number> => {
+    const out: Record<string, number> = {}
+    for (const ab of ABILITIES) out[ab] = resolveBonus(m.get(`ability.${ab}`) ?? []).total
+    return out
+  }
+  let map = buildStatMapOnce(input, build)
+  let totals = totalsOf(map)
+  for (let i = 0; i < 3; i++) {
+    const next = buildStatMapOnce(input, build, totals)
+    const nextTotals = totalsOf(next)
+    map = next
+    const stable = ABILITIES.every(ab => nextTotals[ab] === totals[ab])
+    totals = nextTotals
+    if (stable) break
+  }
   return map
 }
 

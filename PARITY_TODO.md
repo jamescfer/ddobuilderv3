@@ -92,14 +92,16 @@ the PR number, so this file doubles as a changelog.
 | 70 | **Attack-chain combat simulator** — `lib/combat/attackChain.ts` ports the V2 model: Attack data from Feats.xml + tree items/selections (`DPSPane.cpp:253-326`), same-name stacking (`:380-419`), timeline with ExecutionTime / 60-per-APM basic swings (`:577-634`), strict buff expiry (`AttackBuff.cpp:18-22`), stance→style mapping, chain mutations (`AttackChain.cpp:62-81`); CombatPanel chain editor UI. **Key finding:** V2's six per-style DPS evaluators are stubs returning 0 (`DPSPane.cpp:990-1060`) — kept verbatim as `evaluateAttackV2` for parity; the UI's damage numbers use a clearly-marked V3 estimator built on the single-weapon baseline. `SET_ACTIVE_ATTACK_CHAIN` action added; `activeAttackChain` no longer dropped on rehydrate. 32 tests. | #93 |
 | 71 | **Gear data edge cases** — Cosmetic slots: picker slot-name map fixed, `stripCosmeticSlots()` excludes their buffs/set-bonuses/augments from stats (V2 loops only to `Inventory_Count`, `Build.cpp:4824-4834`), and they round-trip `.DDOBuild`. Filigree conditional set-bonus tiers correctly gate on toggleable stances — Attack-feat user stances (Action Boost/Reaper/Blocking) now appear in the Stances panel; **fixed a real bug: filigree set bonuses never fired with real catalogue data** (`SetBonus` array used as a map key). Ring1/Ring2 verified. **Not-a-gap findings:** sentient-gem personalities carry no effects in V2 (`Gem.h:31-34`, zero `<Effect>` in Sentient.gems.xml); no trinket-via-augment mechanic exists in V2 (`Augment.h:35-56`). 18 tests. | #93 |
 
-### Known approximation (noted, not changed)
+### Known approximation — RESOLVED (#93)
 
-`ctx.abilityTotals` (used for effect requirement gating and the ability-mod
-ATypes) is the *inherent* total (base + racial + level-ups), not the full
-breakdown total incl. tomes/gear/enhancements. So ability-mod-driven effect
-*values* (e.g. Divine Might CHA mod) and stat-prereq gating use the chargen-ish
-ability rather than the final score — a two-phase-resolve limitation. The actual
-displayed ability scores and their mods (`resolveAbility`) DO include everything.
+`ctx.abilityTotals` previously used the *inherent* total (base + racial +
+level-ups) for effect requirement gating and the ability-mod ATypes.
+`buildStatMap` now iterates to a bounded fixed point: pass 1 resolves with
+inherent totals, subsequent passes feed the fully-resolved ability totals
+(tomes/gear/enhancements included) back into the EffectContext until stable —
+matching V2's BreakdownItem observer propagation. Regression tests in
+`parityPassFixedPoint.test.ts` (tome→mod, self-granted ability→mod feedback,
+ability-gated requirement thresholds).
 
 ### BreakdownItem* suite review (this PR) — verified matching, no change needed
 
