@@ -46,6 +46,7 @@ export const api = {
   attackRates: () => get<AttackRate[]>('/attack-rates'),
   bonusTypes: () => get<BonusTypeSpec[]>('/bonus-types'),
   challenges: () => get<Challenge[]>('/challenges'),
+  ignoredList: () => get<string[]>('/ignored-list'),
   itemBuffs: () => get<ItemBuffSpec[]>('/item-buffs'),
   itemClickies: () => get<ItemClickieSpec[]>('/item-clickies'),
 }

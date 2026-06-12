@@ -9,7 +9,7 @@ import {
   loadWeaponGroups, loadStances, loadItems, loadAugments, loadSetBonuses,
   loadGuildBuffs, loadFiligreeSets, loadFiligreeBonuses, loadSelfAndPartyBuffs,
   loadPatrons, loadQuests, loadSentientGems,
-  loadAttackRates, loadBonusTypes, loadChallenges, loadItemBuffs, loadItemClickies,
+  loadAttackRates, loadBonusTypes, loadChallenges, loadIgnoredList, loadItemBuffs, loadItemClickies,
 } from './src/server/dataLoaders'
 
 dotenv.config()
@@ -68,6 +68,7 @@ const sentientGems = () => loadSentientGems(DATA_DIR)
 const attackRates = () => loadAttackRates(DATA_DIR)
 const bonusTypes = () => loadBonusTypes(DATA_DIR)
 const challenges = () => loadChallenges(DATA_DIR)
+const ignoredList = () => loadIgnoredList(DATA_DIR)
 const itemBuffs = () => loadItemBuffs(DATA_DIR)
 const itemClickies = () => loadItemClickies(DATA_DIR)
 
@@ -226,6 +227,7 @@ app.get('/api/gems', (_req, res) => res.json(cached('gems', sentientGems)))
 app.get('/api/attack-rates', (_req, res) => res.json(cached('attack-rates', attackRates)))
 app.get('/api/bonus-types', (_req, res) => res.json(cached('bonus-types', bonusTypes)))
 app.get('/api/challenges', (_req, res) => res.json(cached('challenges', challenges)))
+app.get('/api/ignored-list', (_req, res) => res.json(cached('ignored-list', ignoredList)))
 app.get('/api/item-buffs', (_req, res) => res.json(cached('item-buffs', itemBuffs)))
 app.get('/api/item-clickies', (_req, res) => res.json(cached('item-clickies', itemClickies)))
 

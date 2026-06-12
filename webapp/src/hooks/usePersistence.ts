@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, createElement as h } from 'react'
 import type { ReactElement, ChangeEvent } from 'react'
 import type { CharacterBuild, CharacterDocument, Item } from '../types/ddo'
-import { useCharacter } from '../context/CharacterContext'
+import { useCharacter, migrateLoad } from '../context/CharacterContext'
 import { useDocument } from '../context/DocumentContext'
 import {
   isCharacterDocument,
@@ -47,6 +47,23 @@ function writeDocs(docs: CharacterDocument[]): void {
 }
 
 /**
+ * Build-version migration: runs every build of every life through
+ * `migrateLoad` so fields added after the save was written get defaults
+ * everywhere a stored build is consumed (LifeBuildBar, BuildCompare, export),
+ * not only when one is dispatched through LOAD_BUILD. Stamps `_v: 2`.
+ */
+function migrateDocument(doc: CharacterDocument): CharacterDocument {
+  return {
+    ...doc,
+    lives: doc.lives.map(life => ({
+      ...life,
+      builds: life.builds.map(migrateLoad),
+    })),
+    _v: 2,
+  }
+}
+
+/**
  * Reads the saved Character documents. On first run after the U1 upgrade the
  * legacy flat build list is migrated: each legacy build becomes its own
  * one-life one-build document (named after the build) so every old save shows
@@ -58,7 +75,7 @@ function readDocs(): CharacterDocument[] {
     if (raw) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) {
-        return (parsed as unknown[]).filter(isCharacterDocument)
+        return (parsed as unknown[]).filter(isCharacterDocument).map(migrateDocument)
       }
       return []
     }
@@ -67,7 +84,7 @@ function readDocs(): CharacterDocument[] {
   }
   const legacy = readLegacySaves()
   if (legacy.length === 0) return []
-  const docs = legacy.map(b => emptyDocument(b))
+  const docs = legacy.map(b => migrateDocument(emptyDocument(b)))
   writeDocs(docs)
   return docs
 }
@@ -197,7 +214,7 @@ export function usePersistence(): PersistenceAPI {
               reject(new Error('Character document contained no builds'))
               return
             }
-            resolve(parsed)
+            resolve(migrateDocument(parsed))
             return
           }
           if (
@@ -209,7 +226,7 @@ export function usePersistence(): PersistenceAPI {
             reject(new Error('Invalid build file: missing required id or name fields'))
             return
           }
-          resolve(emptyDocument(parsed as CharacterBuild))
+          resolve(emptyDocument(migrateLoad(parsed as CharacterBuild)))
         } catch {
           reject(new Error('Invalid build file: could not parse JSON or XML'))
         }

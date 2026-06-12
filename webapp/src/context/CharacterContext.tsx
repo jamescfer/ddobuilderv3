@@ -94,7 +94,14 @@ function migrateLevelClasses(raw: CharacterBuild): string[] {
   return getLevelClasses(raw)
 }
 
-function migrateLoad(raw: CharacterBuild): CharacterBuild {
+/**
+ * Normalises a build loaded from storage / import to the current shape:
+ * every field added since the save was written gets its default. Exported so
+ * document persistence can migrate every build in a CharacterDocument (not
+ * just the one passed through LOAD_BUILD) — the V3 "build version migration"
+ * path (V2 `Build version="1"` analogue).
+ */
+export function migrateLoad(raw: CharacterBuild): CharacterBuild {
   return {
     ...raw,
     levelClasses: migrateLevelClasses(raw),

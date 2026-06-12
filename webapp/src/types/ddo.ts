@@ -292,6 +292,13 @@ export interface Augment {
    * The XML flag parses to "" — treat presence as true.
    */
   SuppressSetBonus?: boolean | string
+  /**
+   * V2 Augment::ChooseLevel (DL_FLAG, parses to ""): the augment's value is
+   * picked per item level from LevelValue. Used by gearset import matching.
+   */
+  ChooseLevel?: boolean | string
+  /** V2 Augment::LevelValue — space-separated values, one per level. */
+  LevelValue?: { '#text': string; size?: number } | string
 }
 
 // ---------------------------------------------------------------------------

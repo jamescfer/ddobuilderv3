@@ -440,6 +440,21 @@ export interface Challenge {
   Favor?: number
 }
 
+/**
+ * V2 IgnoredList.xml — default list of feat/item names hidden from selection
+ * lists when "Ignore Lists Active" is on (CDDOBuilderApp::IgnoreList,
+ * DDOBuilder.cpp:1481-1510). User additions/removals layer on top in V3
+ * settings (V2 keeps them in the same file in the user data dir).
+ */
+export function loadIgnoredList(dataDir: string): string[] {
+  try {
+    const parsed = readXml(path.join(dataDir, 'IgnoredList.xml')) as { IgnoredList?: { Ignored?: unknown } }
+    const raw = parsed?.IgnoredList?.Ignored
+    const arr = Array.isArray(raw) ? raw : raw != null ? [raw] : []
+    return arr.map(String)
+  } catch { return [] }
+}
+
 export function loadChallenges(dataDir: string): Challenge[] {
   try {
     const parsed = readXml(path.join(dataDir, 'Challenges.xml')) as { Challenges?: { Challenge?: unknown[] } }
