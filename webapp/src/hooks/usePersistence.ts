@@ -11,6 +11,7 @@ import {
   findActiveBuild,
 } from '../lib/multiLife'
 import { importV2Build } from '../lib/v2Import'
+import { importV1Build, isV1CharacterXml } from '../lib/v1Import'
 import { exportV2DocumentModel } from '../lib/v2Export'
 import type { ItemCatalogue } from '../lib/v2Export'
 
@@ -222,6 +223,22 @@ export function usePersistence(): PersistenceAPI {
       reader.onload = () => {
         try {
           const text = reader.result as string
+          // V1 .ddocp XML support — detect by file extension or the V1 root
+          // tag <DDOCharacterData> (CDDOBuilderApp::OnFileImport reads these
+          // with that expected root, DDOBuilder.cpp:294-325). Must be checked
+          // before the generic V2 XML branch below, which would otherwise
+          // swallow any '<'-prefixed text.
+          const isV1 = file.name.toLowerCase().endsWith('.ddocp') ||
+                       isV1CharacterXml(text)
+          if (isV1) {
+            const { document: v1doc, warnings } = importV1Build(text)
+            if (flattenDocument(v1doc).length === 0) {
+              reject(new Error(warnings[0] ?? 'V1 import produced no build'))
+              return
+            }
+            resolve(migrateDocument(v1doc))
+            return
+          }
           // V2 .DDOBuild XML support — detect by file extension or root tag.
           const isXml = file.name.toLowerCase().endsWith('.ddobuild') ||
                         text.trim().startsWith('<')
@@ -391,7 +408,7 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
   const hiddenInput = h('input', {
     ref: fileInputRef,
     type: 'file',
-    accept: '.json,application/json,.ddobuild,.DDOBuild,application/xml,text/xml',
+    accept: '.json,application/json,.ddobuild,.DDOBuild,.ddocp,application/xml,text/xml',
     style: { display: 'none' },
     onChange: handleFileChange,
   })
