@@ -217,6 +217,19 @@ Remaining read/write-fidelity gaps:
   Skill checks the resolved total. The remaining conservative passes
   (GroupMember/StartingWorld/ItemTypeInSlot/ItemSlot without context) match
   the contexts V2 evaluates them in.
+- ❌ **E2 — `SongSkillBonus` empty-item fallback** — `SongSkillBonus` effects
+  with no `<Item>` child return `[]` (silently dropped) instead of applying a
+  Music bonus to **all skills**. Two occurrences in
+  `Output/DataFiles/Classes/Bard.class.xml`: Inspire Competence (+4 Music to
+  all skills) and Song of Capering (+1 Music to all skills) are both silently
+  dropped, so Bards gain no skill bonus from these songs. The parallel effect
+  `SongCasterLevel` correctly falls back to `[make('cl.All', 'Music')]` when
+  no `<Item>` is present — `SongSkillBonus` should mirror that pattern with
+  `[make('skill.All', 'Music')]`. The `skill.All` expansion pass in
+  `useBuildStats.ts:1895-1903` already distributes this marker onto every
+  skill, so only `effectParser.ts:1158` and `effectParser.ts:2156` need
+  changing. V2 source: Bard class song definitions; V3 fix location:
+  `webapp/src/lib/effectParser.ts` lines 1158 and 2156.
 
 ---
 
@@ -347,10 +360,10 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#74 and the Done table
-above for completed items. Last full V2↔V3 review: 2026-06 — section-by-section
-breakdown comparison closing the verified numerical-correctness gaps: AC
-percentage armor/shield bonuses + armor enchantment (N1), combat to-hit TWF /
-ACP / negative-level penalties (N2, partial — proficiency detection pending),
-and the FvS/Sorcerer SP multiplier scope (N4); plus correcting the N3 False
-Life claim, which was a misreading of V2's `m_effects`/`m_itemEffects` split.*
+*Maintained by the parity-pass series. See PRs #53–#93 and the Done table
+above for completed items. Last full V2↔V3 review: 2026-06-13 — exhaustive
+scan of all 11 breakdown categories (HP, PRR/MRR, Dodge, Attack/Damage,
+Saves, Skills, Spell DC, SP, Caster Level, BAB, Ki), all 200+ effect-parser
+cases, all 36 V2 panes/dialogs, all 24 forum-export sections, and all data
+loaders. One new gap found: E2 (SongSkillBonus empty-item fallback — two
+Bard song all-skills bonuses silently dropped).*
