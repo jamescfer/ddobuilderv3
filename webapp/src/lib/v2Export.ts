@@ -111,11 +111,15 @@ class Xml {
 
 // Inverse of v2Import.ts V2_TO_V3_SLOT. The V2 EquippedGear node stores one
 // child element per inventory slot using these V2 names.
-const V3_TO_V2_SLOT: Record<string, string> = {
+export const V3_TO_V2_SLOT: Record<string, string> = {
   Helmet: 'Helmet', Necklace: 'Necklace', Trinket: 'Trinket', Cloak: 'Cloak',
   Belt: 'Belt', Goggles: 'Goggles', Gloves: 'Gloves', Boots: 'Boots',
   Bracers: 'Bracers', Armor: 'Armor', Ring: 'Ring1', Ring2: 'Ring2',
   'Main Hand': 'MainHand', 'Off Hand': 'OffHand', Quiver: 'Quiver', Arrow: 'Arrow',
+  // Cosmetic slots (InventorySlotTypes.h:33-38) — display-only, no stat effects.
+  'Cosmetic Helmet': 'CosmeticHelm', 'Cosmetic Armor': 'CosmeticArmor',
+  'Cosmetic Cloak': 'CosmeticCloak', 'Cosmetic Weapon': 'CosmeticWeapon1',
+  'Cosmetic Off Hand': 'CosmeticWeapon2',
 }
 
 const ABILITIES: Ability[] = [
@@ -419,6 +423,24 @@ function emitGearSet(
     }
   }
   xml.close('EquippedGear')
+}
+
+/**
+ * Standalone <EquippedGear> XML fragment for one gear set — V2 Gear menu
+ * Copy parity (EquipmentPane::OnGearCopy writes exactly this via
+ * EquippedGear::Write to a custom clipboard format). V3 puts it on the text
+ * clipboard so sets can be moved between builds/documents (and pasted from
+ * fragments lifted out of .DDOBuild files).
+ */
+export function exportGearSetXml(
+  setName: string,
+  slots: Record<string, string>,
+  augments: Record<string, string>,
+  itemCatalogue?: ItemCatalogue,
+): string {
+  const xml = new Xml()
+  emitGearSet(xml, setName, slots, augments, undefined, itemCatalogue)
+  return xml.toString()
 }
 
 /**

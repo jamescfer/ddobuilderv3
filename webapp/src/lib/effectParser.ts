@@ -38,6 +38,8 @@ export interface EffectContext {
   sliderValues?: Record<string, number>     // slider name → current value
   weaponClassMain?: Set<string>             // main-hand weapon class memberships
   weaponClassOffhand?: Set<string>          // off-hand weapon class memberships
+  materialBySlot?: Record<string, string>   // V2 slot name (Weapon1, …) → equipped item Material
+  skillTotals?: Record<string, number>      // skill → resolved total (fixed-point pass 2+)
 }
 
 // ---------------------------------------------------------------------------
@@ -113,16 +115,29 @@ function checkRequirement(req: Requirement, ctx: EffectContext): boolean {
       if (!ctx.weaponClassOffhand) return true
       return its.some(i => ctx.weaponClassOffhand!.has(i))
     case 'Skill':
-      // Skill ranks ≥ value — V3 tracks skill totals via build stats not in
-      // ctx; conservative pass to avoid false negatives.
-      return true
+      // V2 Requirement::EvaluateSkill (Requirement.cpp:1040-1048):
+      // SkillAtLevel ≥ Value. Resolved totals arrive via the fixed-point
+      // wrapper (pass 2+); conservative pass until then / for older callers.
+      if (!ctx.skillTotals) return true
+      return (ctx.skillTotals[its[0]] ?? 0) >= (req.Value ?? 0)
+    case 'EnemyType':
+      // V2 Requirement.cpp:467/513: `case Requirement_EnemyType: met = false`.
+      // Favored-enemy-style effects NEVER apply inside the planner.
+      return false
+    case 'MaterialType': {
+      // V2 Requirement::EvaluateMaterialType (Requirement.cpp:1083-1100):
+      // Item = [material, V2 slot name]; met when the equipped item in that
+      // slot has exactly that Material. Conservative pass when the caller
+      // does not supply gear materials.
+      if (!ctx.materialBySlot) return true
+      if (its.length < 2) return false
+      return ctx.materialBySlot[its[1]] === its[0]
+    }
     case 'GroupMember':
     case 'GroupMember2':
     case 'StartingWorld':
-    case 'EnemyType':
     case 'ItemTypeInSlot':
     case 'ItemSlot':
-    case 'MaterialType':
     case 'Exclusive':
       // Not gated client-side; always pass.
       return true
@@ -567,7 +582,53 @@ export function parseEffect(
       .map(n => ({ statKey: `grantedFeat.${n}`, value: 1, bonusType: 'GrantFeat', source }))
   }
 
-  if (resolved === null) return []
+  // Ability-substitution markers carry no Amount (AType NotNeeded) but must
+  // still fire — they only signal an attack/damage ability CANDIDATE for the
+  // wielded weapon (V2 LargestStatBonus, BreakdownItemWeaponAttackBonus.cpp
+  // :327+). Gated on weapon type / weapon class like the rest of the family.
+  if (effect.Type === 'Weapon_AttackAbility' || effect.Type === 'Weapon_DamageAbility'
+      || effect.Type === 'WeaponAttackAbilityClass' || effect.Type === 'WeaponDamageAbilityClass') {
+    const its = toStringArray(effect.Item)
+    if (!ctx || its.length < 2) return []
+    const byClass = effect.Type.endsWith('Class')
+    const memberSet = byClass ? ctx.weaponClassMain : ctx.weaponTypes
+    if (!memberSet || !its.slice(1).some(i => memberSet.has(i))) return []
+    const kind = effect.Type.includes('Attack') ? 'attackAbility' : 'damageAbility'
+    return [{ statKey: `melee.${kind}.${its[0]}`, value: 1, bonusType: effect.Bonus ?? 'Enhancement', source }]
+  }
+
+  if (resolved === null) {
+    // Marker effects whose AType (NotNeeded / SpellInfo) yields no Amount but
+    // which V2 still consumes: immunities and DR bypasses feed display
+    // breakdowns (Breakdown_Immunities / the DR breakdown's bypass list);
+    // GrantSpell / SpellListAddition add spells to a class's list
+    // (SpellsControl). These previously died here and were silently dropped.
+    const mits = toStringArray(effect.Item)
+    const mbt = effect.Bonus ?? 'Enhancement'
+    switch (effect.Type) {
+      case 'Immunity':
+        return mits.length > 0
+          ? mits.map(i => ({ statKey: `immunity.${i}`, value: 1, bonusType: mbt, source }))
+          : [{ statKey: 'immunity.All', value: 1, bonusType: mbt, source }]
+      case 'DRBypass': {
+        // Item = weapon scope (usually "All"); Value = the DR kind bypassed
+        // (e.g. Adamantine).
+        const kind = (effect as { Value?: string }).Value ?? mits[0] ?? 'Untyped'
+        return [{ statKey: `drBypass.${kind}`, value: 1, bonusType: mbt, source }]
+      }
+      case 'GrantSpell':
+      case 'SpellListAddition': {
+        // Item = [spellName, className]; Amount = [spellLevel, cost, …].
+        if (mits.length < 2) return []
+        const amounts = String((effect.Amount as { '#text'?: unknown } | undefined)?.['#text'] ?? effect.Amount ?? '')
+          .split(/\s+/).map(Number)
+        const spellLevel = Number.isFinite(amounts[0]) ? amounts[0] : 1
+        return [{ statKey: `grantSpell.${mits[1]}.${mits[0]}`, value: spellLevel, bonusType: mbt, source }]
+      }
+      default:
+        return []
+    }
+  }
   const value: number = resolved
 
   const bonusType = effect.Bonus ?? 'Enhancement'
@@ -1345,27 +1406,71 @@ export function parseEffect(
     case 'Weapon_AttackAndDamageCritical':
     case 'WeaponOtherDamageBonusCritical':
       return [make('melee.crit.damage')]
-    case 'Weapon_AttackAbility':
-    case 'Weapon_BaseDamage':
-    case 'Weapon_DamageAbility':
-    case 'Weapon_Enchantment':
-    case 'Weapon_AttackCritical':
-    case 'WeaponOtherDamageBonus':
-    case 'WeaponOtherDamageBonusClass':
-    case 'WeaponOtherDamageBonusCriticalClass':
+    // -----------------------------------------------------------------------
+    // Per-weapon-class effects (V2 BreakdownItemWeaponAttackBonus.cpp:233-279,
+    // BreakdownItemWeaponDamageBonus.cpp:157-205, ...CriticalThreatRange /
+    // ...CriticalMultiplier). V2 applies these only when the equipped weapon
+    // is a member of the named weapon class (Build::IsWeaponInGroup); V3
+    // gates on ctx.weaponClassMain (the main-hand weapon's derived classes).
+    // Without weapon context (older callers / no weapon equipped) nothing is
+    // emitted — same as V2 with no weapon wielded.
+    // -----------------------------------------------------------------------
+    case 'WeaponAttackBonusClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.toHit')] : []
+    case 'WeaponDamageBonusClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.damage')] : []
+    case 'WeaponAttackBonusCriticalClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.toHit')] : []
+    case 'WeaponDamageBonusCriticalClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.damage')] : []
+    case 'WeaponCriticalMultiplierClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.multiplier')] : []
+    case 'WeaponCriticalRangeClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.range')] : []
     case 'WeaponAlacrityClass':
-    case 'WeaponAttackAbilityClass':
-    case 'WeaponDamageAbilityClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.alacrity')] : []
+    case 'WeaponOtherDamageBonusClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.damage')] : []
+    case 'WeaponOtherDamageBonusCriticalClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.damage')] : []
+    // Weapon enchantment adds to BOTH attack and damage (V2 routes
+    // Effect_Weapon_Enchantment into the attack and damage breakdowns).
+    case 'Weapon_Enchantment':
+      return items.includes('All') || (ctx && items.some(i => ctx.weaponTypes.has(i)))
+        ? [make('melee.toHit'), make('melee.damage')] : []
+    case 'Weapon_EnchantmentClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.toHit'), make('melee.damage')] : []
+    // Extra base damage dice (+W) for the listed weapon TYPES.
+    case 'Weapon_BaseDamage':
+      return ctx && items.some(i => ctx.weaponTypes.has(i))
+        ? [make('weapon.bonusW')] : []
+    // Crit-confirm bonuses for the wielded weapon type.
+    case 'Weapon_AttackCritical':
+      return items.includes('All') || (ctx && items.some(i => ctx.weaponTypes.has(i)))
+        ? [make('melee.crit.toHit')] : []
+    // Ability substitution for attack/damage rolls (e.g. Pact weapons:
+    // CHA-to-hit). Item = [Ability, ...weaponTypes] (or weapon classes for
+    // the *Class variants). Emit a marker; CombatPanel picks the LARGEST
+    // candidate ability (V2 BreakdownItemWeaponAttackBonus.cpp:327+
+    // LargestStatBonus).
+    // Damage-type-gated variants need the weapon's damage type (Bludgeoning/
+    // Slashing/Piercing), which the EffectContext does not carry; Keen /
+    // Proficiency / Stat variants are likewise unmodelled. ~30 effects total
+    // in the data — documented residual gap.
+    case 'WeaponOtherDamageBonus':
     case 'WeaponDamageBonusCriticalStat':
     case 'WeaponDamageBonusStat':
     case 'WeaponProficiencyClass':
-    case 'WeaponAttackBonusClass':
-    case 'WeaponAttackBonusCriticalClass':
-    case 'WeaponDamageBonusClass':
-    case 'WeaponDamageBonusCriticalClass':
-    case 'WeaponCriticalMultiplierClass':
-    case 'WeaponCriticalRangeClass':
-    case 'Weapon_EnchantmentClass':
     case 'WeaponAttackBonusDamageType':
     case 'WeaponAttackBonusCriticalDamageType':
     case 'WeaponDamageBonusDamageType':
@@ -1403,18 +1508,19 @@ export function parseEffect(
     case 'ExclusionGroup':
     case 'ExcludeFeatSelection':
     case 'GrantFeat':
-    case 'GrantSpell':
-    case 'SpellListAddition':
     case 'SpellLikeAbility':
     case 'CreateSlider':
     case 'EnhancementTree':
     case 'DestinyTree':
     case 'ItemClickie':
-    case 'SLACharge':
     case 'RustSusceptability':
     case 'NotModeled':
     case 'Unknown':
       return []
+
+    // SLA charge count for the named SLA (V2 CSLAControl charge display).
+    case 'SLACharge':
+      return items.length > 0 ? [make(`slaCharge.${items[0]}`)] : []
 
     // Unknown effect type — return nothing
     default:

@@ -626,8 +626,11 @@ function accumulateFiligreeSlots(
       if (eff.Rare && !slot.rare) continue  // rare effects only apply when slot is marked rare
       addParsed(map, parseEffect(eff, 1, source, 0, 0, ctx))
     }
-    if (fil.SetBonus) {
-      setCounts.set(fil.SetBonus, (setCounts.get(fil.SetBonus) ?? 0) + 1)
+    // The XML loader's isArray list includes 'SetBonus', so catalogue-loaded
+    // filigrees carry ['Deadly Rain'] rather than 'Deadly Rain'. Normalise so
+    // set counting works for both shapes (V2 counts per set-bonus Type name).
+    for (const sb of toArray(fil.SetBonus as string | string[] | undefined)) {
+      if (sb) setCounts.set(sb, (setCounts.get(sb) ?? 0) + 1)
     }
   }
 }
@@ -769,18 +772,61 @@ function extractArmorMaxDex(gearItems: Record<string, Item>): number | null {
 // ---------------------------------------------------------------------------
 
 /**
+ * V2 parity: cosmetic slots never contribute stat effects. In V2 the cosmetic
+ * slots (InventorySlotTypes.h:33-38) are declared AFTER the Inventory_Count
+ * sentinel, and Build::ApplyGearEffects (Build.cpp:4824-4834) only loops
+ * `Inventory_Unknown+1 .. Inventory_Count`, so equipped cosmetic items are
+ * displayed but their effects are never applied. Strip them before any stat
+ * aggregation so V3 matches.
+ */
+export function stripCosmeticSlots(gearItems: Record<string, Item>): Record<string, Item> {
+  const out: Record<string, Item> = {}
+  for (const [slot, item] of Object.entries(gearItems)) {
+    if (slot.startsWith('Cosmetic')) continue
+    out[slot] = item
+  }
+  return out
+}
+
+/**
  * Pure variant of the stat-aggregation pipeline. Builds the same StatMap
  * the hook produces but without React. Use from CLI tools and unit tests
  * to compare V3-computed numbers against V2 (e.g. via the V2 importer).
  */
-export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): StatMap {
+/**
+ * Single resolution pass. `abilityTotalsOverride` (when given) replaces the
+ * inherent chargen-time ability totals in the EffectContext — used by the
+ * fixed-point wrapper below to feed fully-resolved ability scores back into
+ * ability-gated requirements and ability-mod ATypes (V2 parity: BreakdownItem
+ * observers re-evaluate against the live ability breakdown totals, not the
+ * chargen snapshot).
+ */
+// V3 gear slot → V2 InventorySlotTypeMap text (InventorySlotTypes.h:50-73) —
+// the names MaterialType requirements use in their second Item field.
+const V3_SLOT_TO_V2_ENUM: Record<string, string> = {
+  Helmet: 'Helmet', Necklace: 'Necklace', Trinket: 'Trinket', Cloak: 'Cloak',
+  Belt: 'Belt', Goggles: 'Goggles', Gloves: 'Gloves', Boots: 'Boots',
+  Bracers: 'Bracers', Armor: 'Armor', Ring: 'Ring1', Ring2: 'Ring2',
+  'Main Hand': 'Weapon1', 'Off Hand': 'Weapon2', Quiver: 'Quiver', Arrow: 'Arrows',
+}
+
+function buildStatMapOnce(
+  input: BuildStatsInput,
+  build: CharacterBuild,
+  abilityTotalsOverride?: Record<string, number>,
+  skillTotalsOverride?: Record<string, number>,
+): StatMap {
   const map: StatMap = new Map()
 
   const {
-    allClasses, allRaces, allFeats, allTrees, gearItems,
+    allClasses, allRaces, allFeats, allTrees,
     allSelfBuffs, allAugments, allSetBonuses, allFiligreeBonuses, allFiligrees,
     allWeaponGroups, allSpells, allGuildBuffs, allItemBuffs,
   } = input
+  // Cosmetic slots are display-only in V2 (effects never applied) — drop them
+  // here so gear buffs, set bonuses, armor stances and weapon detection all
+  // ignore them.
+  const gearItems = stripCosmeticSlots(input.gearItems)
 
   // ItemBuffs.xml template catalogue (Type → template) for resolving
   // flavour-named item Buff Types via parseItemBuff (V2 Item::FindEffect).
@@ -845,14 +891,19 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
         if (rank > 0) ctxEnhancements.add(name)
       }
     }
-    // Inherent-only ability totals (base + race + levelup, no tome at ctx time)
+    // Pass 1: inherent-only ability totals (base + race + levelup). The
+    // fixed-point wrapper re-runs with the fully-resolved totals.
     const ctxAbilityTotals: Record<string, number> = {}
     const ABILITIES_C = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'] as const
-    for (const ab of ABILITIES_C) {
-      const base = build.baseAbilities[ab] ?? 8
-      const racial = ctxRace ? Number((ctxRace as unknown as Record<string, number>)[ab]) || 0 : 0
-      const lv = Object.values(build.abilityLevelUps).filter(v => v === ab).length
-      ctxAbilityTotals[ab] = base + racial + lv
+    if (abilityTotalsOverride) {
+      Object.assign(ctxAbilityTotals, abilityTotalsOverride)
+    } else {
+      for (const ab of ABILITIES_C) {
+        const base = build.baseAbilities[ab] ?? 8
+        const racial = ctxRace ? Number((ctxRace as unknown as Record<string, number>)[ab]) || 0 : 0
+        const lv = Object.values(build.abilityLevelUps).filter(v => v === ab).length
+        ctxAbilityTotals[ab] = base + racial + lv
+      }
     }
     const ctxStances = deriveArmorStances(gearItems)
     // V2 parity: Build::IsStanceActive checks both armor-derived stances AND
@@ -943,6 +994,15 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
     const ctxSliderValues: Record<string, number> = {
       ...((build as { sliderValues?: Record<string, number> }).sliderValues ?? {}),
     }
+    // V2 Requirement::EvaluateMaterialType inputs: equipped item Material per
+    // V2 slot name (Requirement.cpp:1083-1100).
+    const ctxMaterialBySlot: Record<string, string> = {}
+    for (const [v3Slot, item] of Object.entries(gearItems)) {
+      const v2Slot = V3_SLOT_TO_V2_ENUM[v3Slot]
+      const material = (item as { Material?: string }).Material
+      if (v2Slot && material) ctxMaterialBySlot[v2Slot] = material
+    }
+
     const ctx: EffectContext = {
       race: build.race,
       alignment: build.alignment,
@@ -958,6 +1018,8 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       sliderValues: ctxSliderValues,
       weaponClassMain: ctxWeaponClassMain,
       weaponClassOffhand: ctxWeaponClassOff,
+      materialBySlot: ctxMaterialBySlot,
+      skillTotals: skillTotalsOverride,
     }
 
     // ── Ability base scores ───────────────────────────────────────────────
@@ -1133,7 +1195,14 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
 
     // ── Augments ─────────────────────────────────────────────────────────
     // Include sentient-gem augments alongside regular slot augments (Stream 3).
-    const allAugmentChoices = { ...build.augmentChoices } as Record<string, string>
+    // Augments slotted into cosmetic-slot items are dropped: V2 never calls
+    // ApplyItem for cosmetic slots, so their augments (and set-bonus
+    // contributions) are ignored along with the host item.
+    const allAugmentChoices = {} as Record<string, string>
+    for (const [key, name] of Object.entries(build.augmentChoices)) {
+      if (key.startsWith('Cosmetic')) continue
+      allAugmentChoices[key] = name
+    }
     if (build.sentientGem.majorAugment) {
       allAugmentChoices['SentientMajor'] = build.sentientGem.majorAugment
     }
@@ -1859,6 +1928,50 @@ export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): Sta
       map.set(key, rebuilt)
     }
 
+  return map
+}
+
+/**
+ * Fixed-point stat-map resolution (V2 parity for ability-driven effects).
+ *
+ * V2's BreakdownItems observe the ability breakdowns: when gear/enhancement/
+ * tome bonuses change an ability total, every dependent breakdown (Divine
+ * Might-style ability-mod ATypes, ability-gated Requirements) re-evaluates
+ * against the LIVE total. V3 resolves in passes instead: pass 1 uses the
+ * inherent chargen totals (previous behaviour, documented as the "known
+ * approximation"), then re-resolves with the fully-resolved totals until they
+ * stop changing (bounded — ability→effect→ability chains in the data settle
+ * in one or two iterations; the bound guards pathological oscillation).
+ */
+export function buildStatMap(input: BuildStatsInput, build: CharacterBuild): StatMap {
+  const ABILITIES = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']
+  const totalsOf = (m: StatMap): Record<string, number> => {
+    const out: Record<string, number> = {}
+    for (const ab of ABILITIES) out[ab] = resolveBonus(m.get(`ability.${ab}`) ?? []).total
+    return out
+  }
+  // Resolved skill totals for V2 EvaluateSkill gates (Requirement.cpp:1040).
+  const skillsOf = (m: StatMap): Record<string, number> => {
+    const out: Record<string, number> = {}
+    for (const key of m.keys()) {
+      if (key.startsWith('skill.')) out[key.slice(6)] = resolveBonus(m.get(key) ?? []).total
+    }
+    return out
+  }
+  let map = buildStatMapOnce(input, build)
+  let totals = totalsOf(map)
+  let skills = skillsOf(map)
+  for (let i = 0; i < 3; i++) {
+    const next = buildStatMapOnce(input, build, totals, skills)
+    const nextTotals = totalsOf(next)
+    const nextSkills = skillsOf(next)
+    const stable = ABILITIES.every(ab => nextTotals[ab] === totals[ab])
+      && Object.keys({ ...skills, ...nextSkills }).every(k => nextSkills[k] === skills[k])
+    map = next
+    totals = nextTotals
+    skills = nextSkills
+    if (stable) break
+  }
   return map
 }
 

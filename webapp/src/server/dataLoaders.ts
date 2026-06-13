@@ -283,10 +283,32 @@ export function loadWeaponGroups(dataDir: string): WeaponGroupSpec[] {
 }
 
 export function loadStances(dataDir: string): Stance[] {
+  let stances: Stance[] = []
   try {
     const parsed = readXml(path.join(dataDir, 'Stances.xml')) as { Stances?: { Stance?: unknown[] } }
-    return (parsed?.Stances?.Stance ?? []) as Stance[]
+    stances = (parsed?.Stances?.Stance ?? []) as Stance[]
   } catch { return [] }
+  // V2 parity: CStancesPane also surfaces <Stance> elements hosted on trained
+  // feats. The "Attack" feat (Feats.xml, Acquire=Automatic at level 1 — every
+  // build has it) hosts the universal user toggles "Reaper", "Action Boost"
+  // and "Blocking". Conditional filigree set-bonus tiers (e.g. Deadly Rain
+  // 5pc: "+20 Ranged Power while an Action Boost is active") are gated on
+  // Requirement Stance:"Action Boost", so without this merge the trigger can
+  // never be toggled in V3.
+  try {
+    const known = new Set(stances.map(s => s.Name))
+    const attackFeat = loadFeats(dataDir).find(f => f.Name === 'Attack') as
+      (Feat & { Stance?: Stance | Stance[] }) | undefined
+    const hosted = attackFeat?.Stance
+    const hostedList = Array.isArray(hosted) ? hosted : hosted ? [hosted] : []
+    for (const s of hostedList) {
+      if (s?.Name && !known.has(s.Name)) {
+        known.add(s.Name)
+        stances.push(s)
+      }
+    }
+  } catch { /* Feats.xml unavailable — base stances only */ }
+  return stances
 }
 
 export function loadItems(dataDir: string): Item[] {
@@ -438,6 +460,40 @@ export interface Challenge {
   AdventurePack?: string
   LevelRange?: string | { '#text'?: string }
   Favor?: number
+}
+
+/**
+ * V2 IgnoredList.xml — default list of feat/item names hidden from selection
+ * lists when "Ignore Lists Active" is on (CDDOBuilderApp::IgnoreList,
+ * DDOBuilder.cpp:1481-1510). User additions/removals layer on top in V3
+ * settings (V2 keeps them in the same file in the user data dir).
+ */
+/**
+ * Adventure-pack names — the union of <AdventurePack> values from Quests.xml
+ * and Challenges.xml, in first-seen order (V2 CDDOBuilderApp::LoadQuests /
+ * LoadChallenges, DDOBuilder.cpp:1193-1201 + 1238-1246). Drives the
+ * ContentPane ownership list; items from packs in Character.contentIDontOwn
+ * are hidden from item-selection lists (ItemSelectDialog.cpp:312-318).
+ */
+export function loadAdventurePacks(dataDir: string): string[] {
+  const packs: string[] = []
+  const seen = new Set<string>()
+  const add = (p: unknown) => {
+    const name = typeof p === 'string' ? p : ''
+    if (name && !seen.has(name)) { seen.add(name); packs.push(name) }
+  }
+  for (const q of loadQuests(dataDir)) add((q as { AdventurePack?: string }).AdventurePack)
+  for (const c of loadChallenges(dataDir)) add((c as { AdventurePack?: string }).AdventurePack)
+  return packs
+}
+
+export function loadIgnoredList(dataDir: string): string[] {
+  try {
+    const parsed = readXml(path.join(dataDir, 'IgnoredList.xml')) as { IgnoredList?: { Ignored?: unknown } }
+    const raw = parsed?.IgnoredList?.Ignored
+    const arr = Array.isArray(raw) ? raw : raw != null ? [raw] : []
+    return arr.map(String)
+  } catch { return [] }
 }
 
 export function loadChallenges(dataDir: string): Challenge[] {

@@ -131,3 +131,30 @@ label {
   color: var(--color-text-secondary);
   font-size: 12px;
 }
+
+/* ---------------------------------------------------------------------------
+ * Print layout (V2 "print" polish parity): hide chrome, print the active
+ * panel content full-width on white.
+ * ------------------------------------------------------------------------- */
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  /* Hide navigation chrome and interactive-only controls. */
+  nav, aside[class*='Sidebar'], [class*='sidebar'], [class*='hamburger'],
+  button, input[type='file'], select {
+    display: none !important;
+  }
+  main, [class*='content'] {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+  .panel {
+    border: none !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}

@@ -4,6 +4,10 @@ import { useCharacter } from '../../context/CharacterContext'
 import type { Item, ItemBuff, ItemAugment, Augment } from '../../types/ddo'
 import DdoIcon from '../DdoIcon'
 import FindGearDialog from './FindGearDialog'
+import GearImportDialog from './GearImportDialog'
+import { exportGearSetXml } from '../../lib/v2Export'
+import { importGearSetXml } from '../../lib/v2Import'
+import { useDocument } from '../../context/DocumentContext'
 import styles from './GearPanel.module.css'
 
 // ---------------------------------------------------------------------------
@@ -17,9 +21,19 @@ const RIGHT_SLOTS = ['Gloves', 'Bracers', 'Boots', 'Goggles', 'Main Hand', 'Off 
 const COSMETIC_SLOTS = ['Cosmetic Helmet', 'Cosmetic Armor', 'Cosmetic Cloak', 'Cosmetic Weapon', 'Cosmetic Off Hand']
 const ALL_SLOTS = [...LEFT_SLOTS, ...RIGHT_SLOTS, ...COSMETIC_SLOTS]
 
+// Display slot → <EquipmentSlot> key used in the item XML (V2
+// InventorySlotTypes.h enum names, e.g. <CosmeticHelm/>).
+const API_SLOT_NAME: Record<string, string> = {
+  Ring2: 'Ring',
+  'Cosmetic Helmet': 'CosmeticHelm',
+  'Cosmetic Armor': 'CosmeticArmor',
+  'Cosmetic Cloak': 'CosmeticCloak',
+  'Cosmetic Weapon': 'CosmeticWeapon1',
+  'Cosmetic Off Hand': 'CosmeticWeapon2',
+}
+
 function apiSlotName(slot: string): string {
-  if (slot === 'Ring2') return 'Ring'
-  return slot
+  return API_SLOT_NAME[slot] ?? slot
 }
 
 function slotLabel(slot: string): string {
@@ -284,11 +298,13 @@ function AugmentSlot({ slotName, augment, index, choice, onSet, onClear, maxItem
 // ---------------------------------------------------------------------------
 export default function GearPanel() {
   const { build, dispatch } = useCharacter()
+  const { doc } = useDocument()
 
   const [slotItems, setSlotItems] = useState<Record<string, Item[] | null>>({})
   const [itemDetails, setItemDetails] = useState<Record<string, Item | null>>({})
   const [openSlot, setOpenSlot] = useState<string | null>(null)
   const [findGearOpen, setFindGearOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [setNameInput, setSetNameInput] = useState('')
 
   const gear = build.gear
@@ -444,8 +460,11 @@ export default function GearPanel() {
     if (activeSetName) dispatch({ type: 'DELETE_GEAR_SET', setName: activeSetName })
   }
 
-  // For the open picker
-  const pickerSlotItems = openSlot ? (slotItems[openSlot] ?? []) : []
+  // For the open picker. Items from adventure packs the character does not
+  // own are hidden (V2 ItemSelectDialog.cpp:312-318, ContentPane parity).
+  const dontOwn = new Set(doc.contentIDontOwn ?? [])
+  const pickerSlotItems = (openSlot ? (slotItems[openSlot] ?? []) : [])
+    .filter(it => !it.AdventurePack || !dontOwn.has(it.AdventurePack))
   const isPickerLoading = openSlot && slotItems[openSlot] === null
 
   return (
@@ -460,6 +479,45 @@ export default function GearPanel() {
             title="Search all items across every slot by effect type"
           >
             Find Gear by Effect…
+          </button>
+          <button
+            className={styles.findGearBtn}
+            type="button"
+            onClick={() => setImportOpen(true)}
+            title="Import a gear set from a .gearset file or gear-planner website text (V2 Gear menu)"
+          >
+            Import Gear Set…
+          </button>
+          <button
+            className={styles.findGearBtn}
+            type="button"
+            title="Copy the current gear set to the clipboard as V2 EquippedGear XML (V2 Gear → Copy)"
+            onClick={() => {
+              const xml = exportGearSetXml(build.activeGearSetName || 'Copied Set', build.gear, build.augmentChoices)
+              void navigator.clipboard?.writeText(xml)
+            }}
+          >
+            Copy Set
+          </button>
+          <button
+            className={styles.findGearBtn}
+            type="button"
+            title="Paste a gear set from the clipboard (V2 Gear → Paste)"
+            onClick={() => {
+              navigator.clipboard?.readText().then(text => {
+                const parsed = importGearSetXml(text)
+                if (!parsed) { window.alert('Clipboard does not contain a V2 gear-set XML fragment.'); return }
+                for (const [slot, itemName] of Object.entries(parsed.gear)) {
+                  dispatch({ type: 'SET_GEAR', slot, itemName })
+                }
+                for (const [key, augmentName] of Object.entries(parsed.augmentChoices)) {
+                  dispatch({ type: 'SET_AUGMENT', key, augmentName })
+                }
+                dispatch({ type: 'SAVE_GEAR_SET', setName: parsed.name })
+              }).catch(() => window.alert('Could not read the clipboard.'))
+            }}
+          >
+            Paste Set
           </button>
         </div>
         <div className={styles.gearSetRow}>
@@ -544,6 +602,7 @@ export default function GearPanel() {
         </div>
       )}
       {findGearOpen && <FindGearDialog onClose={() => setFindGearOpen(false)} />}
+      {importOpen && <GearImportDialog onClose={() => setImportOpen(false)} />}
     </div>
   )
 }

@@ -197,13 +197,16 @@ export function computeMaxCasterLevel(
   }
   max += stats.total(`maxClSpell.${spell.Name}`)
   max += stats.total('maxCl.All')
-  // V2 also caps at total caster levels (class level acts as a soft floor)
-  return Math.max(max, classLevel)
+  // V2 Spell::ActualMaxCasterLevel returns the computed max as-is — there is
+  // NO class-level floor (the previous Math.max(max, classLevel) was a V3
+  // invention that wrongly raised the cap past MaxCasterLevel for any class
+  // levelled beyond it).
+  return max
 }
 
 /**
- * Spell point cost incl. metamagic surcharges and reductions.
- * Mirrors V2 Spell.cpp:354-448.
+ * Spell point cost incl. metamagic surcharges (V2 Spell.cpp:354-448).
+ * Cost reductions are display-only in V2 and deliberately NOT applied.
  *
  * Metamagic costs are pulled from `metamagic.cost.<name>` stat keys (set by
  * the corresponding metamagic stances in effectParser.ts:1055-1086). Only
@@ -231,12 +234,10 @@ export function computeSpellCost(
     }
   }
 
-  // Flat per-class reduction
-  if (cls) cost += stats.total(`spellCost.${cls.Name}`)
-  cost += stats.total('spellCost.All')
-
-  // Percentage reduction (applied last)
-  const pct = stats.total('spellCostPct')
-  if (pct !== 0) cost = Math.max(0, Math.round(cost * (1 - pct / 100)))
-  return Math.max(0, Math.round(cost))
+  // V2 Spell::TotalCost (Spell.cpp:354-448) ends after the metamagic
+  // surcharges: Effect_SpellCostReduction feeds a DISPLAY-ONLY breakdown
+  // (Breakdown_SpellCostReduction, BreakdownsPane.cpp:1689) that TotalCost
+  // never consumes. V3 previously subtracted spellCost.*/spellCostPct here,
+  // diverging from V2's displayed cost.
+  return Math.max(0, cost)
 }

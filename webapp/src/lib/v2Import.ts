@@ -192,6 +192,11 @@ const V2_TO_V3_SLOT: Record<string, string> = {
   Belt: 'Belt', Goggles: 'Goggles', Gloves: 'Gloves', Boots: 'Boots',
   Bracers: 'Bracers', Armor: 'Armor', Ring1: 'Ring', Ring2: 'Ring2',
   MainHand: 'Main Hand', OffHand: 'Off Hand', Quiver: 'Quiver', Arrow: 'Arrow',
+  // Cosmetic slots (InventorySlotTypes.h:33-38) — display-only in V2; imported
+  // so they round-trip, but useBuildStats strips them from stat aggregation.
+  CosmeticHelm: 'Cosmetic Helmet', CosmeticArmor: 'Cosmetic Armor',
+  CosmeticCloak: 'Cosmetic Cloak', CosmeticWeapon1: 'Cosmetic Weapon',
+  CosmeticWeapon2: 'Cosmetic Off Hand',
 }
 
 function parseGear(equippedGearNode: AnyRec): {
@@ -676,6 +681,28 @@ function parseRoot(xml: string) {
   const activeLifeIdx = asNum(character.ActiveLifeIndex)
   const activeBuildIdx = asNum(character.ActiveBuildIndex ?? '')
   return { character, lives, activeLifeIdx, activeBuildIdx }
+}
+
+/**
+ * Parses a standalone <EquippedGear> XML fragment (V2 Gear menu Paste parity
+ * — EquipmentPane::OnGearPaste reads the same XML OnGearCopy wrote). Returns
+ * null when the text is not a gear-set fragment.
+ */
+export function importGearSetXml(xml: string): {
+  name: string
+  gear: Record<string, string>
+  augmentChoices: Record<string, string>
+} | null {
+  try {
+    const parsed = parser.parse(xml) as AnyRec
+    // The parser is configured with EquippedGear in its isArray list.
+    const node = arr(parsed.EquippedGear as AnyRec | AnyRec[] | undefined)[0]
+    if (!node) return null
+    const g = parseGear(node)
+    return { name: asStr(node.Name) || 'Pasted Set', gear: g.gear, augmentChoices: g.augmentChoices }
+  } catch {
+    return null
+  }
 }
 
 /**

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
+import { useSettings } from '../../context/SettingsContext'
 import type { CharacterBuild, DDOClass, Feat, Race, Requirement } from '../../types/ddo'
 import { buildSnapshotAtCharacterLevel } from '../../lib/levelProgression'
 import { meetsRequirements as sharedMeetsRequirements } from '../../lib/requirements'
@@ -13,10 +14,13 @@ import styles from './FeatSlots.module.css'
 // FeatType is X. The "Heroic" universal slot is treated as type "Standard".
 // "Epic Feat" slots additionally allow Standard-group feats (heroic feats
 // can be re-taken as Epic feats).
-function slotMatchesFeat(slotType: string, featGroups: string[]): boolean {
+// When `epicOnly` (V2 "Show only Epic feats for Epic feat slots" +
+// !ShowUnavailable, Build.cpp:1539-1549) is set, Standard-group feats are NOT
+// re-takable in Epic slots unless they are also Epic-group.
+function slotMatchesFeat(slotType: string, featGroups: string[], epicOnly = false): boolean {
   const matchType = slotType === 'Heroic' ? 'Standard' : slotType
   if (featGroups.includes(matchType)) return true
-  if (matchType === 'Epic Feat' && featGroups.includes('Standard')) return true
+  if (matchType === 'Epic Feat' && featGroups.includes('Standard') && !epicOnly) return true
   return false
 }
 
@@ -107,6 +111,15 @@ interface FeatOption {
   prereqsMet: boolean
 }
 
+interface OptionSettings {
+  /** V2 ShowEpicOnly && !ShowUnavailable (Build.cpp:1539-1549). */
+  epicOnly?: boolean
+  /** V2 ShowUnavailable — ignore-listed feats stay visible (Build.cpp:1455-1459). */
+  showUnavailable?: boolean
+  /** V2 IsInIgnoreList when "Ignore Lists Active". */
+  isIgnored?: (name: string) => boolean
+}
+
 function getOptions(
   slot: SlotEntry,
   slots: SlotEntry[],
@@ -114,6 +127,7 @@ function getOptions(
   build: CharacterBuild,
   allClasses: DDOClass[],
   race?: Race,
+  opt: OptionSettings = {},
 ): FeatOption[] {
   // Snapshot of the build state just before this slot is chosen
   const snap = buildSnapshotForSlot(slot, slots, build)
@@ -133,6 +147,11 @@ function getOptions(
       if (chosenElsewhere.has(f.Name)) return false
       if (f.Acquire && f.Acquire !== 'Train') return false
 
+      // V2 Build::TrainableFeats:1455-1459 — ignore-listed feats are hidden
+      // unless ShowUnavailable is on (or it is the slot's current choice).
+      if (opt.isIgnored?.(f.Name) && !opt.showUnavailable
+          && build.featChoices[slot.key] !== f.Name) return false
+
       // If the slot has an explicit FeatUpdateList, it's the authoritative whitelist
       if (updateList && updateList.length > 0) {
         return updateList.includes(f.Name)
@@ -140,7 +159,8 @@ function getOptions(
 
       // Otherwise: match feat group to slot type (V2 behavior, Build.cpp:1523-1527)
       const featGroups = Array.isArray(f.Group) ? f.Group : f.Group ? [f.Group] : []
-      if (slotMatchesFeat(slot.featType, featGroups)) return true
+      const epicOnly = (opt.epicOnly ?? false) && !(opt.showUnavailable ?? false)
+      if (slotMatchesFeat(slot.featType, featGroups, epicOnly)) return true
 
       // V2 Build.cpp:1528-1538: ConditionalGroup adds extra group memberships when
       // its RequirementsToUse (here the nested Requirements) are met.
@@ -148,7 +168,7 @@ function getOptions(
       if (cg) {
         const condGroups = Array.isArray(cg.Group) ? cg.Group : cg.Group ? [cg.Group] : []
         if (condGroups.length > 0
-          && slotMatchesFeat(slot.featType, condGroups)
+          && slotMatchesFeat(slot.featType, condGroups, epicOnly)
           && sharedMeetsRequirements(cg.Requirements, { build: snap, allClasses, race })) {
           return true
         }
@@ -173,8 +193,11 @@ interface IconPickerProps {
 }
 
 function IconPicker({ options, current, onSelect, onClose }: IconPickerProps) {
+  const { settings } = useSettings()
   const [search, setSearch] = useState('')
-  const [showLocked, setShowLocked] = useState(false)
+  // V2 "Show Unavailable Feats" sets the default; the picker toggle remains
+  // a per-dialog override.
+  const [showLocked, setShowLocked] = useState(settings.showUnavailable)
 
   const lowerSearch = search.toLowerCase()
   const available = options.filter(o => o.prereqsMet && (!search || o.feat.Name.toLowerCase().includes(lowerSearch)))
@@ -248,6 +271,7 @@ function IconPicker({ options, current, onSelect, onClose }: IconPickerProps) {
 // ---------------------------------------------------------------------------
 export default function FeatSlots() {
   const { build, dispatch } = useCharacter()
+  const { settings, isIgnored } = useSettings()
   const [allClasses, setAllClasses] = useState<DDOClass[]>([])
   const [allRaces, setAllRaces] = useState<Race[]>([])
   const [feats, setFeats] = useState<Feat[]>([])
@@ -264,7 +288,11 @@ export default function FeatSlots() {
   const openSlot = openSlotKey ? slots.find(s => s.key === openSlotKey) : null
   const currentRace = allRaces.find(r => r.Name === build.race)
   const pickerOptions = openSlot
-    ? getOptions(openSlot, slots, feats, build, allClasses, currentRace)
+    ? getOptions(openSlot, slots, feats, build, allClasses, currentRace, {
+        epicOnly: settings.showEpicOnly,
+        showUnavailable: settings.showUnavailable,
+        isIgnored,
+      })
     : []
 
   return (

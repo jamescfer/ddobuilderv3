@@ -96,18 +96,18 @@ describe('computeMaxCasterLevel', () => {
     const spell: Spell = { Name: 'X' }
     expect(computeMaxCasterLevel(spell, wizard, 20, makeStats({}))).toBe(Infinity)
   })
-  it('respects MaxCasterLevel + bonuses', () => {
+  it('respects MaxCasterLevel + bonuses (no class-level floor — V2 Spell.cpp:199-228)', () => {
     const spell: Spell = { Name: 'X', MaxCasterLevel: 10, School: 'Evocation' }
     const stats = makeStats({ 'maxCl.Wizard': 1, 'maxClSchool.Evocation': 1 })
-    expect(computeMaxCasterLevel(spell, wizard, 20, stats)).toBe(20) // 12 vs 20: max(20)
+    expect(computeMaxCasterLevel(spell, wizard, 20, stats)).toBe(12)
   })
 })
 
 describe('computeCasterLevel', () => {
-  it('caps at maxCasterLevel', () => {
+  it('caps at maxCasterLevel (V2 InfoTip.cpp:1210 min(maxCL, CL))', () => {
     const spell: Spell = { Name: 'Burning Hands', MaxCasterLevel: 5, School: 'Evocation' }
     const stats = makeStats({ 'cl.Wizard': 0, 'clSchool.Evocation': 0 })
-    expect(computeCasterLevel(spell, wizard, 20, stats)).toBe(20) // max(5, classLevel)=20
+    expect(computeCasterLevel(spell, wizard, 20, stats)).toBe(5)
   })
   it('adds class+school+per-spell CL bonuses', () => {
     const spell: Spell = { Name: 'Magic Missile', MaxCasterLevel: 30, School: 'Evocation' }
@@ -165,10 +165,10 @@ describe('computeSpellCost', () => {
     // maxLevel(Wizard L20) = 9, spellLvl=1 → delta=8 → +64
     expect(computeSpellCost(spell, wizard, 20, stats, ['Heighten'])).toBe(5 + 64)
   })
-  it('applies percentage reduction last', () => {
+  it('ignores cost reductions — display-only in V2 (TotalCost, Spell.cpp:354-448)', () => {
     const spell: Spell = { Name: 'Fireball', Level: { Wizard: 3 } }
     const stats = makeStats({ spellCostPct: 25 })
-    expect(computeSpellCost(spell, wizard, 20, stats, [])).toBe(11) // 15 * 0.75 = 11.25 → 11
+    expect(computeSpellCost(spell, wizard, 20, stats, [])).toBe(15)
   })
 })
 

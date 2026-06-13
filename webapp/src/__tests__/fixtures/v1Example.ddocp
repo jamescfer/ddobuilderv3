@@ -1,0 +1,528 @@
+<?xml version="1.0" encoding="utf-8"?>
+<DDOCharacterData>
+  <Character>
+    <Name>Korvash the Reborn</Name>
+    <Alignment>Lawful Good</Alignment>
+    <Race>Human</Race>
+    <AbilitySpend>
+      <AvailableSpend>32</AvailableSpend>
+      <StrSpend>10</StrSpend>
+      <DexSpend>2</DexSpend>
+      <ConSpend>6</ConSpend>
+      <IntSpend>4</IntSpend>
+      <WisSpend>0</WisSpend>
+      <ChaSpend>6</ChaSpend>
+    </AbilitySpend>
+    <GuildLevel>85</GuildLevel>
+    <ApplyGuildBuffs/>
+    <StrTome>4</StrTome>
+    <DexTome>2</DexTome>
+    <ConTome>3</ConTome>
+    <IntTome>2</IntTome>
+    <WisTome>1</WisTome>
+    <ChaTome>2</ChaTome>
+    <SkillTomes>
+      <Balance>2</Balance>
+      <Intimidate>1</Intimidate>
+      <UMD>3</UMD>
+    </SkillTomes>
+    <SpecialFeats>
+      <TrainedFeat>
+        <FeatName>Past Life: Fighter</FeatName>
+        <Type>HeroicPastLife</Type>
+        <LevelTrainedAt>0</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedFeat>
+        <FeatName>Past Life: Fighter</FeatName>
+        <Type>HeroicPastLife</Type>
+        <LevelTrainedAt>0</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedFeat>
+        <FeatName>Past Life: Fighter (Dragon Lord)</FeatName>
+        <Type>HeroicPastLife</Type>
+        <LevelTrainedAt>0</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedFeat>
+        <FeatName>Past Life: Human</FeatName>
+        <Type>RacialPastLife</Type>
+        <LevelTrainedAt>0</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedFeat>
+        <FeatName>Falconry Tree</FeatName>
+        <Type>Special</Type>
+        <LevelTrainedAt>0</LevelTrainedAt>
+      </TrainedFeat>
+    </SpecialFeats>
+    <ActiveStances>
+      <Stances>Lawful</Stances>
+      <Stances>Human</Stances>
+    </ActiveStances>
+    <Level4>Strength</Level4>
+    <Level8>Strength</Level8>
+    <Level12>Strength</Level12>
+    <Level16>Constitution</Level16>
+    <Level20>Strength</Level20>
+    <Level24>Strength</Level24>
+    <Level28>Strength</Level28>
+    <Class1>Paladin</Class1>
+    <Class2>Fighter</Class2>
+    <SelectedEnhancementTrees>
+      <TreeName>Knight of the Chalice</TreeName>
+      <TreeName>Ravager (Ftr)</TreeName>
+      <TreeName>Sacred Defender</TreeName>
+      <TreeName>No selection</TreeName>
+      <TreeName>No selection</TreeName>
+      <TreeName>No selection</TreeName>
+      <TreeName>No selection</TreeName>
+    </SelectedEnhancementTrees>
+    <SelectedDestinyTrees>
+      <TreeName>Legendary Dreadnought</TreeName>
+      <TreeName>Divine Crusader</TreeName>
+      <TreeName>Fury of the Wild</TreeName>
+      <TreeName>No selection</TreeName>
+    </SelectedDestinyTrees>
+    <Tier5Tree>Ravager (Ftr)</Tier5Tree>
+    <U51Destiny_Tier5Tree>Legendary Dreadnought</U51Destiny_Tier5Tree>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>12</SkillPointsAvailable>
+      <SkillPointsSpent>12</SkillPointsSpent>
+      <TrainedFeat>
+        <FeatName>Power Attack</FeatName>
+        <Type>Standard</Type>
+        <LevelTrainedAt>0</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedFeat>
+        <FeatName>Cleave</FeatName>
+        <Type>Human Bonus Feat</Type>
+        <LevelTrainedAt>0</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Jump</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Jump</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Fighter</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedFeat>
+        <FeatName>Cleave</FeatName>
+        <Type>Standard</Type>
+        <LevelTrainedAt>2</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedFeat>
+        <FeatName>Great Cleave</FeatName>
+        <Type>Fighter Bonus</Type>
+        <LevelTrainedAt>2</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Jump</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedFeat>
+        <FeatName>Improved Critical: Slashing Weapons</FeatName>
+        <Type>Standard</Type>
+        <LevelTrainedAt>5</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedFeat>
+        <FeatName>Purity of Heart</FeatName>
+        <Type>Standard</Type>
+        <LevelTrainedAt>8</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedFeat>
+        <FeatName>Quicken Spell</FeatName>
+        <Type>Standard</Type>
+        <LevelTrainedAt>11</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedFeat>
+        <FeatName>Empower Healing Spell</FeatName>
+        <Type>Standard</Type>
+        <LevelTrainedAt>14</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedFeat>
+        <FeatName>Improved Shield Mastery</FeatName>
+        <Type>Standard</Type>
+        <LevelTrainedAt>17</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Paladin</Class>
+      <SkillPointsAvailable>3</SkillPointsAvailable>
+      <SkillPointsSpent>3</SkillPointsSpent>
+      <TrainedSkill><Skill>Intimidate</Skill></TrainedSkill>
+      <TrainedSkill><Skill>UMD</Skill></TrainedSkill>
+      <TrainedSkill><Skill>Balance</Skill></TrainedSkill>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Epic</Class>
+      <SkillPointsAvailable>0</SkillPointsAvailable>
+      <SkillPointsSpent>0</SkillPointsSpent>
+      <TrainedFeat>
+        <FeatName>Overwhelming Critical</FeatName>
+        <Type>Standard</Type>
+        <LevelTrainedAt>20</LevelTrainedAt>
+      </TrainedFeat>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Epic</Class>
+      <SkillPointsAvailable>0</SkillPointsAvailable>
+      <SkillPointsSpent>0</SkillPointsSpent>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Epic</Class>
+      <SkillPointsAvailable>0</SkillPointsAvailable>
+      <SkillPointsSpent>0</SkillPointsSpent>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Epic</Class>
+      <SkillPointsAvailable>0</SkillPointsAvailable>
+      <SkillPointsSpent>0</SkillPointsSpent>
+      <TrainedFeat>
+        <FeatName>Epic: Epic Damage Reduction</FeatName>
+        <Type>Standard</Type>
+        <LevelTrainedAt>23</LevelTrainedAt>
+      </TrainedFeat>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Epic</Class>
+      <SkillPointsAvailable>0</SkillPointsAvailable>
+      <SkillPointsSpent>0</SkillPointsSpent>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Epic</Class>
+      <SkillPointsAvailable>0</SkillPointsAvailable>
+      <SkillPointsSpent>0</SkillPointsSpent>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Epic</Class>
+      <SkillPointsAvailable>0</SkillPointsAvailable>
+      <SkillPointsSpent>0</SkillPointsSpent>
+      <TrainedFeat>
+        <FeatName>Epic: Bulwark of Defense</FeatName>
+        <Type>Standard</Type>
+        <LevelTrainedAt>26</LevelTrainedAt>
+      </TrainedFeat>
+      <TrainedFeat>
+        <FeatName>First Blood</FeatName>
+        <Type>EpicDestinyFeat</Type>
+        <LevelTrainedAt>26</LevelTrainedAt>
+      </TrainedFeat>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Epic</Class>
+      <SkillPointsAvailable>0</SkillPointsAvailable>
+      <SkillPointsSpent>0</SkillPointsSpent>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Epic</Class>
+      <SkillPointsAvailable>0</SkillPointsAvailable>
+      <SkillPointsSpent>0</SkillPointsSpent>
+      <TrainedFeat>
+        <FeatName>Hellball</FeatName>
+        <Type>EpicDestinyFeat</Type>
+        <LevelTrainedAt>28</LevelTrainedAt>
+      </TrainedFeat>
+    </LevelTraining>
+    <LevelTraining>
+      <Class>Epic</Class>
+      <SkillPointsAvailable>0</SkillPointsAvailable>
+      <SkillPointsSpent>0</SkillPointsSpent>
+    </LevelTraining>
+    <TrainedSpell>
+      <Class>Paladin</Class>
+      <Level>1</Level>
+      <SpellName>Cure Light Wounds</SpellName>
+    </TrainedSpell>
+    <TrainedSpell>
+      <Class>Paladin</Class>
+      <Level>1</Level>
+      <SpellName>Divine Favor</SpellName>
+    </TrainedSpell>
+    <TrainedSpell>
+      <Class>Paladin</Class>
+      <Level>2</Level>
+      <SpellName>Resist Energy</SpellName>
+    </TrainedSpell>
+    <EnhancementSpendInTree>
+      <TreeName>Knight of the Chalice</TreeName>
+      <TreeVersion>1</TreeVersion>
+      <TrainedEnhancement>
+        <EnhancementName>KotCSlayerOfEvil</EnhancementName>
+        <Ranks>1</Ranks>
+      </TrainedEnhancement>
+      <TrainedEnhancement>
+        <EnhancementName>KotCExtraSmite</EnhancementName>
+        <Ranks>3</Ranks>
+      </TrainedEnhancement>
+      <TrainedEnhancement>
+        <EnhancementName>KotCDivineMight</EnhancementName>
+        <Selection>Divine Might</Selection>
+        <Ranks>1</Ranks>
+      </TrainedEnhancement>
+    </EnhancementSpendInTree>
+    <EnhancementSpendInTree>
+      <TreeName>Ravager (Ftr)</TreeName>
+      <TreeVersion>1</TreeVersion>
+      <TrainedEnhancement>
+        <EnhancementName>RavagerCore1</EnhancementName>
+        <Ranks>1</Ranks>
+      </TrainedEnhancement>
+      <TrainedEnhancement>
+        <EnhancementName>RavagerFuryEternal</EnhancementName>
+        <Ranks>3</Ranks>
+        <IsTier5/>
+      </TrainedEnhancement>
+    </EnhancementSpendInTree>
+    <ReaperSpendInTree>
+      <TreeName>Dread Adversary</TreeName>
+      <TreeVersion>1</TreeVersion>
+      <TrainedEnhancement>
+        <EnhancementName>DreadAdversaryCore1</EnhancementName>
+        <Ranks>1</Ranks>
+      </TrainedEnhancement>
+    </ReaperSpendInTree>
+    <DestinySpendInTree>
+      <TreeName>Legendary Dreadnought</TreeName>
+      <TreeVersion>1</TreeVersion>
+      <TrainedEnhancement>
+        <EnhancementName>LDCore1</EnhancementName>
+        <Ranks>1</Ranks>
+      </TrainedEnhancement>
+      <TrainedEnhancement>
+        <EnhancementName>LDMomentumSwing</EnhancementName>
+        <Ranks>3</Ranks>
+      </TrainedEnhancement>
+    </DestinySpendInTree>
+    <ActiveGear>Standard</ActiveGear>
+    <EquippedGear>
+      <Name>Standard</Name>
+      <Helmet>
+        <Name>Legendary Greensteel Helmet of Escalation</Name>
+        <EquipmentSlot>
+          <Helmet/>
+        </EquipmentSlot>
+        <ItemAugment>
+          <Type>Blue</Type>
+          <SelectedAugment>Sapphire of Defense +11</SelectedAugment>
+        </ItemAugment>
+      </Helmet>
+      <Necklace>
+        <Name>Spiked Collar of Strahd</Name>
+        <EquipmentSlot>
+          <Necklace/>
+        </EquipmentSlot>
+      </Necklace>
+      <Armor>
+        <Name>Legendary Armor of the Untouchable</Name>
+        <EquipmentSlot>
+          <Armor/>
+        </EquipmentSlot>
+      </Armor>
+      <MainHand>
+        <Name>Echo of the Bloodletter</Name>
+        <EquipmentSlot>
+          <Weapon1/>
+        </EquipmentSlot>
+        <ItemAugment>
+          <Type>Red</Type>
+          <SelectedAugment>Ruby Eye of Force</SelectedAugment>
+        </ItemAugment>
+      </MainHand>
+      <OffHand>
+        <Name>Legendary Stalwart Tower Shield</Name>
+        <EquipmentSlot>
+          <Weapon2/>
+        </EquipmentSlot>
+      </OffHand>
+      <Ring1>
+        <Name>Band of Diani ir'Wynarn</Name>
+        <EquipmentSlot>
+          <Ring1/>
+        </EquipmentSlot>
+      </Ring1>
+      <CosmeticHelm>
+        <Name>Cosmetic Helmet of Style</Name>
+        <EquipmentSlot>
+          <CosmeticHelm/>
+        </EquipmentSlot>
+      </CosmeticHelm>
+      <SentientJewel>
+        <Personality>The Lone Candle</Personality>
+        <NumFiligrees>3</NumFiligrees>
+        <Filigree>
+          <Name>Eye of the Beholder: Spellpower</Name>
+          <Rare/>
+        </Filigree>
+        <Filigree>
+          <Name>Prowess: +4 Melee Power</Name>
+        </Filigree>
+        <Filigree>
+          <Name>The Serpent: Negative and Poison Spellpower</Name>
+        </Filigree>
+        <ArtifactFiligree>
+          <Name>Nystul's Mystical Defence: Constitution</Name>
+        </ArtifactFiligree>
+      </SentientJewel>
+    </EquippedGear>
+    <EquippedGear>
+      <Name>Boss Beater</Name>
+      <MainHand>
+        <Name>Sword of the Thousand Suns</Name>
+        <EquipmentSlot>
+          <Weapon1/>
+        </EquipmentSlot>
+      </MainHand>
+      <SentientJewel>
+        <NumFiligrees>0</NumFiligrees>
+      </SentientJewel>
+    </EquippedGear>
+    <SelfAndPartyBuffs>Rage</SelfAndPartyBuffs>
+    <SelfAndPartyBuffs>Haste</SelfAndPartyBuffs>
+    <Notes>Imported from DDOBuilder V1.
+Second line of notes.</Notes>
+  </Character>
+</DDOCharacterData>

@@ -121,10 +121,12 @@ describe('shared requirements engine — V2 Requirement.cpp parity', () => {
     expect(meetsRequirements(reqs, { build, allClasses })).toBe(false)
   })
 
-  it('Skill / Stance / EnemyType / StartingWorld are all permissive (V3 limitation noted)', () => {
+  it('Skill / Stance stay permissive without context; EnemyType hard-fails (V2 :467/:513)', () => {
     const build = buildWith({})
     expect(meetsRequirements({ Requirement: [{ Type: 'Skill', Item: 'Spot', Value: 10 }] }, { build, allClasses })).toBe(true)
     expect(meetsRequirements({ Requirement: [{ Type: 'Stance', Item: 'Shield Mastery' }] }, { build, allClasses })).toBe(true)
-    expect(meetsRequirements({ Requirement: [{ Type: 'EnemyType', Item: 'Undead' }] }, { build, allClasses })).toBe(true)
+    // V2 parity: both Requirements::Met and CanTrainEnhancement use
+    // `case Requirement_EnemyType: met = false` — never met in the planner.
+    expect(meetsRequirements({ Requirement: [{ Type: 'EnemyType', Item: 'Undead' }] }, { build, allClasses })).toBe(false)
   })
 })

@@ -5,6 +5,7 @@ import type {
 } from '../../types/ddo'
 import DdoIcon from '../DdoIcon'
 import { meetsRequirements } from '../../lib/requirements'
+import { useSettings } from '../../context/SettingsContext'
 import styles from './TreeGrid.module.css'
 
 // ---------------------------------------------------------------------------
@@ -352,6 +353,7 @@ export default function TreeGrid({
   onChoicesChange, onSelectionsChange,
   build, allClasses, race,
 }: TreeGridProps) {
+  const { settings: { autoSelectSingleOption } } = useSettings()
   const [selectorTarget, setSelectorTarget] = useState<string | null>(null)
 
   const items = tree.EnhancementTreeItem ?? []
@@ -402,6 +404,16 @@ export default function TreeGrid({
 
     const options = getSelectorOptions(item)
     if (options.length > 0 && !getSelection(selections, item)) {
+      // V2 "Auto Select Single Option Enhancements" (EnhancementTreeDialog
+      // ::GetAutoSelection): when exactly one option is selectable, pick it
+      // without showing the dialog. (V2 additionally drops options failing
+      // their per-option requirements before counting; V3's picker does not
+      // model per-option gating, so only the unambiguous one-option case is
+      // automated.)
+      if (autoSelectSingleOption && options.length === 1) {
+        handleSelection(item.Name, options[0].Name)
+        return
+      }
       setSelectorTarget(item.Name)
       return
     }

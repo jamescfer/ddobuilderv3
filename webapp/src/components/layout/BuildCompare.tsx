@@ -1,12 +1,13 @@
-// Side-by-side build comparison. Loads two saved builds (or the active one
-// plus a saved one) and shows each major stat in parallel columns.
+// Side-by-side build comparison. Compares the active build against any other
+// build of the current Character document (V2's simultaneously-active builds
+// within a life — U6) or any build from the saved-characters list.
 //
 // V2 parity: DDOBuilder.h supports multiple active builds for stat comparison.
-// V3's flat save list is the data source; user picks two from a dropdown.
 
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
+import { useDocument } from '../../context/DocumentContext'
 import { usePersistence } from '../../hooks/usePersistence'
 import { useBuildStats } from '../../hooks/useBuildStats'
 import type {
@@ -120,6 +121,7 @@ function StatColumn({ build, data }: { build: CharacterBuild; data: DataBundle }
 
 export default function BuildCompare() {
   const { build } = useCharacter()
+  const { doc } = useDocument()
   const { saves } = usePersistence()
   const [otherId, setOtherId] = useState<string | null>(null)
 
@@ -140,8 +142,21 @@ export default function BuildCompare() {
     }).catch(() => setData(null))
   }, [])
 
-  const other = saves.find(b => b.id === otherId) ?? null
-  const otherBuilds = saves.filter(b => b.id !== build.id)
+  // U6 — builds of the current Character document (other lives/builds),
+  // grouped per life, listed before the saved-character builds (V2 compares
+  // simultaneously-active builds within a life).
+  const docGroups = doc.lives
+    .map(life => ({
+      life,
+      builds: life.builds.filter(b => b.id !== build.id),
+    }))
+    .filter(g => g.builds.length > 0)
+  const docBuildIds = new Set(doc.lives.flatMap(l => l.builds.map(b => b.id)))
+  const savedBuilds = saves.filter(b => b.id !== build.id && !docBuildIds.has(b.id))
+  const other =
+    doc.lives.flatMap(l => l.builds).find(b => b.id === otherId) ??
+    saves.find(b => b.id === otherId) ??
+    null
 
   return (
     <div className="panel">
@@ -150,10 +165,21 @@ export default function BuildCompare() {
         <div className={styles.controls}>
           <strong>Compare with:</strong>
           <select value={otherId ?? ''} onChange={e => setOtherId(e.target.value || null)}>
-            <option value="">— Select saved build —</option>
-            {otherBuilds.map(b => (
-              <option key={b.id} value={b.id}>{b.name}</option>
+            <option value="">— Select build —</option>
+            {docGroups.map(g => (
+              <optgroup key={g.life.id} label={`This character — ${g.life.name}`}>
+                {g.builds.map(b => (
+                  <option key={b.id} value={b.id}>{b.name} (L{b.totalLevel + (b.epicLevels ?? 0) + (b.legendaryLevels ?? 0)})</option>
+                ))}
+              </optgroup>
             ))}
+            {savedBuilds.length > 0 && (
+              <optgroup label="Saved characters">
+                {savedBuilds.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
         {!data ? (

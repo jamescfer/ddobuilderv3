@@ -72,6 +72,7 @@ type Action =
   | { type: 'CLEAR_ALTERNATE_FEAT'; slotKey: string }
   | { type: 'SET_ATTACK_CHAIN'; chainName: string; attacks: string[] }
   | { type: 'DELETE_ATTACK_CHAIN'; chainName: string }
+  | { type: 'SET_ACTIVE_ATTACK_CHAIN'; chainName: string }
 
 function migrateFiligreeSlots(raw: unknown, count: number): FiligreeSlot[] {
   const arr: FiligreeSlot[] = []
@@ -94,7 +95,14 @@ function migrateLevelClasses(raw: CharacterBuild): string[] {
   return getLevelClasses(raw)
 }
 
-function migrateLoad(raw: CharacterBuild): CharacterBuild {
+/**
+ * Normalises a build loaded from storage / import to the current shape:
+ * every field added since the save was written gets its default. Exported so
+ * document persistence can migrate every build in a CharacterDocument (not
+ * just the one passed through LOAD_BUILD) — the V3 "build version migration"
+ * path (V2 `Build version="1"` analogue).
+ */
+export function migrateLoad(raw: CharacterBuild): CharacterBuild {
   return {
     ...raw,
     levelClasses: migrateLevelClasses(raw),
@@ -142,6 +150,7 @@ function migrateLoad(raw: CharacterBuild): CharacterBuild {
     slaCharges: (raw as unknown as { slaCharges?: Record<string, number> }).slaCharges ?? {},
     alternateFeats: (raw as unknown as { alternateFeats?: Record<string, string> }).alternateFeats ?? {},
     attackChains: (raw as unknown as { attackChains?: Record<string, string[]> }).attackChains ?? {},
+    activeAttackChain: (raw as unknown as { activeAttackChain?: string }).activeAttackChain ?? '',
   }
 }
 
@@ -449,8 +458,18 @@ function reducer(state: CharacterBuild, action: Action): CharacterBuild {
     case 'DELETE_ATTACK_CHAIN': {
       const next = { ...state.attackChains }
       delete next[action.chainName]
-      return { ...state, attackChains: next }
+      // V2 Build::DeleteAttackChain (Build.cpp:6592-6602): only the active
+      // chain can be deleted; the active chain becomes the first remaining
+      // chain, or '' when none are left.
+      const remaining = Object.keys(next)
+      const active = state.activeAttackChain === action.chainName
+        ? (remaining[0] ?? '')
+        : state.activeAttackChain
+      return { ...state, attackChains: next, activeAttackChain: active }
     }
+    // V2 Build::Set_ActiveAttackChain (Build.cpp:6566) — select live chain.
+    case 'SET_ACTIVE_ATTACK_CHAIN':
+      return { ...state, activeAttackChain: action.chainName }
     case 'SET_ENH_CHOICES':
       return { ...state, enhancementChoices: { ...state.enhancementChoices, [action.treeName]: action.choices } }
     case 'SET_ENH_SELECTIONS':

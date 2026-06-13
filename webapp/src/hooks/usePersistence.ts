@@ -1,21 +1,36 @@
 import { useState, useCallback, useRef, createElement as h } from 'react'
 import type { ReactElement, ChangeEvent } from 'react'
-import type { CharacterBuild, Item } from '../types/ddo'
-import { useCharacter } from '../context/CharacterContext'
-import { isCharacterDocument, flattenDocument } from '../lib/multiLife'
+import type { CharacterBuild, CharacterDocument, Item } from '../types/ddo'
+import { useCharacter, migrateLoad } from '../context/CharacterContext'
+import { useDocument } from '../context/DocumentContext'
+import {
+  isCharacterDocument,
+  flattenDocument,
+  emptyDocument,
+  syncBuildIntoDocument,
+  findActiveBuild,
+} from '../lib/multiLife'
 import { importV2Build } from '../lib/v2Import'
-import { exportV2Build } from '../lib/v2Export'
+import { importV1Build, isV1CharacterXml } from '../lib/v1Import'
+import { exportV2DocumentModel } from '../lib/v2Export'
 import type { ItemCatalogue } from '../lib/v2Export'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
+/** Legacy flat CharacterBuild[] storage (pre-U1). Read-only: migrated into
+ *  DOCS_KEY on first load, then left in place as a safety net. */
 const STORAGE_KEY = 'ddo-builder-saves'
+/** U1 document storage: CharacterDocument[] (Character → Life[] → Build[]). */
+const DOCS_KEY = 'ddo-builder-docs'
+/** One-deep per-document backups (V2 "Revert to Backup": the app keeps the
+ *  previous file contents as a .bak next to the saved file). */
+const BACKUP_KEY = 'ddo-builder-docs-backup'
 
 // ---------------------------------------------------------------------------
 // Storage helpers
 // ---------------------------------------------------------------------------
-function readSaves(): CharacterBuild[] {
+function readLegacySaves(): CharacterBuild[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return []
@@ -27,67 +42,133 @@ function readSaves(): CharacterBuild[] {
   }
 }
 
-function writeSaves(saves: CharacterBuild[]): void {
+function writeDocs(docs: CharacterDocument[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(saves))
+    localStorage.setItem(DOCS_KEY, JSON.stringify(docs))
   } catch {
     console.warn('usePersistence: could not write to localStorage')
   }
+}
+
+/**
+ * Build-version migration: runs every build of every life through
+ * `migrateLoad` so fields added after the save was written get defaults
+ * everywhere a stored build is consumed (LifeBuildBar, BuildCompare, export),
+ * not only when one is dispatched through LOAD_BUILD. Stamps `_v: 2`.
+ */
+function migrateDocument(doc: CharacterDocument): CharacterDocument {
+  return {
+    ...doc,
+    lives: doc.lives.map(life => ({
+      ...life,
+      builds: life.builds.map(migrateLoad),
+    })),
+    _v: 2,
+  }
+}
+
+/**
+ * Reads the saved Character documents. On first run after the U1 upgrade the
+ * legacy flat build list is migrated: each legacy build becomes its own
+ * one-life one-build document (named after the build) so every old save shows
+ * up in the new picker.
+ */
+function readDocs(): CharacterDocument[] {
+  try {
+    const raw = localStorage.getItem(DOCS_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        return (parsed as unknown[]).filter(isCharacterDocument).map(migrateDocument)
+      }
+      return []
+    }
+  } catch {
+    return []
+  }
+  const legacy = readLegacySaves()
+  if (legacy.length === 0) return []
+  const docs = legacy.map(b => migrateDocument(emptyDocument(b)))
+  writeDocs(docs)
+  return docs
 }
 
 // ---------------------------------------------------------------------------
 // usePersistence hook
 // ---------------------------------------------------------------------------
 export interface PersistenceAPI {
+  /** Saved Character documents (U1). */
+  docs: CharacterDocument[]
+  /** Every build across every saved document, flattened (compare UI, etc.). */
   saves: CharacterBuild[]
-  saveCharacter: (build: CharacterBuild) => void
-  loadCharacter: (id: string) => CharacterBuild | undefined
-  deleteCharacter: (id: string) => void
-  exportJSON: (build: CharacterBuild) => void
-  importJSON: (file: File) => Promise<CharacterBuild>
+  saveDocument: (doc: CharacterDocument) => void
+  deleteDocument: (id: string) => void
+  /** V2 "Revert to Backup": the version of the document before its last save,
+   *  or undefined when it has never been overwritten. */
+  loadBackup: (id: string) => CharacterDocument | undefined
+  exportJSON: (doc: CharacterDocument) => void
+  exportDDOBuild: (doc: CharacterDocument, itemCatalogue?: ItemCatalogue | Item[]) => void
+  /** Parses a V3 JSON (document or single build) or V2 .DDOBuild file. */
+  importFile: (file: File) => Promise<CharacterDocument>
 }
 
 export function usePersistence(): PersistenceAPI {
-  const [saves, setSaves] = useState<CharacterBuild[]>(() => readSaves())
+  const [docs, setDocs] = useState<CharacterDocument[]>(() => readDocs())
 
-  /** Upsert build by id and flush to localStorage */
-  const saveCharacter = useCallback((build: CharacterBuild) => {
-    setSaves(prev => {
-      const idx = prev.findIndex(b => b.id === build.id)
+  const saves = docs.flatMap(flattenDocument)
+
+  /** Upsert document by id and flush to localStorage. The overwritten version
+   *  becomes the document's backup (V2 writes a .bak before saving). */
+  const saveDocument = useCallback((doc: CharacterDocument) => {
+    setDocs(prev => {
+      const idx = prev.findIndex(d => d.id === doc.id)
+      if (idx >= 0) {
+        try {
+          const raw = localStorage.getItem(BACKUP_KEY)
+          const backups = (raw ? JSON.parse(raw) : {}) as Record<string, CharacterDocument>
+          backups[doc.id] = prev[idx]
+          localStorage.setItem(BACKUP_KEY, JSON.stringify(backups))
+        } catch { /* backup is best-effort */ }
+      }
       const next = idx >= 0
-        ? prev.map((b, i) => (i === idx ? build : b))
-        : [...prev, build]
-      writeSaves(next)
+        ? prev.map((d, i) => (i === idx ? doc : d))
+        : [...prev, doc]
+      writeDocs(next)
       return next
     })
   }, [])
 
-  /** Return the build with the given id, or undefined */
-  const loadCharacter = useCallback((id: string): CharacterBuild | undefined => {
-    // Read fresh from storage so this works even without a re-render
-    return readSaves().find(b => b.id === id)
+  const loadBackup = useCallback((id: string): CharacterDocument | undefined => {
+    try {
+      const raw = localStorage.getItem(BACKUP_KEY)
+      const backups = (raw ? JSON.parse(raw) : {}) as Record<string, unknown>
+      const doc = backups[id]
+      return isCharacterDocument(doc) ? migrateDocument(doc) : undefined
+    } catch {
+      return undefined
+    }
   }, [])
 
-  /** Remove a build from the saves list and from localStorage */
-  const deleteCharacter = useCallback((id: string) => {
-    setSaves(prev => {
-      const next = prev.filter(b => b.id !== id)
-      writeSaves(next)
+  /** Remove a document from the saves list and from localStorage */
+  const deleteDocument = useCallback((id: string) => {
+    setDocs(prev => {
+      const next = prev.filter(d => d.id !== id)
+      writeDocs(next)
       return next
     })
   }, [])
 
   /**
-   * Trigger a browser download of the build as a JSON file.
+   * Trigger a browser download of the Character document as a JSON file.
    */
-  const exportJSON = useCallback((build: CharacterBuild) => {
+  const exportJSON = useCallback((doc: CharacterDocument) => {
     try {
-      const json = JSON.stringify(build, null, 2)
+      const json = JSON.stringify(doc, null, 2)
       const blob = new Blob([json], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${build.name.replace(/[^a-z0-9_\- ]/gi, '_')}.json`
+      a.download = `${doc.name.replace(/[^a-z0-9_\- ]/gi, '_')}.json`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -98,8 +179,9 @@ export function usePersistence(): PersistenceAPI {
   }, [])
 
   /**
-   * Trigger a browser download of the build as a V2-compatible .DDOBuild XML
-   * file so it can be re-opened in the V2 MFC application.
+   * Trigger a browser download of the whole Character document (every life
+   * and build) as a V2-compatible .DDOBuild XML file so it can be re-opened
+   * in the V2 MFC application.
    *
    * F2 seam: when `itemCatalogue` (name → Item) is supplied, each equipped
    * item's full V2 definition (Buffs + metadata + SetBonus) is embedded inside
@@ -108,17 +190,17 @@ export function usePersistence(): PersistenceAPI {
    * optional; pass it from a component that already has the item list loaded
    * (e.g. GearPanel) to enable full-fidelity gear embedding.
    */
-  const exportDDOBuild = useCallback((build: CharacterBuild, itemCatalogue?: ItemCatalogue | Item[]) => {
+  const exportDDOBuild = useCallback((doc: CharacterDocument, itemCatalogue?: ItemCatalogue | Item[]) => {
     try {
       const cat: ItemCatalogue | undefined = Array.isArray(itemCatalogue)
         ? new Map(itemCatalogue.map(i => [i.Name, i]))
         : itemCatalogue
-      const xml = exportV2Build(build, cat)
+      const xml = exportV2DocumentModel(doc, cat)
       const blob = new Blob([xml], { type: 'application/xml' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${build.name.replace(/[^a-z0-9_\- ]/gi, '_')}.DDOBuild`
+      a.download = `${doc.name.replace(/[^a-z0-9_\- ]/gi, '_')}.DDOBuild`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -129,33 +211,53 @@ export function usePersistence(): PersistenceAPI {
   }, [])
 
   /**
-   * Read a File object, parse JSON, and resolve to a CharacterBuild.
+   * Read a File object and resolve to a full CharacterDocument:
+   *  - V2 .DDOBuild XML → every <Life>/<Build> is kept (F1/U1)
+   *  - V3 document JSON → as-is
+   *  - V3 single-build JSON (legacy) → wrapped in a one-life document
    * Rejects with a descriptive Error on parse failure or missing fields.
    */
-  const importJSON = useCallback((file: File): Promise<CharacterBuild> => {
+  const importFile = useCallback((file: File): Promise<CharacterDocument> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = () => {
         try {
           const text = reader.result as string
+          // V1 .ddocp XML support — detect by file extension or the V1 root
+          // tag <DDOCharacterData> (CDDOBuilderApp::OnFileImport reads these
+          // with that expected root, DDOBuilder.cpp:294-325). Must be checked
+          // before the generic V2 XML branch below, which would otherwise
+          // swallow any '<'-prefixed text.
+          const isV1 = file.name.toLowerCase().endsWith('.ddocp') ||
+                       isV1CharacterXml(text)
+          if (isV1) {
+            const { document: v1doc, warnings } = importV1Build(text)
+            if (flattenDocument(v1doc).length === 0) {
+              reject(new Error(warnings[0] ?? 'V1 import produced no build'))
+              return
+            }
+            resolve(migrateDocument(v1doc))
+            return
+          }
           // V2 .DDOBuild XML support — detect by file extension or root tag.
           const isXml = file.name.toLowerCase().endsWith('.ddobuild') ||
                         text.trim().startsWith('<')
           if (isXml) {
             const result = importV2Build(text)
-            resolve(result.build)
+            if (result.document.lives.length === 0) {
+              reject(new Error('V2 file contained no lives'))
+              return
+            }
+            resolve(result.document)
             return
           }
           const parsed = JSON.parse(text)
-          // V2-format Character document: unwrap to its first build.
           if (isCharacterDocument(parsed)) {
-            const flat = flattenDocument(parsed)
-            const first = flat.find(b => b.id === parsed.activeBuildId) ?? flat[0]
-            if (!first) {
+            if (flattenDocument(parsed).length === 0) {
               reject(new Error('Character document contained no builds'))
               return
             }
-            resolve(first)
+            resolve(migrateDocument(parsed))
             return
           }
           if (
@@ -167,7 +269,7 @@ export function usePersistence(): PersistenceAPI {
             reject(new Error('Invalid build file: missing required id or name fields'))
             return
           }
-          resolve(parsed as CharacterBuild)
+          resolve(emptyDocument(migrateLoad(parsed as CharacterBuild)))
         } catch {
           reject(new Error('Invalid build file: could not parse JSON or XML'))
         }
@@ -177,7 +279,7 @@ export function usePersistence(): PersistenceAPI {
     })
   }, [])
 
-  return { saves, saveCharacter, loadCharacter, deleteCharacter, exportJSON, importJSON }
+  return { docs, saves, saveDocument, deleteDocument, loadBackup, exportJSON, exportDDOBuild, importFile }
 }
 
 // ---------------------------------------------------------------------------
@@ -189,29 +291,42 @@ export function usePersistence(): PersistenceAPI {
 
 /** Props for SaveLoadBar */
 export interface SaveLoadBarProps {
-  /** Called when the user selects a saved build to load */
-  onLoad: (build: CharacterBuild) => void
+  /** Called when the user selects a saved character document to load */
+  onLoad: (doc: CharacterDocument) => void
 }
 
 /**
  * A toolbar that lets the user save, load, export, and import characters.
- * Reads the current build from CharacterContext automatically.
+ * Operates on the whole Character document (every life/build): the
+ * live-edited active build is synced into the document before each save or
+ * export, and loading hands the full document to `onLoad`.
  */
 export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
   const { build, dispatch } = useCharacter()
-  const { saves, saveCharacter, deleteCharacter, exportJSON, importJSON } = usePersistence()
+  const { doc, setDoc } = useDocument()
+  const { docs, saveDocument, loadBackup, importFile, exportJSON, exportDDOBuild } = usePersistence()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState(false)
 
+  /** The current document with the live build written back in. */
+  function syncedDoc(): CharacterDocument {
+    const synced = syncBuildIntoDocument(doc, build)
+    if (synced !== doc) setDoc(synced)
+    return synced
+  }
+
   function handleNew() {
-    if (window.confirm('Start a new build? Unsaved changes will be lost.')) {
-      dispatch({ type: 'RESET' })
+    if (window.confirm('Start a new character? Unsaved changes will be lost.')) {
+      const fresh = emptyDocument()
+      setDoc(fresh)
+      const target = findActiveBuild(fresh)
+      if (target) dispatch({ type: 'LOAD_BUILD', build: target })
     }
   }
 
   function handleSave() {
-    saveCharacter(build)
+    saveDocument(syncedDoc())
     setSavedMsg(true)
     setTimeout(() => setSavedMsg(false), 1500)
   }
@@ -219,8 +334,7 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
   function handleLoadChange(e: ChangeEvent<HTMLSelectElement>) {
     const id = e.target.value
     if (!id) return
-    // Find the build in current saves list directly
-    const found = saves.find(b => b.id === id)
+    const found = docs.find(d => d.id === id)
     if (found) {
       onLoad(found)
     }
@@ -238,9 +352,9 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
     if (!file) return
     // Reset the input so the same file can be re-selected
     e.target.value = ''
-    importJSON(file)
+    importFile(file)
       .then(imported => {
-        saveCharacter(imported)
+        saveDocument(imported)
         onLoad(imported)
       })
       .catch((err: unknown) => {
@@ -252,22 +366,22 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
 
   const newBtn = h(
     'button',
-    { type: 'button', onClick: handleNew, title: 'Start a new build' },
+    { type: 'button', onClick: handleNew, title: 'Start a new character' },
     'New',
   )
 
   const saveBtn = h(
     'button',
-    { type: 'button', onClick: handleSave, title: 'Save current character' },
+    { type: 'button', onClick: handleSave, title: 'Save current character (all lives and builds)' },
     savedMsg ? '✓ Saved' : 'Save',
   )
 
   const loadSelect = h(
     'select',
     { defaultValue: '', onChange: handleLoadChange, title: 'Load a saved character' },
-    h('option', { value: '', disabled: true }, saves.length === 0 ? 'No saves' : 'Load…'),
-    ...saves.map(b =>
-      h('option', { key: b.id, value: b.id }, b.name),
+    h('option', { value: '', disabled: true }, docs.length === 0 ? 'No saves' : 'Load…'),
+    ...docs.map(d =>
+      h('option', { key: d.id, value: d.id }, d.name),
     ),
   )
 
@@ -275,8 +389,8 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
     'button',
     {
       type: 'button',
-      onClick: () => exportJSON(build),
-      title: 'Export current character as JSON',
+      onClick: () => exportJSON(syncedDoc()),
+      title: 'Export current character (all lives and builds) as JSON',
     },
     'Export JSON',
   )
@@ -285,8 +399,8 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
     'button',
     {
       type: 'button',
-      onClick: () => exportDDOBuild(build),
-      title: 'Export current character as a V2-compatible .DDOBuild file',
+      onClick: () => exportDDOBuild(syncedDoc()),
+      title: 'Export current character as a V2-compatible .DDOBuild file (all lives and builds)',
     },
     'Export .DDOBuild',
   )
@@ -294,15 +408,31 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
   const hiddenInput = h('input', {
     ref: fileInputRef,
     type: 'file',
-    accept: '.json,application/json,.ddobuild,.DDOBuild,application/xml,text/xml',
+    accept: '.json,application/json,.ddobuild,.DDOBuild,.ddocp,application/xml,text/xml',
     style: { display: 'none' },
     onChange: handleFileChange,
   })
 
   const importBtn = h(
     'button',
-    { type: 'button', onClick: handleImportClick, title: 'Import a character from a V3 JSON file or a V2 .DDOBuild XML file' },
+    { type: 'button', onClick: handleImportClick, title: 'Import a character from a V3 JSON file or a V2 .DDOBuild XML file (all lives and builds are kept)' },
     'Import',
+  )
+
+  const revertBtn = h(
+    'button',
+    {
+      type: 'button',
+      title: 'Revert to the version before the last save (V2 "Revert to Backup")',
+      onClick: () => {
+        const backup = loadBackup(doc.id)
+        if (!backup) { window.alert('No backup exists for this character yet.') }
+        else if (window.confirm('Revert to the previous saved version? Current changes will be lost.')) {
+          onLoad(backup)
+        }
+      },
+    },
+    'Revert',
   )
 
   const errorSpan = importError
@@ -327,6 +457,7 @@ export function SaveLoadBar({ onLoad }: SaveLoadBarProps): ReactElement {
     exportV2Btn,
     hiddenInput,
     importBtn,
+    revertBtn,
     errorSpan,
   )
 }
