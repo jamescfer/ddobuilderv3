@@ -4,6 +4,7 @@ import { useCharacter } from '../../context/CharacterContext'
 import { api } from '../../api'
 
 export type NavItem =
+  | 'Main'
   | 'Builder'
   | 'Ability Ups'
   | 'Skills'
@@ -41,7 +42,7 @@ interface NavGroup {
 }
 
 const NAV_GROUPS: NavGroup[] = [
-  { label: 'Character', items: ['Builder', 'Ability Ups', 'Skills', 'Level Training'] },
+  { label: 'Character', items: ['Main', 'Builder', 'Ability Ups', 'Skills', 'Level Training'] },
   { label: 'Combat', items: ['Feats', 'Automatic Feats', 'Spells', 'DCs'] },
   { label: 'Progression', items: ['Enhancements', 'Epic Destinies', 'Reaper'] },
   { label: 'Equipment', items: ['Gear', 'Filigrees', 'Set Bonuses', 'Clickies'] },

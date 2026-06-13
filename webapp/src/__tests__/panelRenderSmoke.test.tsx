@@ -225,6 +225,7 @@ const PANELS: Array<[string, () => Promise<{ default: React.ComponentType<any> }
   ['ContentPanel', () => import('../components/layout/ContentPanel')],
   ['HelpPanel', () => import('../components/layout/HelpPanel')],
   ['LifeBuildBar', () => import('../components/layout/LifeBuildBar')],
+  ['Dashboard', () => import('../components/layout/Dashboard')],
 ]
 
 describe.skipIf(!haveData)('panel render smoke (real data + real build)', () => {
