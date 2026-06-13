@@ -1038,8 +1038,10 @@ export function parseEffect(
     case 'DestinyAPBonus':
       return [make('destinyAP')]
 
+    // V2 Effect_RAPBonus = bonus RACIAL action points (Life::CountBonusRacialAP,
+    // Life.cpp:735-772) — was mis-keyed as reaperAP.
     case 'RAPBonus':
-      return [make('reaperAP')]
+      return [make('racialAP')]
 
     case 'UAPBonus':
       return [make('universalAP')]
@@ -2075,7 +2077,7 @@ export function parseItemBuff(
     // AP / fate / class extras
     // -----------------------------------------------------------------------
     case 'DestinyAPBonus':         return [make('destinyAP')]
-    case 'RAPBonus':               return [make('reaperAP')]
+    case 'RAPBonus':               return [make('racialAP')]
     case 'UAPBonus':               return [make('universalAP')]
     case 'FatePoint':              return [make('fatePoint')]
     case 'ExtraActionBoost':       return [make('actionBoost.extra')]

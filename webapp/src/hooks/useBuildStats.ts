@@ -1103,7 +1103,8 @@ function buildStatMapOnce(
     // ── Past lives ────────────────────────────────────────────────────────
     for (const [source, count] of Object.entries(build.pastLives)) {
       if (!count) continue
-      const feat = allFeats.find(f => f.Name === source || f.Name === `Past Life: ${source}`)
+      const feat = allFeats.find(f =>
+        f.Name === source || f.Name === `Past Life: ${source}` || f.Name === `Racial Past Life: ${source}`)
       if (feat) accumulateFeat(map, feat, count, `Past life: ${source} ×${count}`, build.totalLevel, ctx)
     }
 

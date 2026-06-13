@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { api } from '../../api'
 import { useCharacter } from '../../context/CharacterContext'
-import type { DDOClass, EnhancementTree, EnhancementTreeItem, Race } from '../../types/ddo'
+import { enhancementAPBudget } from '../../lib/actionPoints'
+import type { DDOClass, EnhancementTree, EnhancementTreeItem, Race, Feat } from '../../types/ddo'
 import TreeGrid, { type TreeChoices, type TreeSelections } from './TreeGrid'
 import DdoIcon from '../DdoIcon'
 import styles from './EnhancementTreePanel.module.css'
@@ -10,7 +11,6 @@ import styles from './EnhancementTreePanel.module.css'
 // Constants
 // ---------------------------------------------------------------------------
 
-const ENH_AP = 80
 const MAX_VISIBLE = 6
 
 // ---------------------------------------------------------------------------
@@ -171,6 +171,7 @@ export default function EnhancementTreePanel() {
   const [allTrees, setAllTrees] = useState<EnhancementTree[]>([])
   const [allClasses, setAllClasses] = useState<DDOClass[]>([])
   const [allRaces, setAllRaces] = useState<Race[]>([])
+  const [allFeats, setAllFeats] = useState<Feat[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -186,9 +187,10 @@ export default function EnhancementTreePanel() {
       api.enhancements(),
       api.classes().catch(() => [] as DDOClass[]),
       api.races().catch(() => [] as Race[]),
+      api.feats().catch(() => [] as Feat[]),
     ])
-      .then(([trees, classes, races]) => {
-        setAllTrees(trees); setAllClasses(classes); setAllRaces(races); setError(null)
+      .then(([trees, classes, races, feats]) => {
+        setAllTrees(trees); setAllClasses(classes); setAllRaces(races); setAllFeats(feats); setError(null)
       })
       .catch(err => setError(String(err)))
       .finally(() => setLoading(false))
@@ -216,8 +218,13 @@ export default function EnhancementTreePanel() {
     })
   }, [enhTrees, build.race, build.classes])
 
-  // Auto-pin racial tree when build changes
+  // Auto-pin racial tree when build changes.
   useEffect(() => {
+    // While the tree catalogue is still loading, availableTrees is empty —
+    // pruning against it here WIPED the imported/saved pinned list on every
+    // mount (the cause of "enhancement trees not coming across" after a V2
+    // import). Only prune once real data is present.
+    if (loading || enhTrees.length === 0) return
     let next = pinned.filter(name => availableTrees.some(t => t.Name === name))
     const racial = availableTrees.find(t => t.IsRacialTree)
     if (racial && !next.includes(racial.Name)) {
@@ -232,6 +239,14 @@ export default function EnhancementTreePanel() {
   const totalSpent = useMemo(() =>
     enhTrees.reduce((s, t) => s + computeTreeSpent(t, enhChoices[t.Name] ?? {}), 0),
     [enhTrees, enhChoices])
+
+  // V2 Build::AvailableActionPoints(TT_allEnhancement): min(20, level)·4 plus
+  // bonus racial/universal APs from past-life / favor feats (Effect_RAPBonus
+  // / Effect_UAPBonus). The previous hardcoded 80 mis-reported imported
+  // builds with bonus APs as over budget ("102 / 80").
+  const apBudget = useMemo(
+    () => (allFeats.length > 0 ? enhancementAPBudget(build, allFeats) : Math.min(20, build.totalLevel || 0) * 4),
+    [build, allFeats])
 
   function handleChoicesChange(treeName: string, updated: TreeChoices) {
     dispatch({ type: 'SET_ENH_CHOICES', treeName, choices: updated })
@@ -267,7 +282,7 @@ export default function EnhancementTreePanel() {
     <div className="panel">
       <div className="panel-header">
         <span>Enhancements</span>
-        <span className={styles.apTotal}>{totalSpent} / {ENH_AP} AP</span>
+        <span className={styles.apTotal}>{totalSpent} / {apBudget} AP</span>
       </div>
 
       <div className="panel-body" style={{ padding: 0 }}>
@@ -288,7 +303,7 @@ export default function EnhancementTreePanel() {
               <button className={styles.addTreeBtn} onClick={() => setPickerOpen(true)}>
                 + Add Tree ({pinned.length}/{MAX_VISIBLE})
               </button>
-              <span className={styles.toolbarHint}>{ENH_AP - totalSpent} AP remaining</span>
+              <span className={styles.toolbarHint}>{apBudget - totalSpent} AP remaining</span>
             </div>
 
             {visibleTrees.length === 0 ? (
@@ -327,7 +342,7 @@ export default function EnhancementTreePanel() {
                           choices={treeChoices}
                           selections={treeSelections}
                           totalSpentAllTrees={totalSpent}
-                          totalAP={ENH_AP}
+                          totalAP={apBudget}
                           onChoicesChange={u => handleChoicesChange(tree.Name, u)}
                           onSelectionsChange={u => handleSelectionsChange(tree.Name, u)}
                           build={build}

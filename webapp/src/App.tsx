@@ -40,6 +40,7 @@ import SettingsPanel from './components/layout/SettingsPanel'
 import ContentPanel from './components/layout/ContentPanel'
 import HelpPanel from './components/layout/HelpPanel'
 import AppShortcuts from './components/layout/AppShortcuts'
+import Dashboard from './components/layout/Dashboard'
 import LifeBuildBar from './components/layout/LifeBuildBar'
 import { findActiveBuild } from './lib/multiLife'
 import type { CharacterDocument } from './types/ddo'
@@ -79,6 +80,10 @@ function AppInner() {
   return (
     <Layout activeItem={activeItem} onNavigate={setActiveItem} saveBar={saveBar}>
       <div className={styles.content}>
+        {activeItem === 'Main' && (
+          <Dashboard />
+        )}
+
         {activeItem === 'Builder' && (
           <div className={styles.builderLayout}>
             <aside className={styles.builderSidebar}>
