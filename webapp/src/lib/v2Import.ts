@@ -582,6 +582,14 @@ function parseBuildNode(
   for (const [k, t] of Object.entries(charSpecial.pastLifeTypes)) {
     out.pastLifeTypes[k] = t
   }
+  // Non-past-life Special feats trained N times (Inherent Racial/Universal
+  // Action Point, Inherent Fate Point, Inherent Melee Power, …) are
+  // effect-bearing and feed the AP budget / stats exactly like past lives —
+  // fold them into pastLives by count (previously parsed but dropped).
+  for (const name of charSpecial.feats) {
+    out.pastLives[name] = (out.pastLives[name] ?? 0) + 1
+    out.pastLifeTypes[name] = 'Special'
+  }
 
   // ── Spells (per class / spell-level) — F3 ─────────────────────────────────
   // V2 <TrainedSpells> is a DL_OBJECT_VECTOR of <TrainedSpell> with
