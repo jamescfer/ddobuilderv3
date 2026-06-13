@@ -582,6 +582,21 @@ export function parseEffect(
       .map(n => ({ statKey: `grantedFeat.${n}`, value: 1, bonusType: 'GrantFeat', source }))
   }
 
+  // Ability-substitution markers carry no Amount (AType NotNeeded) but must
+  // still fire — they only signal an attack/damage ability CANDIDATE for the
+  // wielded weapon (V2 LargestStatBonus, BreakdownItemWeaponAttackBonus.cpp
+  // :327+). Gated on weapon type / weapon class like the rest of the family.
+  if (effect.Type === 'Weapon_AttackAbility' || effect.Type === 'Weapon_DamageAbility'
+      || effect.Type === 'WeaponAttackAbilityClass' || effect.Type === 'WeaponDamageAbilityClass') {
+    const its = toStringArray(effect.Item)
+    if (!ctx || its.length < 2) return []
+    const byClass = effect.Type.endsWith('Class')
+    const memberSet = byClass ? ctx.weaponClassMain : ctx.weaponTypes
+    if (!memberSet || !its.slice(1).some(i => memberSet.has(i))) return []
+    const kind = effect.Type.includes('Attack') ? 'attackAbility' : 'damageAbility'
+    return [{ statKey: `melee.${kind}.${its[0]}`, value: 1, bonusType: effect.Bonus ?? 'Enhancement', source }]
+  }
+
   if (resolved === null) return []
   const value: number = resolved
 
@@ -1360,27 +1375,71 @@ export function parseEffect(
     case 'Weapon_AttackAndDamageCritical':
     case 'WeaponOtherDamageBonusCritical':
       return [make('melee.crit.damage')]
-    case 'Weapon_AttackAbility':
-    case 'Weapon_BaseDamage':
-    case 'Weapon_DamageAbility':
-    case 'Weapon_Enchantment':
-    case 'Weapon_AttackCritical':
-    case 'WeaponOtherDamageBonus':
-    case 'WeaponOtherDamageBonusClass':
-    case 'WeaponOtherDamageBonusCriticalClass':
+    // -----------------------------------------------------------------------
+    // Per-weapon-class effects (V2 BreakdownItemWeaponAttackBonus.cpp:233-279,
+    // BreakdownItemWeaponDamageBonus.cpp:157-205, ...CriticalThreatRange /
+    // ...CriticalMultiplier). V2 applies these only when the equipped weapon
+    // is a member of the named weapon class (Build::IsWeaponInGroup); V3
+    // gates on ctx.weaponClassMain (the main-hand weapon's derived classes).
+    // Without weapon context (older callers / no weapon equipped) nothing is
+    // emitted — same as V2 with no weapon wielded.
+    // -----------------------------------------------------------------------
+    case 'WeaponAttackBonusClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.toHit')] : []
+    case 'WeaponDamageBonusClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.damage')] : []
+    case 'WeaponAttackBonusCriticalClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.toHit')] : []
+    case 'WeaponDamageBonusCriticalClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.damage')] : []
+    case 'WeaponCriticalMultiplierClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.multiplier')] : []
+    case 'WeaponCriticalRangeClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.range')] : []
     case 'WeaponAlacrityClass':
-    case 'WeaponAttackAbilityClass':
-    case 'WeaponDamageAbilityClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.alacrity')] : []
+    case 'WeaponOtherDamageBonusClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.damage')] : []
+    case 'WeaponOtherDamageBonusCriticalClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.damage')] : []
+    // Weapon enchantment adds to BOTH attack and damage (V2 routes
+    // Effect_Weapon_Enchantment into the attack and damage breakdowns).
+    case 'Weapon_Enchantment':
+      return items.includes('All') || (ctx && items.some(i => ctx.weaponTypes.has(i)))
+        ? [make('melee.toHit'), make('melee.damage')] : []
+    case 'Weapon_EnchantmentClass':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.toHit'), make('melee.damage')] : []
+    // Extra base damage dice (+W) for the listed weapon TYPES.
+    case 'Weapon_BaseDamage':
+      return ctx && items.some(i => ctx.weaponTypes.has(i))
+        ? [make('weapon.bonusW')] : []
+    // Crit-confirm bonuses for the wielded weapon type.
+    case 'Weapon_AttackCritical':
+      return items.includes('All') || (ctx && items.some(i => ctx.weaponTypes.has(i)))
+        ? [make('melee.crit.toHit')] : []
+    // Ability substitution for attack/damage rolls (e.g. Pact weapons:
+    // CHA-to-hit). Item = [Ability, ...weaponTypes] (or weapon classes for
+    // the *Class variants). Emit a marker; CombatPanel picks the LARGEST
+    // candidate ability (V2 BreakdownItemWeaponAttackBonus.cpp:327+
+    // LargestStatBonus).
+    // Damage-type-gated variants need the weapon's damage type (Bludgeoning/
+    // Slashing/Piercing), which the EffectContext does not carry; Keen /
+    // Proficiency / Stat variants are likewise unmodelled. ~30 effects total
+    // in the data — documented residual gap.
+    case 'WeaponOtherDamageBonus':
     case 'WeaponDamageBonusCriticalStat':
     case 'WeaponDamageBonusStat':
     case 'WeaponProficiencyClass':
-    case 'WeaponAttackBonusClass':
-    case 'WeaponAttackBonusCriticalClass':
-    case 'WeaponDamageBonusClass':
-    case 'WeaponDamageBonusCriticalClass':
-    case 'WeaponCriticalMultiplierClass':
-    case 'WeaponCriticalRangeClass':
-    case 'Weapon_EnchantmentClass':
     case 'WeaponAttackBonusDamageType':
     case 'WeaponAttackBonusCriticalDamageType':
     case 'WeaponDamageBonusDamageType':

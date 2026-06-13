@@ -120,7 +120,10 @@ export function buildAttackEntry(
   const sneakDice = stats.total('melee.sneakDice') + stats.total('melee.sneakAttack')
 
   const abilityMod = modifier(abilityScore)
-  const weaponDie = avgDie(weapon.diceNum, weapon.diceSides)
+  // Effect_Weapon_BaseDamage: extra base damage dice (+W) for the wielded
+  // weapon type (gated in effectParser against ctx.weaponTypes).
+  const bonusW = stats.total('weapon.bonusW')
+  const weaponDie = avgDie(weapon.diceNum + bonusW, weapon.diceSides)
   const baseDamage = weaponDie + meleeDamage + abilityMod * damageAbilMult
   const sneakBonus = sneakDice * 3.5 // 1d6 = 3.5
   const hitDmgRaw = (baseDamage + sneakBonus) * meleePowerMult

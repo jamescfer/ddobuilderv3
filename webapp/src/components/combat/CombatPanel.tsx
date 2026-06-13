@@ -95,7 +95,21 @@ export default function CombatPanel() {
 
   const result = useMemo(() => {
     if (!stats.weapon) return null
-    const ab = stats.weapon.attackModifier as 'Strength' | 'Dexterity'
+    // V2 BreakdownItemWeaponAttackBonus.cpp:327+ (LargestStatBonus): the
+    // attack ability is the LARGEST of the weapon's default ability and any
+    // Weapon_AttackAbility / WeaponAttackAbilityClass candidates active for
+    // the wielded weapon (e.g. Pact weapons CHA-to-hit), surfaced by
+    // effectParser as melee.attackAbility.<Ability> markers.
+    const defaultAb = stats.weapon.attackModifier as string
+    const abilityCandidates = new Set<string>([defaultAb])
+    for (const key of stats.keys()) {
+      const m = /^melee\.(attackAbility|damageAbility)\.(.+)$/.exec(key)
+      if (m && stats.total(key) !== 0) abilityCandidates.add(m[2])
+    }
+    let ab = defaultAb
+    for (const cand of abilityCandidates) {
+      if (stats.total(`ability.${cand}`) > stats.total(`ability.${ab}`)) ab = cand
+    }
     const abilityScore = stats.total(`ability.${ab}`)
     const bab = Math.min(25, stats.total('bab'))
     const twfTier = pickTwfTier(build.featChoices)
