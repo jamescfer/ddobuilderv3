@@ -597,7 +597,38 @@ export function parseEffect(
     return [{ statKey: `melee.${kind}.${its[0]}`, value: 1, bonusType: effect.Bonus ?? 'Enhancement', source }]
   }
 
-  if (resolved === null) return []
+  if (resolved === null) {
+    // Marker effects whose AType (NotNeeded / SpellInfo) yields no Amount but
+    // which V2 still consumes: immunities and DR bypasses feed display
+    // breakdowns (Breakdown_Immunities / the DR breakdown's bypass list);
+    // GrantSpell / SpellListAddition add spells to a class's list
+    // (SpellsControl). These previously died here and were silently dropped.
+    const mits = toStringArray(effect.Item)
+    const mbt = effect.Bonus ?? 'Enhancement'
+    switch (effect.Type) {
+      case 'Immunity':
+        return mits.length > 0
+          ? mits.map(i => ({ statKey: `immunity.${i}`, value: 1, bonusType: mbt, source }))
+          : [{ statKey: 'immunity.All', value: 1, bonusType: mbt, source }]
+      case 'DRBypass': {
+        // Item = weapon scope (usually "All"); Value = the DR kind bypassed
+        // (e.g. Adamantine).
+        const kind = (effect as { Value?: string }).Value ?? mits[0] ?? 'Untyped'
+        return [{ statKey: `drBypass.${kind}`, value: 1, bonusType: mbt, source }]
+      }
+      case 'GrantSpell':
+      case 'SpellListAddition': {
+        // Item = [spellName, className]; Amount = [spellLevel, cost, …].
+        if (mits.length < 2) return []
+        const amounts = String((effect.Amount as { '#text'?: unknown } | undefined)?.['#text'] ?? effect.Amount ?? '')
+          .split(/\s+/).map(Number)
+        const spellLevel = Number.isFinite(amounts[0]) ? amounts[0] : 1
+        return [{ statKey: `grantSpell.${mits[1]}.${mits[0]}`, value: spellLevel, bonusType: mbt, source }]
+      }
+      default:
+        return []
+    }
+  }
   const value: number = resolved
 
   const bonusType = effect.Bonus ?? 'Enhancement'
@@ -1477,18 +1508,19 @@ export function parseEffect(
     case 'ExclusionGroup':
     case 'ExcludeFeatSelection':
     case 'GrantFeat':
-    case 'GrantSpell':
-    case 'SpellListAddition':
     case 'SpellLikeAbility':
     case 'CreateSlider':
     case 'EnhancementTree':
     case 'DestinyTree':
     case 'ItemClickie':
-    case 'SLACharge':
     case 'RustSusceptability':
     case 'NotModeled':
     case 'Unknown':
       return []
+
+    // SLA charge count for the named SLA (V2 CSLAControl charge display).
+    case 'SLACharge':
+      return items.length > 0 ? [make(`slaCharge.${items[0]}`)] : []
 
     // Unknown effect type — return nothing
     default:
