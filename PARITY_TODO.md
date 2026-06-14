@@ -186,6 +186,22 @@ Remaining read/write-fidelity gaps:
 
 ## High-priority remaining — numerical correctness
 
+- ❌ **N6 — Weapon damage-type-gated effects** — `WeaponKeenDamageType`
+  (Improved Critical: Slashing/Piercing/Bludgeoning/Ranged/Thrown),
+  `WeaponAttackBonusDamageType`/`WeaponAttackBonusCriticalDamageType` (Greater
+  Weapon Focus feats), `WeaponDamageBonusDamageType`/
+  `WeaponDamageBonusCriticalDamageType` (Greater Weapon Specialization feats) —
+  **23 effects** across `Feats.xml` and `Fighter.class.xml` are silently dropped
+  in `parseEffect` (returns `[]`). Improved Critical doubles the weapon's
+  critical threat range and appears in nearly every melee build.
+  WeaponGroupings.xml already places weapons in "Slashing"/"Bludgeoning"/
+  "Piercing"/"Ranged"/"Thrown" groups and `ctx.weaponTypes` already tracks
+  those; `parseEffect` just needs five new cases routing to `melee.crit.range` /
+  `melee.toHit` / `melee.crit.toHit` / `melee.damage` / `melee.crit.damage`
+  gated on `ctx?.weaponTypes.has(item)` (V2
+  `BreakdownItemWeaponCriticalThreatRange.cpp:63-65`,
+  `BreakdownItemWeaponAttackBonus.cpp:255-258`,
+  `BreakdownItemWeaponDamageBonus.cpp:179-182` parity).
 - ✅ **N1 — AC percentage armor/shield bonuses** — fixed (Done #43).
 - ✅ **N2 — Combat to-hit penalties** — TWF / ACP / negative-level penalties
   fixed (Done #44); weapon-proficiency detection complete (Done #56).
@@ -208,6 +224,7 @@ Remaining read/write-fidelity gaps:
 
 ## High-priority remaining — effect parser coverage
 
+- ❌ **E2 — `WeaponOtherDamageBonus` / `WeaponDamageBonusStat` / `WeaponDamageBonusCriticalStat`** — three weapon-effect types in `effectParser.ts` return `[]` (documented residual, line 1473–1481). `WeaponOtherDamageBonus` is the generic "other damage" bucket V2 routes into the damage breakdown for effects that don't fit the class/type/stat variants; `*Stat` variants gate on an ability score. Impact: ~30 remaining effects in enhancement trees that use these types. These require a `weaponStat` context field (the ability score to use) not yet present in `EffectContext`. Lower urgency than N6 because `*Stat` variants are rare in practice.
 - ✅ **E1 — `SLA` (Spell-Like Ability)** — the SLA *list* is auto-derived
   (`sla.<spellName>` markers + `BuildStats.slaList` + forum export, #74).
   Charge *consumption* verified not-a-gap (Done #69): V2 `SLAControl.cpp`
@@ -259,6 +276,28 @@ Remaining read/write-fidelity gaps:
 
 ## High-priority remaining — forum export
 
+- ❌ **X2 — Weapon damage section completeness** — V3's `weaponDamage` section
+  (`sections.ts:334-348`) only emits weapon dice/crit, to-hit, flat damage, and
+  doublestrike%. V2's `FES_WeaponDamage` (`ForumExportDlg.cpp:1681-1733`) also
+  exports: Melee Power, Strikethrough, Off-Hand Attack Chance, Fortification
+  Bypass, Dodge Bypass, Helpless Damage bonus, Ranged Power, Doubleshot%, Sneak
+  Attack dice+bonus. All these are already computed by V3 (`melee.power`,
+  `melee.strikethrough`, `helpless`, `fortBypass`, `dodgeBypass`, `ranged.power`,
+  `ranged.doubleshot`, `melee.sneakDice`, `melee.sneakAttack`, `melee.sneakDamage`
+  in `buildStatMap`) — they just need to be wired into the export section.
+- ❌ **X3 — Saves vs. conditions** — V3's saves section only emits
+  Fort/Reflex/Will totals. V2's `FES_Saves` (`ForumExportDlg.cpp:510-529`) also
+  showed saves vs Poison and Disease (Fort sub-saves), vs Enchantment/Illusion/
+  Fear/Curse (Will sub-saves), and vs Traps/Spell/Magic (Reflex sub-saves).
+  These are separate stat keys that V3 may not yet track; needs investigation of
+  which are computable from existing `save.*` breakdown keys vs. which require
+  new effect-type handlers.
+- ❌ **X4 — Spell export details** — V3's spells section (`sections.ts:313-332`)
+  shows class → level → spell names only. V2's `FES_Spells`
+  (`ForumExportDlg.cpp:1523-1570`) also showed spell school, caster level, max
+  caster level, DC, average damage, and critical damage per trained spell. CL,
+  MCL, and DC are already computed by V3 per class/school; school and damage
+  estimates are not surfaced in the export.
 - ➖ **X1 — Image embedding** — Investigation shows V2's `ForumExportDlg.cpp`
   uses no `[img]` BBCode tags; V2's forum export is also purely text-based.
   The original claim was incorrect — no gap exists here.
@@ -282,6 +321,23 @@ Remaining read/write-fidelity gaps:
   every build of every stored/imported document through `migrateLoad`.
 
 ### Data-file edge cases
+- ❌ **D1 — Item name migration** — V2's `Build::GetLatestVersionOfItem()`
+  (`Build.cpp:4409-4489`) refreshes each equipped item by looking it up fresh
+  from the live catalogue on load, preserving user-set augments by type-match
+  and handling `SlotUpgrade` → augment promotions. V3 has no equivalent: items
+  from `.DDOBuild` files whose names were updated by DDO patches remain
+  unresolved in the gear panel until manually re-selected. The only migration in
+  V3 (`v1Import.ts:195-202`) handles one specific rename ("Legendary Greensteel"
+  → "Legendary Green Steel"). A general item-name migration pass run at import /
+  load time would close this.
+- ❌ **D2 — `SuppressSetBonus` augment validation** — V2's `ItemSelectDialog.cpp
+  :487-500` enforces a UI constraint: at most one augment per item may have the
+  `SuppressSetBonus` flag (shows error "You cannot equip multiple augments that
+  suppress set bonuses"). V3's `useBuildStats.ts:575-586` correctly processes
+  the first `SuppressSetBonus` flag found, but the gear panel imposes no
+  constraint; a user can equip two set-suppressing augments on one item without
+  warning. Low impact (the stat calculation is still correct), but can cause
+  user confusion.
 - ✅ **Item slot edge cases** — two ring slots verified (#71);
   trinket-via-augment is **not a V2 mechanic** (`Augment.h:35-56` — augments
   can only add/grant augment slots, never inventory slots).
@@ -302,6 +358,25 @@ Remaining read/write-fidelity gaps:
 
 ## Low-priority polish
 
+- ❌ **X5 — Forum export: Energy resistance completeness** — V3's
+  `energyResistances` section checks 11 types (Fire, Cold, Acid, Electric,
+  Sonic, Force, Light, Negative, Positive, Poison, Repair). V2's
+  `FES_EnergyResistances` (`ForumExportDlg.cpp:1168-1215`) also checked Evil,
+  Good, and Lawful (alignment-based resistances) and showed Absorbance values as
+  a separate column beside Resistance. Most builds have 0 alignment resistance;
+  adding them costs one line of code (extend the `types` array and check
+  `resist.Evil`, `resist.Good`, `resist.Lawful`).
+- ❌ **X6 — Forum export: Enhancement AP summary** — V2's
+  `FES_EnhancementTrees` shows a total AP header (heroic, racial, epic, reaper
+  APs spent). V3's `enhancements` section (`sections.ts`) emits per-tree
+  breakdowns without a total header. Straightforward addition using the same AP
+  sums the `EnhancementTreePanel` already computes.
+- ❌ **X7 — Forum export: Gear set bonuses and filigrees** — V3's gear section
+  shows slot/item/augment names only. V2's `FES_Gear`
+  (`ForumExportDlg.cpp:1859-1925`) also listed active set bonus names (with
+  suppression markers), artifact filigrees (by named set), and weapon filigrees
+  with Sentient personality names. Needs `LoadedCatalogues` (set bonuses,
+  filigrees) threaded into the `emit` context.
 - ✅ **Keyboard shortcuts / print layout / auto-save / drag-and-drop import** —
   done (#69). Recent-files is covered by the Load picker (documents persist in
   localStorage); Win32 file associations are desktop-only (➖).
@@ -347,10 +422,13 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#74 and the Done table
-above for completed items. Last full V2↔V3 review: 2026-06 — section-by-section
-breakdown comparison closing the verified numerical-correctness gaps: AC
-percentage armor/shield bonuses + armor enchantment (N1), combat to-hit TWF /
-ACP / negative-level penalties (N2, partial — proficiency detection pending),
-and the FvS/Sorcerer SP multiplier scope (N4); plus correcting the N3 False
-Life claim, which was a misreading of V2's `m_effects`/`m_itemEffects` split.*
+*Maintained by the parity-pass series. See PRs #53–#93 and the Done table
+above for completed items. Last full V2↔V3 review: 2026-06-14 — full
+section-by-section comparison across all five areas: numerical breakdowns (HP,
+AC, saves, BAB, skills, spell power, PRR/MRR/dodge, Ki, fixed-point ability
+loops all verified at parity), effect parser coverage (new gaps N6 weapon
+damage-type effects and E2 stat-based weapon variants identified), UI features
+(all major panels ported; DPSPane confirmed stub in V2 so not a gap), forum
+export (new gaps X2–X7 added; X1 image embedding confirmed not a V2 feature),
+and data edge cases (D1 item name migration and D2 set-suppressing augment
+validation added).*
