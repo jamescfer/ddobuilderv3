@@ -71,7 +71,6 @@ the PR number, so this file doubles as a changelog.
 | 50 | **Percentage effects** (`<Percent/>`) — `BreakdownItem::DoPercentageEffects`: ~186 effects (86 Hitpoints, 63 ACBonus, 17 Weapon_Attack, 10 SpellPoints, …) tag their amount as a **percentage of the stat base total** (e.g. Frenzied Berserker +25% HP). V3 ignored the flag and added them flat. Now `ParsedBonus`/`RawBonus` carry a `percent` flag (set from `effect.Percent`/`buff.Percent`), and a post-pass in `buildStatMap` replaces each stat's percent markers with `trunc(base × Σpercent / 100)` (gear percents still obey Highest-Only via the `fromGear` split). | this PR |
 | 51 | **Auto-acquired feat effects** (`Build::AutomaticFeats` via `<AutomaticAcquisition>`) — V2 grants some feats purely through the per-feat acquisition mechanism (not class `AutomaticFeats` / race `GrantedFeat`), so V3 never applied their **effects**: **Heroic Durability** (`SpecificLevel 1` → **+30 HP for every character** — universal HP under-count) and **Completionist / Racial Completionist** (`AbilityBonus Item="All"` +2 → +2 all abilities for fully past-lifed builds, which V3 listed for display but never applied). Added a targeted pass in `buildStatMap` that applies these (Attack and Defensive Fighting deliberately excluded — already modeled as hardcoded defaults / a stance). Also fixed `Item="All"` `AbilityBonus`/`AbilityScore`/`SkillBonus` to expand to all six abilities / all skills (were dead `ability.All`/`skill.All` keys). | this PR |
 | 52 | **Universal combat base values from the "Attack" feat** — the universal `Attack` feat (no stance gating) grants base **+50% helpless damage** and **+20% strikethrough**. V3 parsed `HelplessDamage`/`Strikethrough` effects but had no base, so the combat estimator under-stated helpless and two-handed multi-target DPS. Added both as base contributions (Attack's base AC 10 / dodge cap 25 / shield PRR / damage multipliers remain modeled as hardcoded defaults, so only these two non-conflicting combat values were added). | this PR |
-
 | 53 | **Gear-derived weapon / fighting-style stances** — V2's StancesPane auto-activates weapon-type and fighting-style stances from the equipped weapons (default ON when wielded). V3 treated all stances as player-toggled, so effects gated on **"Two Handed Fighting"** (43), **"Two Weapon Fighting"** (29), **"Single Weapon Fighting"** (19), the weapon type itself ("Quarterstaff", "Dwarven Axe", "Handwraps", …), or **"Shield"** (56) never fired unless manually toggled. `buildStatMap` now derives these from `gearItems` (main/off-hand weapon type, two-handed/one-handed via weapon groups, shield presence) and merges them into `ctxStances` alongside the player toggles. | this PR |
 | 54 | **Section C file-compat F1–F5** — see the "File compatibility" section below; F1 (multi-life/multi-build document import + export), F3 (FavorFeats / TrainedSpells / AttackChains / GearSetSnapshot+Snapshot\*), F4 (ContentIDontOwn + Life SpecialFeats), F5 (past-life Type round-trip), F2 (gear-effect embedding seam) all closed. | this PR |
 | 55 | **Reaper AP budget persisted (U3)** — `reaperAP: number` added to `CharacterBuild` and `emptyBuild()` (default 0); `SET_REAPER_AP` action added to the reducer; `migrateLoad` defaults old saves to 0; `ReaperPanel` slider now dispatches `SET_REAPER_AP` and reads `build.reaperAP` instead of local `useState`, so the budget survives page refresh like V2. | #75 |
@@ -99,6 +98,8 @@ the PR number, so this file doubles as a changelog.
 | 77 | **V2-exact spell cost & max caster level** — `TotalCost` (Spell.cpp:354-448) ends after metamagic surcharges (SpellCostReduction is a display-only breakdown); `ActualMaxCasterLevel` (:199-228) has no class-level floor. V3's invented reductions/floor removed. | #93 |
 | 78 | **Per-weapon-class effect family** (200+ effects) — WeaponAttackBonusClass / WeaponDamageBonusClass / *Critical* / Multiplier / Range / Alacrity / Enchantment(Class) / Weapon_BaseDamage / Weapon_(Attack|Damage)Ability(+Class) all returned []. Now gated on the wielded weapon's classes (V2 Build::IsWeaponInGroup) and routed to the combat keys; CombatPanel picks the LARGEST candidate attack ability (V2 LargestStatBonus). Residual: ~30 damage-type-gated/Keen/Stat variants need a weapon damage-type context field. | #93 |
 | 79 | **Marker effects past the null-Amount guard** (260+ effects) — Immunity / DRBypass / GrantSpell / SpellListAddition (AType NotNeeded/SpellInfo) and SLACharge were silently dropped; now emit immunity.* / drBypass.<Value> / grantSpell.<Class>.<Spell> / slaCharge.* matching V2's consumers. End-to-end probe of all 8 301 data effects: drops 728 → 102 (≈30 documented residual + correctly-gated rest). | #93 |
+| 80 | **Enhancement trees import fix** — all enhancement tree data now loads correctly. | #94 |
+| 81 | **Customizable Main dashboard** — V2 docking-panes parity with drag-and-drop panel layout on the main dashboard. | #94 |
 
 ### Known approximation — RESOLVED (#93)
 
@@ -184,84 +185,66 @@ Remaining read/write-fidelity gaps:
 
 ---
 
-## High-priority remaining — numerical correctness
+## High-priority remaining — numerical correctness & display
 
-- ✅ **N1 — AC percentage armor/shield bonuses** — fixed (Done #43).
-- ✅ **N2 — Combat to-hit penalties** — TWF / ACP / negative-level penalties
-  fixed (Done #44); weapon-proficiency detection complete (Done #56).
-  `buildRuntimeGroupAdds` collects `AddGroupWeapon` effects from all trained
-  feats and enhancements; `BuildStats.isWeaponProficient` checks the resulting
-  dynamic "Proficiency" group; `CombatPanel` passes the −4 non-proficiency
-  penalty to `buildAttackEntry`.
-- ✅ **N3 — False Life** — *not a bug* (Done #46). V2's `BreakdownItem::Total`
-  only applies highest-only to gear (`m_itemEffects`); feat/enhancement False
-  Life always stacks — exactly V3's `fromGear` model. The earlier claim
-  misread the C++.
-- ✅ **N4 — FvS/Sorcerer SP multiplier scope** — fixed (Done #45). The
-  multiplier applies to gear SP only, matching V2.
-- ✅ **N5 — Multi-Type effect expansion** — `parseEffect` now handles `effect.Type` as `string[]` (multiple `<Type>` child elements in one XML block); **464+ enhancement-tree effects** (PRR+MRR, MeleePower+RangedPower, DodgeBonus+DodgeCapBonus, Doublestrike+Doubleshot, …) plus guild-buff hireling PRR+MRR (Sellswords' Tavern) that were silently dropped are now correctly applied. Fixed (Done #63).
+- ❌ **T1 — Tactical DC per-type totals and forum export** — Three related gaps
+  found in the 2026-06 full scan:
 
-### Tooling
-- ✅ **G1 — Real V2-golden comparison harness** — fixed (Done #61). `lib/goldenCompare.ts` exports `compareAgainstGolden()` + `captureTemplate()` + `formatReport()`; CLI `scripts/v2GoldenCompare.ts` provides diff mode and `--capture` template mode; `scripts/golden/README.md` documents workflow. Parity claims are now verifiable numbers against pre-captured V2 BreakdownsPane values.
+  1. **Forum export always emits 0**: `sections.ts:355` calls
+     `stats.total('tacticalDC')` but that exact stat key is **never populated**:
+     effects with no `<Item>` don't exist in the 244 data occurrences; effects
+     with `<Item>All</Item>` go to `tacticalDC.All`; specific-type effects go to
+     `tacticalDC.Trip` etc. The key `tacticalDC` (bare) is always absent so the
+     `tacticalDCs` forum-export section always returns `[]` — **0 players see
+     their tactical DCs in the forum export**.
+
+  2. **BreakdownsPanel missing 7 tactical types**: `BreakdownsPanel.tsx` rows
+     exist for All / Trip / Stun / Sunder / Assassinate only. V2
+     `BreakdownsPane.cpp:1544-1556` tracks 13 distinct types. In the data,
+     **General** (67 effects), **Wands** (16), **Rune Arm** (14), **Breath
+     Weapon** (10), **Poison** (2), **Stunning Shield** (1), and **Trap** (1)
+     have matching data effects but no corresponding display row.
+
+  3. **Combined-type DC not shown**: V2's `BreakdownItemTactical::AffectsUs`
+     applies any effect whose Item list contains the type name OR "All" to that
+     type's total. In V3 the "All" bonus (`tacticalDC.All`) and the type-specific
+     bonus (`tacticalDC.Trip`) are stored as separate keys. The BreakdownsPanel
+     shows them in separate rows rather than as a combined per-type total, and the
+     forum export has no way to derive the combined total from the two keys.
+
+  Fix: add a `computeTacticalDCTotals(statsMap)` helper in `lib/v2Formulas.ts`
+  that computes `tacticalDC.All + tacticalDC.{type}` for each type with any
+  bonus; update `BreakdownsPanel` to show all 13 V2 types using combined totals;
+  update `sections.ts` `tacticalDCs` to emit a per-type table matching V2
+  `ForumExportDlg.cpp::AddTacticalDCs` (V2 source: `BreakdownItemTactical.cpp`,
+  `BreakdownsPane.cpp:1544-1556`).
 
 ---
 
 ## High-priority remaining — effect parser coverage
 
-- ✅ **E1 — `SLA` (Spell-Like Ability)** — the SLA *list* is auto-derived
-  (`sla.<spellName>` markers + `BuildStats.slaList` + forum export, #74).
-  Charge *consumption* verified not-a-gap (Done #69): V2 `SLAControl.cpp`
-  contains no charge tracking at all; V3's `slaCharges` already exceeds V2.
-- ✅ **Non-stance runtime gates** — now V2-exact (Done #73): EnemyType
-  hard-fails (as in V2), MaterialType checks the equipped item's material,
-  Skill checks the resolved total. The remaining conservative passes
-  (GroupMember/StartingWorld/ItemTypeInSlot/ItemSlot without context) match
-  the contexts V2 evaluates them in.
+  *(All V2 Effect ATypes verified in 2026-06 scan — effectParser.ts covers all
+  244 types. No parser gaps found. The ~30 weapon-damage-type-gated effects
+  [WeaponAttackBonusDamageType, WeaponDamageBonusDamageType, WeaponKeenDamageType,
+  etc.] are commented out in V2's Effect.cpp switch as well as in V3's
+  effectParser.ts — not a parity gap.)*
 
 ---
 
 ## High-priority remaining — UI features
 
-- ✅ **U1 — Multi-life / multi-build document UI** — fixed (Done #65).
-  `DocumentContext` + `LifeBuildBar` hold and render the full Character →
-  Life[] → Build[] document; persistence stores whole documents (legacy flat
-  saves auto-migrate); V2 import/export keeps every life/build.
-- ✅ **U2 — Twists of Fate editor** — fixed (Done #58). `availableTwistItems()` in
-  `lib/twists.ts` filters non-Tier5 items from available destiny trees; five labeled
-  dropdowns in `EpicDestiniesPanel` dispatch `SET_TWIST_CHOICE` to set `build.twistChoices`.
-- ✅ **U3 — Reaper AP persisted.** `reaperAP` added to `CharacterBuild`; `SET_REAPER_AP` action wired through the reducer; `ReaperPanel` reads/writes `build.reaperAP` (Done #55).
-- ✅ **U4 — Spells known-per-level limit** — fixed (Done #57). `knownSpellCount()`
-  reads `Level${N}` rows from the class data; `SpellsPanel` shows `(N/max
-  trained)` and disables the train checkbox once a spell level is full.
-- ✅ **U5 — Granted / Special / Automatic feats consolidated.** V2 has three
-  panes (Automatic/Granted/Special); V3 folds them into one `AutomaticFeats.tsx`.
-  **Numerical parity restored (Done #59)**: `GrantFeat` effects from enhancements
-  and item buffs now apply the granted feat's stat effects in `buildStatMap`.
-  **UI parity restored (Done #60)**: `BuildStats.grantedFeatsList` exposes the
-  sorted list of effect-granted feat names; `AutomaticFeats.tsx` renders a
-  "Granted Feats" subsection when any are active. Remaining (out of scope here):
-  a "Special Feats" panel for past-life icon grids / favor feats management.
-- ✅ **U6 — Build comparison scope** — fixed (Done #66). BuildCompare lists
-  every build of the current document (grouped per life) ahead of saved
-  characters.
-- ✅ **U7 — Per-level training UI** — `LevelTrainingPanel.tsx` shows each heroic
-  character level as a collapsible card with class, feat choices, and skill
-  ranks allocated at that level. `lib/levelTraining.ts` exports `buildSlots()`
-  (shared with FeatSlots) and `getLevelTrainingEntries()`. Added "Level Training"
-  to the Character sidebar group. (Done #62).
-- ➖ **U8 — Spell metamagic class-gating** — Investigation shows V2's `Spell.h`
-  also uses only per-spell binary metamagic flags with no class-level gating.
-  Both V2 and V3 treat metamagics as spell-wide properties; no gap exists.
-- ✅ **U9 — complete.** FindGearDialog (Done #64), ContentPane per-pack
-  ownership toggles + item filtering (Done #68), Help & About panel (Done #69).
+  *(All V2 panes verified in 2026-06 scan. The pane-restructuring differences
+  [ClassAndFeatPane merged into StatsPanel, SkillsPane into Skills grid, etc.]
+  are intentional architectural differences in V3's tab-based layout, not
+  missing functionality. LogPane is desktop-only debug output — ➖.)*
 
 ---
 
 ## High-priority remaining — forum export
 
-- ➖ **X1 — Image embedding** — Investigation shows V2's `ForumExportDlg.cpp`
-  uses no `[img]` BBCode tags; V2's forum export is also purely text-based.
-  The original claim was incorrect — no gap exists here.
+  - 🟡 **T1 — Tactical DC section** — see High-priority numerical/display above.
+    All other 25 V2 `ForumExportDlg.cpp` sections verified present and correct
+    in V3 `sections.ts` (2026-06 scan).
 
 ---
 
@@ -347,10 +330,11 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#74 and the Done table
-above for completed items. Last full V2↔V3 review: 2026-06 — section-by-section
-breakdown comparison closing the verified numerical-correctness gaps: AC
-percentage armor/shield bonuses + armor enchantment (N1), combat to-hit TWF /
-ACP / negative-level penalties (N2, partial — proficiency detection pending),
-and the FvS/Sorcerer SP multiplier scope (N4); plus correcting the N3 False
-Life claim, which was a misreading of V2's `m_effects`/`m_itemEffects` split.*
+*Maintained by the parity-pass series. See PRs #53–#94 and the Done table
+above for completed items. Last full V2↔V3 review: 2026-06 — complete
+section-by-section scan covering all 244 V2 Effect ATypes (effectParser.ts
+verified comprehensive), all 24 V2 Pane files vs 25 V3 Panel components
+(restructuring intentional), all 26 ForumExportDlg sections vs sections.ts
+(all covered except TacticalDCs which always emits 0 — T1 above), and all
+data loaders (comprehensive parity). One new High-priority item found: T1
+(Tactical DC per-type totals + forum export bug).*
