@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseEffect, type EffectContext } from '../lib/effectParser'
-import type { Effect } from '../types/ddo'
+import { parseEffect, parseItemBuff, type EffectContext } from '../lib/effectParser'
+import type { Effect, ItemBuff } from '../types/ddo'
 
 const ctx: EffectContext = {
   race: 'Human',
@@ -130,5 +130,58 @@ describe('parseEffect — stat aggregation basics', () => {
     const out = parseEffect(mk('Weapon_CriticalMultiplier19To20', { Amount: 1 }), 1, 'Weapon', 0, 0, ctx)
     expect(out[0].statKey).toBe('weapon.critMultiplier19to20')
     expect(out[0].value).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// N1 — SkillBonusAbility fan-out (V2 BreakdownItemSkill parity)
+// ---------------------------------------------------------------------------
+describe('SkillBonusAbility — fans out to per-skill stat keys', () => {
+  const CHA_SKILLS = ['Bluff', 'Diplomacy', 'Haggle', 'Intimidate', 'Perform', 'Use Magic Device']
+  const INT_SKILLS = ['Disable Device', 'Repair', 'Search', 'Spellcraft']
+  const WIS_SKILLS = ['Heal', 'Listen', 'Spot']
+
+  it('parseEffect with Charisma fans out to all CHA-governed skills', () => {
+    const eff = mk('SkillBonusAbility', { Amount: 1, Item: 'Charisma', Bonus: 'Feat' })
+    const out = parseEffect(eff, 1, 'Bard Past Life', 0, 0, ctx)
+    const keys = out.map(b => b.statKey).sort()
+    expect(keys).toEqual(CHA_SKILLS.map(s => `skill.${s}`).sort())
+    expect(out.every(b => b.value === 1)).toBe(true)
+    expect(out.every(b => b.bonusType === 'Feat')).toBe(true)
+  })
+
+  it('parseEffect with Intelligence fans out to all INT-governed skills', () => {
+    const eff = mk('SkillBonusAbility', { Amount: 1, Item: 'Intelligence', Bonus: 'Feat' })
+    const out = parseEffect(eff, 1, 'Artificer Past Life', 0, 0, ctx)
+    const keys = out.map(b => b.statKey).sort()
+    expect(keys).toEqual(INT_SKILLS.map(s => `skill.${s}`).sort())
+  })
+
+  it('parseEffect with Wisdom fans out to WIS-governed skills', () => {
+    const eff = mk('SkillBonusAbility', { Amount: 2, Item: 'Wisdom', Bonus: 'Exceptional' })
+    const out = parseEffect(eff, 1, 'Greensteel Augment', 0, 0, ctx)
+    const keys = out.map(b => b.statKey).sort()
+    expect(keys).toEqual(WIS_SKILLS.map(s => `skill.${s}`).sort())
+  })
+
+  it('parseEffect with All fans out to all 21 skills', () => {
+    const eff = mk('SkillBonusAbility', { Amount: 1, Item: 'All', Bonus: 'Enhancement' })
+    const out = parseEffect(eff, 1, 'Test Source', 0, 0, ctx)
+    expect(out).toHaveLength(21)
+    expect(out.every(b => b.statKey.startsWith('skill.'))).toBe(true)
+  })
+
+  it('parseItemBuff SkillBonusAbility with Charisma fans out to all CHA-governed skills', () => {
+    const buff: ItemBuff = { Type: 'SkillBonusAbility', Value1: 2, Item: 'Charisma', BonusType: 'Competence' }
+    const out = parseItemBuff(buff, 'Command Armor')
+    const keys = out.map(b => b.statKey).sort()
+    expect(keys).toEqual(CHA_SKILLS.map(s => `skill.${s}`).sort())
+    expect(out.every(b => b.value === 2)).toBe(true)
+  })
+
+  it('parseItemBuff SkillBonusAbility does not emit dead skill.<Ability>.ability keys', () => {
+    const buff: ItemBuff = { Type: 'SkillBonusAbility', Value1: 1, Item: 'Intelligence', BonusType: 'Competence' }
+    const out = parseItemBuff(buff, 'Test Item')
+    expect(out.some(b => b.statKey === 'skill.Intelligence.ability')).toBe(false)
   })
 })
