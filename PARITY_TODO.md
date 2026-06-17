@@ -98,6 +98,7 @@ the PR number, so this file doubles as a changelog.
 | 77 | **V2-exact spell cost & max caster level** — `TotalCost` (Spell.cpp:354-448) ends after metamagic surcharges (SpellCostReduction is a display-only breakdown); `ActualMaxCasterLevel` (:199-228) has no class-level floor. V3's invented reductions/floor removed. | #93 |
 | 78 | **Per-weapon-class effect family** (200+ effects) — WeaponAttackBonusClass / WeaponDamageBonusClass / *Critical* / Multiplier / Range / Alacrity / Enchantment(Class) / Weapon_BaseDamage / Weapon_(Attack\|Damage)Ability(+Class) all returned []. Now gated on the wielded weapon's classes (V2 Build::IsWeaponInGroup) and routed to the combat keys; CombatPanel picks the LARGEST candidate attack ability (V2 LargestStatBonus). Residual: ~30 damage-type-gated/Keen/Stat variants need a weapon damage-type context field. | #93 |
 | 79 | **Marker effects past the null-Amount guard** (260+ effects) — Immunity / DRBypass / GrantSpell / SpellListAddition (AType NotNeeded/SpellInfo) and SLACharge were silently dropped; now emit immunity.* / drBypass.<Value> / grantSpell.<Class>.<Spell> / slaCharge.* matching V2's consumers. End-to-end probe of all 8 301 data effects: drops 728 → 102 (≈30 documented residual + correctly-gated rest). | #93 |
+| 80 | **N1 — `SkillBonusAbility` fan-out** — `expandSkillsByAbility()` added to `effectParser.ts`; both `parseEffect` and `parseItemBuff` `SkillBonusAbility` cases now fan out to actual `skill.<Name>` keys for all skills governed by the given ability (e.g. Charisma → Bluff/Diplomacy/Haggle/Intimidate/Perform/UMD), replacing the dead `skill.<Ability>.ability` keys. `Item="All"` expands to all 21 skills. Fixes ~68 silently-dropped occurrences: Bard Past Life (+1 CHA skills), Artificer Past Life (+1 INT skills), Greensteel augments (+2 Exceptional skill sets), Command/Persuasion item buffs. (V2 `BreakdownItemSkill` parity). | this PR |
 
 ### Known approximation — RESOLVED (#93)
 
@@ -185,31 +186,7 @@ Remaining read/write-fidelity gaps:
 
 ## High-priority remaining — numerical correctness
 
-- ❌ **N1 — `SkillBonusAbility` expansion not wired** — `effectParser.ts`
-  (both `parseEffect` lines 1345–1347 and `parseItemBuff` lines 2207–2209)
-  emits dead `skill.${ability}.ability` markers for `SkillBonusAbility` effects,
-  but `useBuildStats.ts` never reads those sub-keys to fold the bonus into the
-  actual skill totals. V2 `BreakdownItemSkill` adds the `Amount` directly to
-  every skill whose governing ability matches the effect's `<Item>` field.
-  **~68 occurrences silently dropped:**
-  - **Bard Past Life feat** — `+1 Feat` to all CHA skills (Bluff, Diplomacy,
-    Haggle, Intimidate, Perform, UMD); `Classes/Bard.class.xml:1`
-  - **Artificer Past Life feat** — `+1 Feat` to all INT skills (Disable Device,
-    Repair, Search, Spellcraft); `Classes/Artificer.class.xml:1`
-  - **Greensteel Heroic augments** — `+2 Exceptional` to Charisma/Wisdom/
-    Intelligence skill sets; `Augments/Greensteel_Heroic.Augments.xml:36`
-  - **Greensteel Legendary augments** — `+2 Exceptional` to skill sets;
-    `Augments/Greensteel_Legendary.Augments.xml:15`
-  - **Dragontouched Eldritch Rune augments** — skill-by-ability bonuses;
-    `Augments/Dragontouched_EldritchRune.Augments.xml:6`
-  - **Command armor buff** (`ItemBuffs.xml`) — `+2/+3 Competence` to CHA skills
-  - **Persuasion item buff** (`ItemBuffs.xml`) — `+3 Competence` to CHA skills
-  - **Fix:** In both `SkillBonusAbility` cases in `effectParser.ts`, replace
-    `items.map(item => make('skill.${item}.ability'))` with fan-out over the
-    `SKILLS` constant: `item === 'All'` → all 21 skills, otherwise
-    `SKILLS.filter(s => s.ability === item)` → the matching skill subset.
-    No change to `useBuildStats.ts` needed — the bonus arrives under
-    `skill.${name}` directly and is summed normally.
+- ✅ **N1 — `SkillBonusAbility` fan-out** — done (this PR / #80). `expandSkillsByAbility()` in `effectParser.ts` fans both `parseEffect` and `parseItemBuff` out to actual `skill.<Name>` keys for all skills governed by the given ability; `Item="All"` expands to all 21 skills. Fixes ~68 silently-dropped occurrences (Bard/Artificer Past Life, Greensteel augments, Command/Persuasion buffs).
 
 - ❌ **N2 — Weapon damage-type-gated attack/damage effects (~5 types,
   ~30+ occurrences)** — `effectParser.ts` lines 2312–2317 return `[]` for

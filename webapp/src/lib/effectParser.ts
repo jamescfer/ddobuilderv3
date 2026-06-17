@@ -5,6 +5,7 @@
 // (e.g. "ability.Strength", "save.Fort", "skill.Heal", "sp.Fire", …).
 
 import type { Effect, ItemBuff, Requirements, Requirement } from '../types/ddo'
+import { SKILLS } from './gamedata'
 
 // The six ability scores — used to expand Item="All" ability effects (V2 applies
 // an AbilityBonus with ability "All" to every ability, e.g. Completionist +2).
@@ -13,6 +14,19 @@ const ALL_ABILITIES = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 
 /** Expands an ability item list, turning "All" into the six ability names. */
 function expandAbilityItems(items: string[]): string[] {
   return items.flatMap(it => (it === 'All' ? [...ALL_ABILITIES] : [it]))
+}
+
+/**
+ * Expands SkillBonusAbility items (ability names) to the skill names governed
+ * by that ability (V2 BreakdownItemSkill: adds Amount to every skill whose
+ * governing ability matches the effect's Item field).
+ */
+function expandSkillsByAbility(items: string[]): string[] {
+  return items.flatMap(it =>
+    it === 'All'
+      ? SKILLS.map(s => s.name)
+      : SKILLS.filter(s => s.ability === it).map(s => s.name),
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -1342,9 +1356,10 @@ export function parseEffect(
       }
       return [make('save.All.noFailOn1')]
 
-    case 'SkillBonusAbility':
-      if (items.length > 0) return items.map(item => make(`skill.${item}.ability`))
-      return []
+    case 'SkillBonusAbility': {
+      const skillNames = expandSkillsByAbility(items)
+      return skillNames.map(name => make(`skill.${name}`))
+    }
 
     // -----------------------------------------------------------------------
     // Hireling stats (Stream 4 — surfaced under their own Breakdowns section).
@@ -2204,9 +2219,10 @@ export function parseItemBuff(
       }
       return []
 
-    case 'SkillBonusAbility':
-      if (items.length > 0) return items.map(item => make(`skill.${item}.ability`))
-      return []
+    case 'SkillBonusAbility': {
+      const skillNames = expandSkillsByAbility(items)
+      return skillNames.map(name => make(`skill.${name}`))
+    }
 
     case 'SaveNoFailOn1':
       if (items.length > 0) {
