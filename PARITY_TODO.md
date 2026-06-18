@@ -99,6 +99,7 @@ the PR number, so this file doubles as a changelog.
 | 78 | **Per-weapon-class effect family** (200+ effects) — WeaponAttackBonusClass / WeaponDamageBonusClass / *Critical* / Multiplier / Range / Alacrity / Enchantment(Class) / Weapon_BaseDamage / Weapon_(Attack\|Damage)Ability(+Class) all returned []. Now gated on the wielded weapon's classes (V2 Build::IsWeaponInGroup) and routed to the combat keys; CombatPanel picks the LARGEST candidate attack ability (V2 LargestStatBonus). Residual: ~30 damage-type-gated/Keen/Stat variants need a weapon damage-type context field. | #93 |
 | 79 | **Marker effects past the null-Amount guard** (260+ effects) — Immunity / DRBypass / GrantSpell / SpellListAddition (AType NotNeeded/SpellInfo) and SLACharge were silently dropped; now emit immunity.* / drBypass.<Value> / grantSpell.<Class>.<Spell> / slaCharge.* matching V2's consumers. End-to-end probe of all 8 301 data effects: drops 728 → 102 (≈30 documented residual + correctly-gated rest). | #93 |
 | 80 | **N1 — `SkillBonusAbility` fan-out** — `expandSkillsByAbility()` added to `effectParser.ts`; both `parseEffect` and `parseItemBuff` `SkillBonusAbility` cases now fan out to actual `skill.<Name>` keys for all skills governed by the given ability (e.g. Charisma → Bluff/Diplomacy/Haggle/Intimidate/Perform/UMD), replacing the dead `skill.<Ability>.ability` keys. `Item="All"` expands to all 21 skills. Fixes ~68 silently-dropped occurrences: Bard Past Life (+1 CHA skills), Artificer Past Life (+1 INT skills), Greensteel augments (+2 Exceptional skill sets), Command/Persuasion item buffs. (V2 `BreakdownItemSkill` parity). | this PR |
+| 81 | **N2 — Weapon damage-type-gated attack/damage effects** — `parseEffect` now handles `WeaponAttackBonusDamageType` → `melee.toHit`, `WeaponAttackBonusCriticalDamageType` → `melee.crit.toHit`, `WeaponDamageBonusDamageType` → `melee.damage`, `WeaponDamageBonusCriticalDamageType` → `melee.crit.damage`, and `WeaponKeenDamageType` → `weapon.keen` (value=1 "Improved Critical active" flag), all gated on `ctx.weaponClassMain`. The damage-type group names (Bludgeoning, Slashing, Piercing, Ranged) are regular weapon groups in `WeaponGroupings.xml` and are already present in `ctxWeaponClassMain` via `deriveWeaponClasses` — no new context field needed. Fixes ~30 silently-dropped effects: Fighter `Greater Weapon Focus` / `Superior Weapon Focus` feats (+1/+2 Feat to-hit for weapons of a damage type) and `Improved Critical` feats (keen flag for weapons of a damage type). V2 source: `BreakdownItemWeaponEffects.cpp:306-323`. | this PR |
 
 ### Known approximation — RESOLVED (#93)
 
@@ -188,18 +189,7 @@ Remaining read/write-fidelity gaps:
 
 - ✅ **N1 — `SkillBonusAbility` fan-out** — done (this PR / #80). `expandSkillsByAbility()` in `effectParser.ts` fans both `parseEffect` and `parseItemBuff` out to actual `skill.<Name>` keys for all skills governed by the given ability; `Item="All"` expands to all 21 skills. Fixes ~68 silently-dropped occurrences (Bard/Artificer Past Life, Greensteel augments, Command/Persuasion buffs).
 
-- ❌ **N2 — Weapon damage-type-gated attack/damage effects (~5 types,
-  ~30+ occurrences)** — `effectParser.ts` lines 2312–2317 return `[]` for
-  `WeaponAttackBonusDamageType`, `WeaponDamageBonusDamageType`,
-  `WeaponAttackBonusCriticalDamageType`, `WeaponDamageBonusCriticalDamageType`,
-  and `WeaponKeenDamageType`. V2 gates these on whether the wielded weapon's
-  `DamageType` XML field includes the effect's damage-type (Piercing / Slashing
-  / Bludgeoning). V3's `EffectContext` carries weapon classes but not damage
-  types. Fix requires: (a) parse `<DamageType>` from equipped items, (b) add
-  `ctxWeaponDamageTypesMain`/`Off` to `EffectContext`, (c) gate these five
-  effect types on membership (parallel to how `WeaponAttackBonusClass` uses
-  `ctxWeaponClassMain`). Smaller scope than the 200+ per-weapon-class family
-  closed in #93 (Done #78).
+- ✅ **N2 — Weapon damage-type-gated attack/damage effects** — done (this PR / #81). `parseEffect` now handles all 5 damage-type-gated effect types gated on `ctx.weaponClassMain` (which already contains Bludgeoning/Slashing/Piercing/Ranged as regular weapon groups from `WeaponGroupings.xml`). No new context field needed. Fixes ~30 silently-dropped effects from Fighter feats.
 
 ---
 
@@ -308,6 +298,6 @@ These V2 features won't be ported because they don't make sense in a webapp:
 above for completed items. Last full V2↔V3 review: 2026-06 — comprehensive
 scan of all 219 V2 effect types vs. `effectParser.ts`, all 24 V2 Pane classes
 vs. V3 components, all 25 V2 forum export sections vs. `sections.ts`, and all
-V2 Breakdown*.cpp formulas vs. `useBuildStats.ts`. Two new numerical gaps found:
-`SkillBonusAbility` expansion (N1, ~68 occurrences silently dropped) and weapon
-damage-type-gated effects (N2, ~30 effects return []).*
+V2 Breakdown*.cpp formulas vs. `useBuildStats.ts`. Both numerical gaps from that
+review are now closed: N1 (`SkillBonusAbility` expansion, ~68 occurrences) and
+N2 (weapon damage-type-gated effects, ~30 occurrences).*
