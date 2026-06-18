@@ -1480,20 +1480,38 @@ export function parseEffect(
     // the *Class variants). Emit a marker; CombatPanel picks the LARGEST
     // candidate ability (V2 BreakdownItemWeaponAttackBonus.cpp:327+
     // LargestStatBonus).
-    // Damage-type-gated variants need the weapon's damage type (Bludgeoning/
-    // Slashing/Piercing), which the EffectContext does not carry; Keen /
-    // Proficiency / Stat variants are likewise unmodelled. ~30 effects total
-    // in the data — documented residual gap.
+    // Stat / Proficiency / Other variants are still unmodelled (~5 effects):
     case 'WeaponOtherDamageBonus':
     case 'WeaponDamageBonusCriticalStat':
     case 'WeaponDamageBonusStat':
     case 'WeaponProficiencyClass':
-    case 'WeaponAttackBonusDamageType':
-    case 'WeaponAttackBonusCriticalDamageType':
-    case 'WeaponDamageBonusDamageType':
-    case 'WeaponDamageBonusCriticalDamageType':
-    case 'WeaponKeenDamageType':
       return []
+    // -----------------------------------------------------------------------
+    // Per-damage-type effects (V2 BreakdownItemWeaponEffects.cpp:306-323).
+    // V2 gates these on the wielded weapon's damage-type group membership
+    // (Bludgeoning / Slashing / Piercing / Ranged — regular weapon groups in
+    // WeaponGroupings.xml). These group names are already in ctxWeaponClassMain
+    // via deriveWeaponClasses, so we reuse that set exactly as V2 does with
+    // Build::IsWeaponInGroup(item, weaponType).
+    // -----------------------------------------------------------------------
+    case 'WeaponAttackBonusDamageType':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.toHit')] : []
+    case 'WeaponAttackBonusCriticalDamageType':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.toHit')] : []
+    case 'WeaponDamageBonusDamageType':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.damage')] : []
+    case 'WeaponDamageBonusCriticalDamageType':
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [make('melee.crit.damage')] : []
+    case 'WeaponKeenDamageType':
+      // Amount=0 in data — V2 computes the doubling from the weapon's base crit
+      // range at runtime (BreakdownItemWeaponCriticalThreatRange.cpp:152-168).
+      // Emit value=1 as a binary "Improved Critical active" marker.
+      return ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))
+        ? [{ statKey: 'weapon.keen', value: 1, bonusType, source }] : []
 
     // -----------------------------------------------------------------------
     // Niche surfaced stats (V2 parity): regen, guard, ghost touch, etc.
