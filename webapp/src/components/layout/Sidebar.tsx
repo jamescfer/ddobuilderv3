@@ -35,6 +35,7 @@ export type NavItem =
   | 'Settings'
   | 'Content'
   | 'Help'
+  | 'Build Log'
 
 interface NavGroup {
   label: string
@@ -48,7 +49,7 @@ const NAV_GROUPS: NavGroup[] = [
   { label: 'Equipment', items: ['Gear', 'Filigrees', 'Set Bonuses', 'Clickies'] },
   { label: 'Analysis', items: ['Breakdowns', 'Combat', 'Bonuses', 'Stances', 'Compare'] },
   { label: 'History', items: ['Past Lives', 'Tomes', 'Favor'] },
-  { label: 'Buffs & Misc', items: ['Self Buffs', 'Guild Buffs', 'Notes', 'Forum Export', 'Content', 'Settings', 'Help'] },
+  { label: 'Buffs & Misc', items: ['Self Buffs', 'Guild Buffs', 'Notes', 'Forum Export', 'Content', 'Settings', 'Help', 'Build Log'] },
 ]
 
 // ---------------------------------------------------------------------------
