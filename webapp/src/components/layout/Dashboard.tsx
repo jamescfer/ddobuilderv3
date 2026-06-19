@@ -37,6 +37,7 @@ const REGISTRY: Record<string, React.LazyExoticComponent<React.ComponentType>> =
   'Bonuses': lazy(() => import('../bonuses/BonusesPanel')),
   'Notes': lazy(() => import('../notes/NotesPanel')),
   'Forum Export': lazy(() => import('../export/ForumExportPanel')),
+  'Build Log': lazy(() => import('./BuildHistoryPanel')),
 }
 
 interface Win {

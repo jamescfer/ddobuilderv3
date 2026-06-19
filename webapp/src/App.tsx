@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { CharacterProvider, useCharacter } from './context/CharacterContext'
+import { BuildLogProvider } from './context/BuildLogContext'
+import BuildHistoryPanel from './components/layout/BuildHistoryPanel'
 import Layout from './components/layout/Layout'
 import type { NavItem } from './components/layout/Sidebar'
 import CharacterInfo from './components/builder/CharacterInfo'
@@ -48,13 +50,15 @@ import styles from './App.module.css'
 
 export default function App() {
   return (
-    <CharacterProvider>
-      <DocumentProvider>
-        <SettingsProvider>
-          <AppInner />
-        </SettingsProvider>
-      </DocumentProvider>
-    </CharacterProvider>
+    <BuildLogProvider>
+      <CharacterProvider>
+        <DocumentProvider>
+          <SettingsProvider>
+            <AppInner />
+          </SettingsProvider>
+        </DocumentProvider>
+      </CharacterProvider>
+    </BuildLogProvider>
   )
 }
 
@@ -272,6 +276,12 @@ function AppInner() {
         {activeItem === 'Help' && (
           <div className={styles.single}>
             <HelpPanel />
+          </div>
+        )}
+
+        {activeItem === 'Build Log' && (
+          <div className={styles.single}>
+            <BuildHistoryPanel />
           </div>
         )}
       </div>

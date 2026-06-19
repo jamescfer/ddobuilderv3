@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useReducer } from 'react'
+import React, { createContext, useCallback, useContext, useReducer } from 'react'
 import type { CharacterBuild, Ability, FiligreeSlot, QuestDifficulty } from '../types/ddo'
 import { emptyBuild, migrateSentientGem } from '../types/ddo'
 import { aggregateLevelClasses, getLevelClasses, HEROIC_CAP } from '../lib/levelProgression'
+import { useBuildLog } from './BuildLogContext'
 
 type Action =
   | { type: 'SET_NAME'; name: string }
@@ -517,7 +518,12 @@ interface CharacterContextValue {
 const CharacterContext = createContext<CharacterContextValue | null>(null)
 
 export function CharacterProvider({ children }: { children: React.ReactNode }) {
-  const [build, dispatch] = useReducer(reducer, undefined, emptyBuild)
+  const [build, rawDispatch] = useReducer(reducer, undefined, emptyBuild)
+  const { logAction } = useBuildLog()
+  const dispatch = useCallback((action: Action) => {
+    rawDispatch(action)
+    logAction(action as never)
+  }, [rawDispatch, logAction])
   return (
     <CharacterContext.Provider value={{ build, dispatch }}>
       {children}
