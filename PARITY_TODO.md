@@ -192,6 +192,8 @@ Remaining read/write-fidelity gaps:
 
 - ✅ **N2 — Weapon damage-type-gated attack/damage effects** — done (this PR / #81). `parseEffect` now handles all 5 damage-type-gated effect types gated on `ctx.weaponClassMain` (which already contains Bludgeoning/Slashing/Piercing/Ranged as regular weapon groups from `WeaponGroupings.xml`). No new context field needed. Fixes ~30 silently-dropped effects from Fighter feats.
 
+- ❌ **N3 — TacticalDC display completeness** — `effectParser.ts` correctly routes all `TacticalDC` effects to per-type stat keys (`tacticalDC.General`, `tacticalDC.Trip`, etc.), but `BreakdownsPanel.tsx` only displays 5 rows (`tacticalDC.All`, Trip, Stun, Sunder, Assassinate). V2 `BreakdownsPane.cpp:1544-1556` registers 13 types: Assassinate, Stun, Sunder, Trap, Trip, **General**, Stunning Shield, Wands, Fear, Innate Attack, Breath Weapon, Poison, Rune Arm. The most impactful missing type is `tacticalDC.General`: Fighter "Tactical Training" feats (Fighter.class.xml) grant `+4`/`+6`/`+8` to `Trip`, `Sunder`, `Stun`, **and** `General` simultaneously — the General bonus is computed but invisible in V3. Monk Shintao / Kensei / Legendary Dreadnought enhancement trees similarly use `tacticalDC.General`. Real data has 293 `TacticalDC` effects covering 47 unique `<Item>` values. Fix: add the missing 8 V2-canonical rows to `BreakdownsPanel.tsx` (or make the section dynamic by enumerating all `tacticalDC.*` keys with non-zero values). V2 source: `BreakdownsPane.cpp:1544-1556`.
+
 ---
 
 ## High-priority remaining — effect parser coverage
@@ -222,6 +224,8 @@ Remaining read/write-fidelity gaps:
 
 - ➖ **X1 — Image embedding** — V2's `ForumExportDlg.cpp` uses no `[img]`
   BBCode; V2's forum export is text-only. No gap.
+
+- ❌ **X2 — Forum export TacticalDCs section always silent** — `sections.ts` `tacticalDCs` section calls `stats.total('tacticalDC')` (bare key, no suffix). No `TacticalDC` effect in the data ever maps to this bare key — `parseEffect` always maps them to `tacticalDC.<Item>` (e.g. `tacticalDC.General`, `tacticalDC.Trip`), and `stats.total()` is an exact key lookup. So `total === 0` always and the section emits nothing even when the character has significant tactical DC bonuses. V2 `ForumExportDlg.cpp:1735-1757` iterates all 13 breakdown types and emits each non-zero value. Fix: replace the single `stats.total('tacticalDC')` call with iteration over the 13 canonical subtypes (General, Trip, Stun, Sunder, Assassinate, Trap, Stunning Shield, Wands, Fear, Innate Attack, Breath Weapon, Poison, Rune Arm) plus `All`; emit each with a non-zero total. This gap is the forum-export manifestation of N3 above.
 
 ---
 
@@ -292,10 +296,12 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#93 and the Done table
-above for completed items. Last full V2↔V3 review: 2026-06 — comprehensive
-scan of all 219 V2 effect types vs. `effectParser.ts`, all 24 V2 Pane classes
-vs. V3 components, all 25 V2 forum export sections vs. `sections.ts`, and all
-V2 Breakdown*.cpp formulas vs. `useBuildStats.ts`. Both numerical gaps from that
-review are now closed: N1 (`SkillBonusAbility` expansion, ~68 occurrences) and
-N2 (weapon damage-type-gated effects, ~30 occurrences).*
+*Maintained by the parity-pass series. See PRs #53–#101 and the Done table
+above for completed items. Last full V2↔V3 review: 2026-06-20 — comprehensive
+scan of all 200+ V2 effect types vs. `effectParser.ts` (all handled; 0 silently
+dropped), all 24 V2 Pane classes vs. V3 components, all V2 forum export sections
+vs. `sections.ts`, and all V2 Breakdown*.cpp formulas vs. `useBuildStats.ts`.
+Two new gaps surfaced: N3 (`TacticalDC` display — 8 of V2's 13 tactical types
+missing from `BreakdownsPanel.tsx`, with `tacticalDC.General` being the highest
+impact) and X2 (forum export `tacticalDCs` section always silent due to wrong
+bare stat key). All previous numerical gaps (N1, N2) remain closed.*
