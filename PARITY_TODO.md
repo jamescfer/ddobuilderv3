@@ -188,9 +188,18 @@ Remaining read/write-fidelity gaps:
 
 ## High-priority remaining — numerical correctness
 
-- ✅ **N1 — `SkillBonusAbility` fan-out** — done (this PR / #80). `expandSkillsByAbility()` in `effectParser.ts` fans both `parseEffect` and `parseItemBuff` out to actual `skill.<Name>` keys for all skills governed by the given ability; `Item="All"` expands to all 21 skills. Fixes ~68 silently-dropped occurrences (Bard/Artificer Past Life, Greensteel augments, Command/Persuasion buffs).
-
-- ✅ **N2 — Weapon damage-type-gated attack/damage effects** — done (this PR / #81). `parseEffect` now handles all 5 damage-type-gated effect types gated on `ctx.weaponClassMain` (which already contains Bludgeoning/Slashing/Piercing/Ranged as regular weapon groups from `WeaponGroupings.xml`). No new context field needed. Fixes ~30 silently-dropped effects from Fighter feats.
+- ❌ **N1 — Healing/Repair/Negative amplification not displayed** — V2
+  `BreakdownsPane.cpp:1066-1098` shows `HealingAmplification`,
+  `NegativeHealingAmplification`, and `RepairAmplification` as three separate
+  breakdowns under Defense. V2's forum export header also includes
+  `+Healing Amp` / `-Healing Amp` / `Repair Amp` alongside HP/PRR/MRR
+  (`ForumExportDlg.cpp:361-379`). In V3, `parseEffect` correctly accumulates
+  `healAmp`, `negHealAmp`, and `repairAmp` stat keys, but **no panel or section
+  ever reads them** — the values are silently computed and discarded. Impact:
+  Cleric/FvS Divine Healing aura, Radiant Servant, Positive Energy Burst, and
+  many item enchantments that grant `+N% Positive Healing` are invisible.
+  Fix: add three rows to the Defense section of `BreakdownsPanel.tsx` and add
+  them to the `FES_Header`-equivalent in `sections.ts`.
 
 ---
 
@@ -220,7 +229,15 @@ Remaining read/write-fidelity gaps:
 
 ## High-priority remaining — forum export
 
-- ➖ **X1 — Image embedding** — V2's `ForumExportDlg.cpp` uses no `[img]`
+- ❌ **X1 — TacticalDC forum export key bug** — `sections.ts` line 355 calls
+  `stats.total('tacticalDC')` which is always 0 because `parseEffect` emits
+  `tacticalDC.All` (not `tacticalDC`) for effects without an `Item`. Should use
+  `stats.total('tacticalDC.All')`. Also, V2 `AddTacticalDCs`
+  (`ForumExportDlg.cpp:1735-1756`) lists every active tactical DC type by name
+  from the DCPane; V3 only emits a single general total. Fix: use the correct
+  key and enumerate per-type values (Stun, Trip, Sunder, Assassinate, Trap,
+  BreathWeapon, Fear, InnateAttack, Poison, RuneArm, StunningShield, Wands).
+- ➖ **X2 — Image embedding** — V2's `ForumExportDlg.cpp` uses no `[img]`
   BBCode; V2's forum export is text-only. No gap.
 
 ---
@@ -232,6 +249,32 @@ Remaining read/write-fidelity gaps:
 - ➖ **Gear optimizer / auto-equip** — phantom: V2 has no such feature.
 - ✅ **Settings** — done (#67/#69).
 - ✅ **Build version migration** — done (#66).
+
+### Additional display stats missing from BreakdownsPanel
+- ❌ **D1 — Missing bypass / failure / sneak-attack detail stats** — V2
+  `BreakdownsPane.cpp` shows under its Attack or Defense sections:
+  `ArcaneSpellfailure` / `ArcaneSpellfailureShields` (lines 1644-1659),
+  `MissileDeflection` / `MissileDeflectionBypass` (lines 1003, 1440),
+  `FortificationBypass` / `DodgeBypass` (lines 1697-1699),
+  `SneakAttackAttack` / `SneakAttackDamage` (lines 1711-1715),
+  `DamageAbilityMultiplier` / `DamageAbilityMultiplierOffhand` (lines 1691-1693),
+  and `HelplessDamageReduction` (line 1050). All are in the V3 stat map
+  (`arcaneSpellFailure`, `arcaneSpellFailureShield`, `missileDeflection`,
+  `missileDeflectionBypass`, `fortBypass`, `dodgeBypass`, `melee.sneakAttack`,
+  `melee.sneakDamage`, `melee.sneakRange`, `melee.damageAbilityMult`,
+  `offhand.damageAbilityMult`, `helplessDR`) but never rendered in any panel.
+- ❌ **D2 — Tactical DC subtypes in BreakdownsPanel** — V2 shows 12 per-tactic
+  breakdowns (Assassinate, BreathWeapon, Fear, General, InnateAttack, Poison,
+  RuneArm, Stun, StunningShield, Sunder, Trap, Trip, Wands); V3
+  `BreakdownsPanel.tsx:481-485` shows only 5 (All, Trip, Stun, Sunder,
+  Assassinate). The stat keys for the other 7 are emitted by `parseEffect` but
+  never displayed.
+- ❌ **D3 — Metamagic cost display panel** — V2 `BreakdownsPane.cpp:2657-2807`
+  shows 10 per-metamagic cost-reduction breakdowns (Accelerate, Eschew
+  Materials, Embolden, Empower, Empower Healing, Enlarge, Extend, Heighten,
+  Intensify, Maximize, Quicken). V3 uses `metamagic.cost.*` stat keys in
+  `spellMath.ts` for actual spell cost computation but never displays the
+  per-feat cost-reduction totals to the user.
 
 ### Data-file edge cases
 - ✅ **Item slot edge cases** — done (#71); trinket-via-augment not a V2 mechanic.
@@ -250,6 +293,13 @@ Remaining read/write-fidelity gaps:
 - ✅ **Keyboard shortcuts / print layout / auto-save / drag-and-drop import** —
   done (#69).
 - ✅ **L1 — Build history log (V2 `LogPane`)** — `lib/buildLog.ts` exports `actionToLogMessage` mapping key reducer action types to human-readable log strings (feat trained, class changed, gear equipped, enhancement selected, etc.); `BuildLogContext.tsx` wraps `CharacterProvider`'s dispatch to capture a session-only (non-persisted) `LogEntry[]`; `BuildHistoryPanel.tsx` renders entries in reverse-chronological order with Copy-to-Clipboard and Clear buttons (V2 `CLogPane::OnCopyLogToClipboard`/`OnClearLog` parity). Registered in Sidebar and Dashboard. 14 regression tests.
+- ❌ **L2 — Forum export header defense stats** — V2 `AddCharacterHeader`
+  (`ForumExportDlg.cpp:312-391`) shows a 7-row grid with ability scores
+  (Start/Tome/Final) alongside HP, AC, PRR, MRR/MRR-Cap, Dodge/DodgeCap,
+  Fortification, SR, BAB, DR, and Immunities in the same header block. V3's
+  `characterHeader` section (`sections.ts:42-56`) only outputs identity info;
+  defense stats are in separate sections. Format mismatch when V3 forum export
+  is compared directly with V2 output.
 
 ---
 
@@ -292,10 +342,11 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#93 and the Done table
+*Maintained by the parity-pass series. See PRs #53–#101 and the Done table
 above for completed items. Last full V2↔V3 review: 2026-06 — comprehensive
-scan of all 219 V2 effect types vs. `effectParser.ts`, all 24 V2 Pane classes
-vs. V3 components, all 25 V2 forum export sections vs. `sections.ts`, and all
-V2 Breakdown*.cpp formulas vs. `useBuildStats.ts`. Both numerical gaps from that
-review are now closed: N1 (`SkillBonusAbility` expansion, ~68 occurrences) and
-N2 (weapon damage-type-gated effects, ~30 occurrences).*
+scan of all V2 Breakdown*.cpp types vs. `BreakdownsPanel.tsx`, all V2 forum
+export sections vs. `sections.ts`, and V2 effect types vs. `effectParser.ts`.
+New gaps from this review: N1 (Healing/Repair/Negative Amplification display),
+X1 (TacticalDC forum export key bug), D1-D3 (missing display stats), L2 (forum
+export header format). High-priority: N1 (computed but invisible) and X1
+(always emits 0 — functional bug).*
