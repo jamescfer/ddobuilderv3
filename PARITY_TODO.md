@@ -101,6 +101,7 @@ the PR number, so this file doubles as a changelog.
 | 82 | **L1 — Build history log (V2 `LogPane`)** — `lib/buildLog.ts` exports `actionToLogMessage` mapping key reducer action types to human-readable log strings; `BuildLogContext.tsx` wraps `CharacterProvider` dispatch to capture a session-only (non-persisted) `LogEntry[]`; `BuildHistoryPanel.tsx` renders entries in reverse-chronological order with Copy-to-Clipboard and Clear buttons (V2 `CLogPane::OnCopyLogToClipboard`/`OnClearLog` parity). Registered in Sidebar and Dashboard. 14 regression tests. | #101 |
 | 81 | **N2 — Weapon damage-type-gated attack/damage effects** — `parseEffect` now handles `WeaponAttackBonusDamageType` → `melee.toHit`, `WeaponAttackBonusCriticalDamageType` → `melee.crit.toHit`, `WeaponDamageBonusDamageType` → `melee.damage`, `WeaponDamageBonusCriticalDamageType` → `melee.crit.damage`, and `WeaponKeenDamageType` → `weapon.keen` (value=1 "Improved Critical active" flag), all gated on `ctx.weaponClassMain`. The damage-type group names (Bludgeoning, Slashing, Piercing, Ranged) are regular weapon groups in `WeaponGroupings.xml` and are already present in `ctxWeaponClassMain` via `deriveWeaponClasses` — no new context field needed. Fixes ~30 silently-dropped effects: Fighter `Greater Weapon Focus` / `Superior Weapon Focus` feats (+1/+2 Feat to-hit for weapons of a damage type) and `Improved Critical` feats (keen flag for weapons of a damage type). V2 source: `BreakdownItemWeaponEffects.cpp:306-323`. | #100 |
 | 80 | **N1 — `SkillBonusAbility` fan-out** — `expandSkillsByAbility()` added to `effectParser.ts`; both `parseEffect` and `parseItemBuff` `SkillBonusAbility` cases now fan out to actual `skill.<Name>` keys for all skills governed by the given ability (e.g. Charisma → Bluff/Diplomacy/Haggle/Intimidate/Perform/UMD), replacing the dead `skill.<Ability>.ability` keys. `Item="All"` expands to all 21 skills. Fixes ~68 silently-dropped occurrences: Bard Past Life (+1 CHA skills), Artificer Past Life (+1 INT skills), Greensteel augments (+2 Exceptional skill sets), Command/Persuasion item buffs. (V2 `BreakdownItemSkill` parity). | #99 |
+| 83 | **X2 — Save sub-saves in forum export** — `sections.ts` `saves` section now emits 9 sub-save rows (vs Poison, vs Disease under Fort; vs Traps, vs Spell, vs Magic under Reflex; vs Enchantment, vs Illusion, vs Fear, vs Curse under Will) when the sub-bonus is non-zero. Total = `stats.total(baseKey) + stats.total(subKey)`, matching V2 `ForumExportDlg.cpp:514-524` and V3's own `BreakdownsPanel.tsx` sub-save formula. 5 regression tests in `parityPassX2.test.ts`. | #102 |
 
 ### Known approximation — RESOLVED (#93)
 
@@ -222,6 +223,19 @@ Remaining read/write-fidelity gaps:
 
 - ➖ **X1 — Image embedding** — V2's `ForumExportDlg.cpp` uses no `[img]`
   BBCode; V2's forum export is text-only. No gap.
+- ✅ **X2 — Save sub-saves in forum export** — done (#102). `sections.ts`
+  `saves` section now emits 9 sub-save rows (vs Poison, vs Disease, vs
+  Enchantment, vs Illusion, vs Fear, vs Curse, vs Traps, vs Spell, vs Magic)
+  when the sub-bonus is non-zero. Total = base save + sub-save bonus, matching
+  V2 `ForumExportDlg.cpp:514-524`. 5 regression tests in `parityPassX2.test.ts`.
+- ❌ **X3 — Energy absorbance missing from forum export** — `sections.ts`
+  `energyResistances` section only emits `resist.*` values. V2
+  `ForumExportDlg.cpp:1183-1200` exports both Resistance and Absorbance columns
+  in a TABLE. V3 already computes `absorb.*` stats via `EnergyAbsorbance` in
+  `effectParser.ts`; `BreakdownsPanel.tsx:400-405` converts the additive bonus
+  stack to an absorption percentage using multiplicative stacking:
+  `100 − Π((100−x)/100)·100`. The forum export should add an "Absorbance"
+  column (or indented rows) for energy types that have non-zero absorbance.
 
 ---
 
@@ -292,10 +306,12 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#93 and the Done table
-above for completed items. Last full V2↔V3 review: 2026-06 — comprehensive
-scan of all 219 V2 effect types vs. `effectParser.ts`, all 24 V2 Pane classes
-vs. V3 components, all 25 V2 forum export sections vs. `sections.ts`, and all
-V2 Breakdown*.cpp formulas vs. `useBuildStats.ts`. Both numerical gaps from that
-review are now closed: N1 (`SkillBonusAbility` expansion, ~68 occurrences) and
-N2 (weapon damage-type-gated effects, ~30 occurrences).*
+*Maintained by the parity-pass series. See PRs #53–#101 and the Done table
+above for completed items. Last full V2↔V3 review: 2026-06 (second pass) —
+re-scan of all V2 effect types vs. `effectParser.ts` (all ~220 confirmed
+handled, including `WeaponOtherDamageBonusCritical`/Class/CriticalClass and
+`WeaponKeenDamageType`), all V2 Pane classes vs. V3 components (full parity),
+all V2 `Breakdown*.cpp` formulas vs. `useBuildStats.ts` (full parity), and all
+25 V2 forum export sections vs. `sections.ts`. Two remaining forum export gaps
+found: X2 (save sub-saves) and X3 (energy absorbance) — both stats already
+computed by V3, just not yet emitted by the forum export sections.*

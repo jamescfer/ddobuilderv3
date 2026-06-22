@@ -123,12 +123,28 @@ const saves: SectionDef = {
   label: 'Saving throws',
   emit: ({ stats }) => {
     if (!stats) return []
+    // V2 ForumExportDlg.cpp:514-524: exports 9 sub-save rows (base + sub bonus)
+    // in addition to the three main saves.  Only non-zero sub-rows are shown.
+    function subRow(label: string, baseKey: string, subKey: string): string | null {
+      const sub = stats!.total(subKey)
+      if (!sub) return null
+      return `    ${label}: ${sign(stats!.total(baseKey) + sub)}`
+    }
     return [
       '[b]Saving Throws[/b]:',
       `  Fortitude: ${sign(stats.total('save.Fort'))}`,
+      subRow('vs Poison',      'save.Fort',   'save.sub.Poison'),
+      subRow('vs Disease',     'save.Fort',   'save.sub.Disease'),
       `  Reflex: ${sign(stats.total('save.Reflex'))}`,
+      subRow('vs Traps',       'save.Reflex', 'save.sub.Traps'),
+      subRow('vs Spell',       'save.Reflex', 'save.sub.Spell'),
+      subRow('vs Magic',       'save.Reflex', 'save.sub.Magic'),
       `  Will: ${sign(stats.total('save.Will'))}`,
-    ]
+      subRow('vs Enchantment', 'save.Will',   'save.sub.Enchantment'),
+      subRow('vs Illusion',    'save.Will',   'save.sub.Illusion'),
+      subRow('vs Fear',        'save.Will',   'save.sub.Fear'),
+      subRow('vs Curse',       'save.Will',   'save.sub.Curse'),
+    ].filter((l): l is string => l !== null)
   },
 }
 
