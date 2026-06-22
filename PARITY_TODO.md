@@ -222,6 +222,23 @@ Remaining read/write-fidelity gaps:
 
 - ➖ **X1 — Image embedding** — V2's `ForumExportDlg.cpp` uses no `[img]`
   BBCode; V2's forum export is text-only. No gap.
+- ❌ **X2 — Save sub-saves missing from forum export** — `sections.ts` `saves`
+  section only emits three lines (Fort / Reflex / Will). V2 `ForumExportDlg.cpp:
+  514-524` also exports 9 sub-save rows: Fort vs Poison, vs Disease; Will vs
+  Enchantment, vs Illusion, vs Fear, vs Curse; Reflex vs Traps, vs Spell, vs
+  Magic. V3 already computes `save.sub.Poison` / `save.sub.Disease` / … in
+  `effectParser.ts` and `BreakdownsPanel.tsx` uses them correctly via
+  `subSave(baseKey, subKey)`. The total to export is
+  `stats.total(baseKey) + stats.total(subKey)` — identical to the BreakdownsPanel
+  formula. Only non-zero sub-save rows need to appear (same as V2).
+- ❌ **X3 — Energy absorbance missing from forum export** — `sections.ts`
+  `energyResistances` section only emits `resist.*` values. V2
+  `ForumExportDlg.cpp:1183-1200` exports both Resistance and Absorbance columns
+  in a TABLE. V3 already computes `absorb.*` stats via `EnergyAbsorbance` in
+  `effectParser.ts`; `BreakdownsPanel.tsx:400-405` converts the additive bonus
+  stack to an absorption percentage using multiplicative stacking:
+  `100 − Π((100−x)/100)·100`. The forum export should add an "Absorbance"
+  column (or indented rows) for energy types that have non-zero absorbance.
 
 ---
 
@@ -292,10 +309,12 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#93 and the Done table
-above for completed items. Last full V2↔V3 review: 2026-06 — comprehensive
-scan of all 219 V2 effect types vs. `effectParser.ts`, all 24 V2 Pane classes
-vs. V3 components, all 25 V2 forum export sections vs. `sections.ts`, and all
-V2 Breakdown*.cpp formulas vs. `useBuildStats.ts`. Both numerical gaps from that
-review are now closed: N1 (`SkillBonusAbility` expansion, ~68 occurrences) and
-N2 (weapon damage-type-gated effects, ~30 occurrences).*
+*Maintained by the parity-pass series. See PRs #53–#101 and the Done table
+above for completed items. Last full V2↔V3 review: 2026-06 (second pass) —
+re-scan of all V2 effect types vs. `effectParser.ts` (all ~220 confirmed
+handled, including `WeaponOtherDamageBonusCritical`/Class/CriticalClass and
+`WeaponKeenDamageType`), all V2 Pane classes vs. V3 components (full parity),
+all V2 `Breakdown*.cpp` formulas vs. `useBuildStats.ts` (full parity), and all
+25 V2 forum export sections vs. `sections.ts`. Two remaining forum export gaps
+found: X2 (save sub-saves) and X3 (energy absorbance) — both stats already
+computed by V3, just not yet emitted by the forum export sections.*
