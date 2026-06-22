@@ -101,6 +101,7 @@ the PR number, so this file doubles as a changelog.
 | 82 | **L1 — Build history log (V2 `LogPane`)** — `lib/buildLog.ts` exports `actionToLogMessage` mapping key reducer action types to human-readable log strings; `BuildLogContext.tsx` wraps `CharacterProvider` dispatch to capture a session-only (non-persisted) `LogEntry[]`; `BuildHistoryPanel.tsx` renders entries in reverse-chronological order with Copy-to-Clipboard and Clear buttons (V2 `CLogPane::OnCopyLogToClipboard`/`OnClearLog` parity). Registered in Sidebar and Dashboard. 14 regression tests. | #101 |
 | 81 | **N2 — Weapon damage-type-gated attack/damage effects** — `parseEffect` now handles `WeaponAttackBonusDamageType` → `melee.toHit`, `WeaponAttackBonusCriticalDamageType` → `melee.crit.toHit`, `WeaponDamageBonusDamageType` → `melee.damage`, `WeaponDamageBonusCriticalDamageType` → `melee.crit.damage`, and `WeaponKeenDamageType` → `weapon.keen` (value=1 "Improved Critical active" flag), all gated on `ctx.weaponClassMain`. The damage-type group names (Bludgeoning, Slashing, Piercing, Ranged) are regular weapon groups in `WeaponGroupings.xml` and are already present in `ctxWeaponClassMain` via `deriveWeaponClasses` — no new context field needed. Fixes ~30 silently-dropped effects: Fighter `Greater Weapon Focus` / `Superior Weapon Focus` feats (+1/+2 Feat to-hit for weapons of a damage type) and `Improved Critical` feats (keen flag for weapons of a damage type). V2 source: `BreakdownItemWeaponEffects.cpp:306-323`. | #100 |
 | 80 | **N1 — `SkillBonusAbility` fan-out** — `expandSkillsByAbility()` added to `effectParser.ts`; both `parseEffect` and `parseItemBuff` `SkillBonusAbility` cases now fan out to actual `skill.<Name>` keys for all skills governed by the given ability (e.g. Charisma → Bluff/Diplomacy/Haggle/Intimidate/Perform/UMD), replacing the dead `skill.<Ability>.ability` keys. `Item="All"` expands to all 21 skills. Fixes ~68 silently-dropped occurrences: Bard Past Life (+1 CHA skills), Artificer Past Life (+1 INT skills), Greensteel augments (+2 Exceptional skill sets), Command/Persuasion item buffs. (V2 `BreakdownItemSkill` parity). | #99 |
+| 83 | **X2 — Save sub-saves in forum export** — `sections.ts` `saves` section now emits 9 sub-save rows (vs Poison, vs Disease under Fort; vs Traps, vs Spell, vs Magic under Reflex; vs Enchantment, vs Illusion, vs Fear, vs Curse under Will) when the sub-bonus is non-zero. Total = `stats.total(baseKey) + stats.total(subKey)`, matching V2 `ForumExportDlg.cpp:514-524` and V3's own `BreakdownsPanel.tsx` sub-save formula. 5 regression tests in `parityPassX2.test.ts`. | #102 |
 
 ### Known approximation — RESOLVED (#93)
 
@@ -222,15 +223,11 @@ Remaining read/write-fidelity gaps:
 
 - ➖ **X1 — Image embedding** — V2's `ForumExportDlg.cpp` uses no `[img]`
   BBCode; V2's forum export is text-only. No gap.
-- ❌ **X2 — Save sub-saves missing from forum export** — `sections.ts` `saves`
-  section only emits three lines (Fort / Reflex / Will). V2 `ForumExportDlg.cpp:
-  514-524` also exports 9 sub-save rows: Fort vs Poison, vs Disease; Will vs
-  Enchantment, vs Illusion, vs Fear, vs Curse; Reflex vs Traps, vs Spell, vs
-  Magic. V3 already computes `save.sub.Poison` / `save.sub.Disease` / … in
-  `effectParser.ts` and `BreakdownsPanel.tsx` uses them correctly via
-  `subSave(baseKey, subKey)`. The total to export is
-  `stats.total(baseKey) + stats.total(subKey)` — identical to the BreakdownsPanel
-  formula. Only non-zero sub-save rows need to appear (same as V2).
+- ✅ **X2 — Save sub-saves in forum export** — done (#102). `sections.ts`
+  `saves` section now emits 9 sub-save rows (vs Poison, vs Disease, vs
+  Enchantment, vs Illusion, vs Fear, vs Curse, vs Traps, vs Spell, vs Magic)
+  when the sub-bonus is non-zero. Total = base save + sub-save bonus, matching
+  V2 `ForumExportDlg.cpp:514-524`. 5 regression tests in `parityPassX2.test.ts`.
 - ❌ **X3 — Energy absorbance missing from forum export** — `sections.ts`
   `energyResistances` section only emits `resist.*` values. V2
   `ForumExportDlg.cpp:1183-1200` exports both Resistance and Absorbance columns
