@@ -151,13 +151,24 @@ const saves: SectionDef = {
 const energyResistances: SectionDef = {
   id: 'EnergyResistances',
   label: 'Energy resistances',
+  // V2 ForumExportDlg.cpp:1183-1200 exports both Resistance and Absorbance.
+  // Absorbance uses multiplicative stacking: 100 − Π((100−x)/100)·100
+  // matching BreakdownsPanel.tsx:400-404 and BreakdownItemEnergyAbsorbance.
   emit: ({ stats }) => {
     if (!stats) return []
     const types = ['Fire', 'Cold', 'Acid', 'Electric', 'Sonic', 'Force', 'Light', 'Negative', 'Positive', 'Poison', 'Repair']
     const rows: string[] = []
     for (const t of types) {
-      const v = stats.total(`resist.${t}`)
-      if (v) rows.push(`  ${t}: ${v}`)
+      const resist = stats.total(`resist.${t}`)
+      if (resist) rows.push(`  ${t}: ${resist}`)
+
+      const active = stats.resolve(`absorb.${t}`).bonuses.filter(b => b.active)
+      if (active.length > 0) {
+        let factor = 1
+        for (const b of active) factor *= (100 - b.value) / 100
+        const pct = 100 - factor * 100
+        if (pct > 0) rows.push(`    ${t} Absorption: ${pct.toFixed(1)}%`)
+      }
     }
     return rows.length > 0 ? ['[b]Energy Resistances[/b]:', ...rows] : []
   },
