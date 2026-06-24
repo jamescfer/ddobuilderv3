@@ -96,13 +96,13 @@ the PR number, so this file doubles as a changelog.
 | 75 | **V1 `.ddocp` importer** — `lib/v1Import.ts` ports `CDDOBuilderApp::OnFileImport` + `ConvertToNewDataStructure` (`DDOBuilder.cpp:294-325, 1793-1949`): full Legacy* schema, ability-spend table, per-level LevelTraining replay, Tier5Tree folding, and ALL name-migration tables (4 trees, 30+ feats incl. cleric domains/Warlock pacts/archetype past lives, 6 filigrees, Legendary Green Steel items); auto-detected in Import by `.ddocp` extension or `DDOCharacterData` root. 33 tests against a schema-accurate fixture. | #93 |
 | 76 | **FiligreePanel crash fix + app-wide render smoke harness** — `Filigree.SetBonus` parses as an ARRAY with real data; keying the set-bonus Map on it crashed the whole page (`a.localeCompare`) the moment any filigree was slotted. Fixed; `panelRenderSmoke.test.tsx` now mounts all 35 panels in jsdom with REAL catalogue data + the imported Maetrim build (fetch mocked to mirror server.ts), catching the whole "real XML shape crashes a page" class. | #93 |
 | 77 | **V2-exact spell cost & max caster level** — `TotalCost` (Spell.cpp:354-448) ends after metamagic surcharges (SpellCostReduction is a display-only breakdown); `ActualMaxCasterLevel` (:199-228) has no class-level floor. V3's invented reductions/floor removed. | #93 |
-| 78 | **Per-weapon-class effect family** (200+ effects) — WeaponAttackBonusClass / WeaponDamageBonusClass / *Critical* / Multiplier / Range / Alacrity / Enchantment(Class) / Weapon_BaseDamage / Weapon_(Attack\|Damage)Ability(+Class) all returned []. Now gated on the wielded weapon's classes (V2 Build::IsWeaponInGroup) and routed to the combat keys; CombatPanel picks the LARGEST candidate attack ability (V2 LargestStatBonus). Residual: ~30 damage-type-gated/Keen/Stat variants need a weapon damage-type context field. | #93 |
+| 78 | **Per-weapon-class effect family** (200+ effects) — WeaponAttackBonusClass / WeaponDamageBonusClass / *Critical* / Multiplier / Range / Alacrity / Enchantment(Class) / Weapon_BaseDamage / Weapon_(Attack\|Damage)Ability(+Class) all returned []. Now gated on the wielded weapon's classes (V2 Build::IsWeaponInGroup) and routed to the combat keys; CombatPanel picks the LARGEST candidate attack ability (V2 LargestStatBonus). Residual: ~20 damage-type-gated/Stat variants still unmodeled (tracked below as N6). | #93 |
 | 79 | **Marker effects past the null-Amount guard** (260+ effects) — Immunity / DRBypass / GrantSpell / SpellListAddition (AType NotNeeded/SpellInfo) and SLACharge were silently dropped; now emit immunity.* / drBypass.<Value> / grantSpell.<Class>.<Spell> / slaCharge.* matching V2's consumers. End-to-end probe of all 8 301 data effects: drops 728 → 102 (≈30 documented residual + correctly-gated rest). | #93 |
 | 82 | **L1 — Build history log (V2 `LogPane`)** — `lib/buildLog.ts` exports `actionToLogMessage` mapping key reducer action types to human-readable log strings; `BuildLogContext.tsx` wraps `CharacterProvider` dispatch to capture a session-only (non-persisted) `LogEntry[]`; `BuildHistoryPanel.tsx` renders entries in reverse-chronological order with Copy-to-Clipboard and Clear buttons (V2 `CLogPane::OnCopyLogToClipboard`/`OnClearLog` parity). Registered in Sidebar and Dashboard. 14 regression tests. | #101 |
 | 81 | **N2 — Weapon damage-type-gated attack/damage effects** — `parseEffect` now handles `WeaponAttackBonusDamageType` → `melee.toHit`, `WeaponAttackBonusCriticalDamageType` → `melee.crit.toHit`, `WeaponDamageBonusDamageType` → `melee.damage`, `WeaponDamageBonusCriticalDamageType` → `melee.crit.damage`, and `WeaponKeenDamageType` → `weapon.keen` (value=1 "Improved Critical active" flag), all gated on `ctx.weaponClassMain`. The damage-type group names (Bludgeoning, Slashing, Piercing, Ranged) are regular weapon groups in `WeaponGroupings.xml` and are already present in `ctxWeaponClassMain` via `deriveWeaponClasses` — no new context field needed. Fixes ~30 silently-dropped effects: Fighter `Greater Weapon Focus` / `Superior Weapon Focus` feats (+1/+2 Feat to-hit for weapons of a damage type) and `Improved Critical` feats (keen flag for weapons of a damage type). V2 source: `BreakdownItemWeaponEffects.cpp:306-323`. | #100 |
 | 80 | **N1 — `SkillBonusAbility` fan-out** — `expandSkillsByAbility()` added to `effectParser.ts`; both `parseEffect` and `parseItemBuff` `SkillBonusAbility` cases now fan out to actual `skill.<Name>` keys for all skills governed by the given ability (e.g. Charisma → Bluff/Diplomacy/Haggle/Intimidate/Perform/UMD), replacing the dead `skill.<Ability>.ability` keys. `Item="All"` expands to all 21 skills. Fixes ~68 silently-dropped occurrences: Bard Past Life (+1 CHA skills), Artificer Past Life (+1 INT skills), Greensteel augments (+2 Exceptional skill sets), Command/Persuasion item buffs. (V2 `BreakdownItemSkill` parity). | #99 |
-| 83 | **X2 — Save sub-saves in forum export** — `sections.ts` `saves` section now emits 9 sub-save rows (vs Poison, vs Disease under Fort; vs Traps, vs Spell, vs Magic under Reflex; vs Enchantment, vs Illusion, vs Fear, vs Curse under Will) when the sub-bonus is non-zero. Total = `stats.total(baseKey) + stats.total(subKey)`, matching V2 `ForumExportDlg.cpp:514-524` and V3's own `BreakdownsPanel.tsx` sub-save formula. 5 regression tests in `parityPassX2.test.ts`. | #102 |
-| 84 | **X3 — Energy absorbance in forum export** — `energyResistances` section now also emits indented `${t} Absorption: X.X%` rows for energy types with non-zero absorbance. Uses the same multiplicative stacking formula (`100 − Π((100−x)/100)·100`) as `BreakdownsPanel.tsx:400-404`, reading `stats.resolve('absorb.*').bonuses` and filtering to active-only contributions (V2 `ForumExportDlg.cpp:1183-1200` parity). 8 regression tests in `parityPassX3.test.ts`. | this PR |
+| 83 | **X2 — Save sub-saves in forum export** — `sections.ts` `saves` section now emits 9 sub-save rows (vs Poison, vs Disease under Fort; vs Traps, vs Spell, vs Magic under Reflex; vs Enchantment, vs Illusion, vs Fear, vs Curse under Will) when the sub-bonus is non-zero. Total = `stats.total(baseKey) + stats.total(subKey)`, matching V2 `ForumExportDlg.cpp:514-524` and V3's own `BreakdownsPanel.tsx` sub-save formula. 5 regression tests in `parityPassX2.test.ts`. | #104 |
+| 84 | **X3 — Energy absorbance in forum export** — `energyResistances` section now also emits indented `${t} Absorption: X.X%` rows for energy types with non-zero absorbance. Uses the same multiplicative stacking formula (`100 − Π((100−x)/100)·100`) as `BreakdownsPanel.tsx:400-404`, reading `stats.resolve('absorb.*').bonuses` and filtering to active-only contributions (V2 `ForumExportDlg.cpp:1183-1200` parity). 8 regression tests in `parityPassX3.test.ts`. | #105 |
 
 ### Known approximation — RESOLVED (#93)
 
@@ -188,11 +188,47 @@ Remaining read/write-fidelity gaps:
 
 ---
 
+## High-priority remaining — forum export
+
+- ❌ **X4 — Forum export `tacticalDCs` section broken** — `sections.ts:tacticalDCs`
+  emits `stats.total('tacticalDC')` which is **always 0** because `parseEffect`
+  routes effects to `tacticalDC.All`, `tacticalDC.Trip`, `tacticalDC.Stun`, etc.
+  (never the bare `tacticalDC` key). The section is always suppressed. Fix:
+  enumerate all `tacticalDC.*` stat-map keys with non-zero totals and emit a
+  table row per type, matching V2 `ForumExportDlg.cpp:1735-1757` which lists
+  every active DC by name. The per-type keys already exist in the stat map
+  (`tacticalDC.All` for universal bonuses, `tacticalDC.Trip` / `tacticalDC.Stun`
+  / `tacticalDC.Sunder` / `tacticalDC.Assassinate` etc. for type-specific ones).
+  `BuildStats` needs a `keys()` method (or the section iterates a fixed list of
+  V2 tactical types: Assassinate, Trap, Trip, Stun, Sunder, StunningShield,
+  General, Fear, InnateAttack, BreathWeapon, Poison, RuneArm from
+  `TacticalTypes.h`). Small self-contained fix.
+
+- ❌ **X5 — Forum export `grantedFeats` section ignores `stats.grantedFeatsList`**
+  — `sections.ts:grantedFeats` checks `build.featChoices` for keys starting with
+  `"granted:"`, a heuristic that never matches real slot-key patterns in the
+  reducer. PR #60 added `BuildStats.grantedFeatsList` (populated by both
+  `computeBuildStats` and `useBuildStats` from `grantedFeat.*` stat-map keys),
+  but the export section still uses the stale heuristic — so the "Granted Feats"
+  forum section is always empty. Fix: use `stats?.grantedFeatsList` when stats
+  are available (V2 `ForumExportDlg.cpp:662-735 AddGrantedFeats` parity).
+  Small self-contained fix.
+
+---
+
 ## High-priority remaining — numerical correctness
 
-- ✅ **N1 — `SkillBonusAbility` fan-out** — done (this PR / #80). `expandSkillsByAbility()` in `effectParser.ts` fans both `parseEffect` and `parseItemBuff` out to actual `skill.<Name>` keys for all skills governed by the given ability; `Item="All"` expands to all 21 skills. Fixes ~68 silently-dropped occurrences (Bard/Artificer Past Life, Greensteel augments, Command/Persuasion buffs).
-
-- ✅ **N2 — Weapon damage-type-gated attack/damage effects** — done (this PR / #81). `parseEffect` now handles all 5 damage-type-gated effect types gated on `ctx.weaponClassMain` (which already contains Bludgeoning/Slashing/Piercing/Ranged as regular weapon groups from `WeaponGroupings.xml`). No new context field needed. Fixes ~30 silently-dropped effects from Fighter feats.
+- ❌ **N6 — Weapon ability-driven damage effects returning `[]`** —
+  `effectParser.ts:1484-1488` explicitly returns `[]` for four effect types:
+  `WeaponOtherDamageBonus`, `WeaponDamageBonusStat`, `WeaponDamageBonusCriticalStat`,
+  and `WeaponProficiencyClass`. These handle ability-score-gated weapon damage
+  contributions (e.g., Warlock Pact weapons using CHA to damage, or class-keyed
+  stat-driven critical damage). The comment says "~5 effects" but the actual count
+  from `Output/DataFiles/` search is ~15–20 effects silently dropped. V2 source:
+  `BreakdownItemWeaponDamageBonus.cpp:157-205`. Unlike the `Weapon_AttackAbility`/
+  `WeaponAttackAbilityClass` family (which already emit `melee.attackAbility.*`
+  markers for `LargestStatBonus` picking), the `*Stat` variants carry an explicit
+  stat name and multiplier that can be resolved directly.
 
 ---
 
@@ -217,19 +253,16 @@ Remaining read/write-fidelity gaps:
 - ➖ **U8 — Spell metamagic class-gating** — not a gap; V2 also uses per-spell
   binary metamagic flags with no class-level gating.
 - ✅ **U9 — complete** — FindGearDialog (#64), ContentPane (#68), Help/About (#69).
-
----
-
-## High-priority remaining — forum export
-
-- ➖ **X1 — Image embedding** — V2's `ForumExportDlg.cpp` uses no `[img]`
-  BBCode; V2's forum export is text-only. No gap.
-- ✅ **X2 — Save sub-saves in forum export** — done (#102). `sections.ts`
-  `saves` section now emits 9 sub-save rows (vs Poison, vs Disease, vs
-  Enchantment, vs Illusion, vs Fear, vs Curse, vs Traps, vs Spell, vs Magic)
-  when the sub-bonus is non-zero. Total = base save + sub-save bonus, matching
-  V2 `ForumExportDlg.cpp:514-524`. 5 regression tests in `parityPassX2.test.ts`.
-- ✅ **X3 — Energy absorbance in forum export** — done (this PR / #84). `energyResistances` section now emits indented `${t} Absorption: X.X%` rows for energy types with non-zero absorbance, using the same multiplicative stacking formula as `BreakdownsPanel.tsx:400-404` (V2 `ForumExportDlg.cpp:1183-1200` parity). 8 regression tests in `parityPassX3.test.ts`.
+- ❌ **U10 — BreakdownsPanel tactical DC sub-types incomplete** — `BreakdownsPanel.tsx`
+  hardcodes four tactical DC sub-type rows (Trip, Stun, Sunder, Assassinate) but
+  V2's `TacticalTypes.h` defines 13 types: Assassinate, Trap, Trip, Stun, Sunder,
+  StunningShield, General, Wands, Fear, InnateAttack, BreathWeapon, Poison,
+  RuneArm. Enhancement data uses several of these additional types (Fear from
+  Warlock Tainted Scholar, InnateAttack from some Dragonborn enhancements, etc.).
+  The stat keys for the missing types exist in the stat map whenever effects set
+  them, but `BreakdownsPanel.tsx` never displays them, so users can't see these
+  bonuses. Fix: show all non-zero `tacticalDC.*` keys dynamically rather than a
+  hardcoded list.
 
 ---
 
@@ -246,6 +279,21 @@ Remaining read/write-fidelity gaps:
 - ✅ **Cosmetic gear effects** — done (#71).
 - ✅ **Sentient gem personality buffs** — not a gap (#71).
 - ✅ **Filigree set bonuses with conditional triggers** — done (#71).
+
+### Spell power school coverage
+- ❌ **X6 — Missing alignment/physical spell power types in export and BreakdownsPanel** —
+  V2 tracks 17 distinct spell power types in `BreakdownsPane.cpp:1764-1780` (Acid,
+  LightAlignment, Chaos, Cold, Electric, Evil, Fire, Force, Lawful, Negative,
+  Physical, Poison, Positive, Repair, Rust, Sonic, Untyped). `parseEffect` correctly
+  emits all of these as `sp.Chaos`, `sp.Evil`, `sp.Lawful`, `sp.Physical`, `sp.Poison`,
+  `sp.Untyped` when present in enhancement data. However:
+  - `sections.ts:spellPowers` only iterates 13 types (omits Chaos, Evil, Lawful,
+    Physical, Poison, Untyped) — confirmed real data: Cleric Divine Disciple and
+    Warlock Tainted Scholar trees grant `SpellPower` effects with `<Item>Chaos</Item>`,
+    `<Item>Evil</Item>`, `<Item>Lawful</Item>`.
+  - `BreakdownsPanel.tsx` similarly uses the same restricted list.
+  Fix: add the 6 missing spell power types to both the forum export section and the
+  BreakdownsPanel display.
 
 ### Editor tools (intentionally out of parity scope)
 - ➖ **Item / enhancement-tree / spell / race / class editors** — V3 reads V2's
@@ -300,12 +348,12 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#101 and the Done table
-above for completed items. Last full V2↔V3 review: 2026-06 (second pass) —
-re-scan of all V2 effect types vs. `effectParser.ts` (all ~220 confirmed
-handled, including `WeaponOtherDamageBonusCritical`/Class/CriticalClass and
-`WeaponKeenDamageType`), all V2 Pane classes vs. V3 components (full parity),
-all V2 `Breakdown*.cpp` formulas vs. `useBuildStats.ts` (full parity), and all
-25 V2 forum export sections vs. `sections.ts`. Forum export gaps X2 (save
-sub-saves) and X3 (energy absorbance) now both closed — all forum export
-sections match V2 parity.*
+*Maintained by the parity-pass series. See PRs #53–#105 and the Done table
+above for completed items. Last full V2↔V3 review: 2026-06 (third pass) —
+re-scan of all V2 effect types vs. `effectParser.ts`, all V2 Pane classes vs.
+V3 components, all V2 `Breakdown*.cpp` formulas vs. `useBuildStats.ts`, and all
+25 V2 forum export sections vs. `sections.ts`. New gaps found: X4 (tacticalDCs
+section broken stat key), X5 (grantedFeats section ignores stats.grantedFeatsList),
+N6 (4 weapon ability-damage effect types still returning []), X6 (6 spell power
+types missing from export + BreakdownsPanel), U10 (BreakdownsPanel hardcoded
+tactical DC sub-types).*
