@@ -103,6 +103,7 @@ the PR number, so this file doubles as a changelog.
 | 80 | **N1 — `SkillBonusAbility` fan-out** — `expandSkillsByAbility()` added to `effectParser.ts`; both `parseEffect` and `parseItemBuff` `SkillBonusAbility` cases now fan out to actual `skill.<Name>` keys for all skills governed by the given ability (e.g. Charisma → Bluff/Diplomacy/Haggle/Intimidate/Perform/UMD), replacing the dead `skill.<Ability>.ability` keys. `Item="All"` expands to all 21 skills. Fixes ~68 silently-dropped occurrences: Bard Past Life (+1 CHA skills), Artificer Past Life (+1 INT skills), Greensteel augments (+2 Exceptional skill sets), Command/Persuasion item buffs. (V2 `BreakdownItemSkill` parity). | #99 |
 | 83 | **X2 — Save sub-saves in forum export** — `sections.ts` `saves` section now emits 9 sub-save rows (vs Poison, vs Disease under Fort; vs Traps, vs Spell, vs Magic under Reflex; vs Enchantment, vs Illusion, vs Fear, vs Curse under Will) when the sub-bonus is non-zero. Total = `stats.total(baseKey) + stats.total(subKey)`, matching V2 `ForumExportDlg.cpp:514-524` and V3's own `BreakdownsPanel.tsx` sub-save formula. 5 regression tests in `parityPassX2.test.ts`. | #104 |
 | 84 | **X3 — Energy absorbance in forum export** — `energyResistances` section now also emits indented `${t} Absorption: X.X%` rows for energy types with non-zero absorbance. Uses the same multiplicative stacking formula (`100 − Π((100−x)/100)·100`) as `BreakdownsPanel.tsx:400-404`, reading `stats.resolve('absorb.*').bonuses` and filtering to active-only contributions (V2 `ForumExportDlg.cpp:1183-1200` parity). 8 regression tests in `parityPassX3.test.ts`. | #105 |
+| 85 | **X5 — Forum export `grantedFeats` section uses `stats.grantedFeatsList`** — `sections.ts:grantedFeats` now reads `stats?.grantedFeatsList` (parallel to how `slas` reads `stats?.slaList`) instead of the stale heuristic that filtered `build.featChoices` for keys starting with `"granted:"` (a pattern that never matched real slot keys). When stats are available, the section emits one indented line per granted feat name, matching V2 `ForumExportDlg.cpp:662-735 AddGrantedFeats`. 5 regression tests in `parityPassX5.test.ts`. | this PR |
 
 ### Known approximation — RESOLVED (#93)
 
@@ -204,15 +205,7 @@ Remaining read/write-fidelity gaps:
   General, Fear, InnateAttack, BreathWeapon, Poison, RuneArm from
   `TacticalTypes.h`). Small self-contained fix.
 
-- ❌ **X5 — Forum export `grantedFeats` section ignores `stats.grantedFeatsList`**
-  — `sections.ts:grantedFeats` checks `build.featChoices` for keys starting with
-  `"granted:"`, a heuristic that never matches real slot-key patterns in the
-  reducer. PR #60 added `BuildStats.grantedFeatsList` (populated by both
-  `computeBuildStats` and `useBuildStats` from `grantedFeat.*` stat-map keys),
-  but the export section still uses the stale heuristic — so the "Granted Feats"
-  forum section is always empty. Fix: use `stats?.grantedFeatsList` when stats
-  are available (V2 `ForumExportDlg.cpp:662-735 AddGrantedFeats` parity).
-  Small self-contained fix.
+- ✅ **X5 — Forum export `grantedFeats` section uses `stats.grantedFeatsList`** — done (this PR).
 
 ---
 

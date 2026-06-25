@@ -429,14 +429,12 @@ const slas: SectionDef = {
 const grantedFeats: SectionDef = {
   id: 'GrantedFeats',
   label: 'Granted feats',
-  emit: ({ build }) => {
-    // Heuristic: any feat slot whose key starts with "granted:" represents an
-    // auto-grant. (V2's GrantedFeat list is derived from feat/race/enhancement
-    // GrantFeat effects; v3's UI does not yet flag these explicitly, so we
-    // surface a reminder placeholder.)
-    const grants = Object.entries(build.featChoices).filter(([k]) => k.startsWith('granted:'))
+  // V2 ForumExportDlg.cpp:662-735 AddGrantedFeats() emits feats from the
+  // GrantFeat-effect list. BuildStats.grantedFeatsList holds that list.
+  emit: ({ stats }) => {
+    const grants = stats?.grantedFeatsList ?? []
     if (grants.length === 0) return []
-    return ['[b]Granted Feats[/b]:', ...grants.map(([k, v]) => `  ${k.slice(8)}: ${v}`)]
+    return ['[b]Granted Feats[/b]:', ...grants.map(name => `  ${name}`)]
   },
 }
 
