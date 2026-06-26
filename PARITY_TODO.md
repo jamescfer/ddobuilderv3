@@ -104,6 +104,8 @@ the PR number, so this file doubles as a changelog.
 | 83 | **X2 — Save sub-saves in forum export** — `sections.ts` `saves` section now emits 9 sub-save rows (vs Poison, vs Disease under Fort; vs Traps, vs Spell, vs Magic under Reflex; vs Enchantment, vs Illusion, vs Fear, vs Curse under Will) when the sub-bonus is non-zero. Total = `stats.total(baseKey) + stats.total(subKey)`, matching V2 `ForumExportDlg.cpp:514-524` and V3's own `BreakdownsPanel.tsx` sub-save formula. 5 regression tests in `parityPassX2.test.ts`. | #104 |
 | 84 | **X3 — Energy absorbance in forum export** — `energyResistances` section now also emits indented `${t} Absorption: X.X%` rows for energy types with non-zero absorbance. Uses the same multiplicative stacking formula (`100 − Π((100−x)/100)·100`) as `BreakdownsPanel.tsx:400-404`, reading `stats.resolve('absorb.*').bonuses` and filtering to active-only contributions (V2 `ForumExportDlg.cpp:1183-1200` parity). 8 regression tests in `parityPassX3.test.ts`. | #105 |
 | 85 | **X5 — Forum export `grantedFeats` section uses `stats.grantedFeatsList`** — `sections.ts:grantedFeats` now reads `stats?.grantedFeatsList` (parallel to how `slas` reads `stats?.slaList`) instead of the stale heuristic that filtered `build.featChoices` for keys starting with `"granted:"` (a pattern that never matched real slot keys). When stats are available, the section emits one indented line per granted feat name, matching V2 `ForumExportDlg.cpp:662-735 AddGrantedFeats`. 5 regression tests in `parityPassX5.test.ts`. | this PR |
+| 86 | **X4 — Forum export `tacticalDCs` section fixed** — `sections.ts:tacticalDCs` was calling `stats.total('tacticalDC')` which is always 0 (parseEffect routes to `tacticalDC.All`/`tacticalDC.{Type}`, never the bare key). Now iterates all 13 V2 canonical tactical types from `TacticalTypes.h` (Assassinate, Trap, Trip, Stun, Sunder, StunningShield, General, Wands, Fear, InnateAttack, BreathWeapon, Poison, RuneArm), computes `total = tacticalDC.All + tacticalDC.{Type}`, and emits one row per non-zero type, matching V2 `ForumExportDlg.cpp:1735-1757`. 9 regression tests in `parityPassX4.test.ts`. | #108 |
+| 87 | **U10 — BreakdownsPanel tactical DC sub-types complete** — `BreakdownsPanel.tsx` hardcoded only 4 tactical DC sub-type rows (Trip, Stun, Sunder, Assassinate); now dynamically renders all 13 V2 types from `TacticalTypes.h`, matching V2 `BreakdownsPane.cpp::AddTacticalItem` which registers all 13. Users can now see Fear (Warlock Tainted Scholar), InnateAttack (Dragonborn enhancements), and all other types. | #108 |
 
 ### Known approximation — RESOLVED (#93)
 
@@ -191,19 +193,7 @@ Remaining read/write-fidelity gaps:
 
 ## High-priority remaining — forum export
 
-- ❌ **X4 — Forum export `tacticalDCs` section broken** — `sections.ts:tacticalDCs`
-  emits `stats.total('tacticalDC')` which is **always 0** because `parseEffect`
-  routes effects to `tacticalDC.All`, `tacticalDC.Trip`, `tacticalDC.Stun`, etc.
-  (never the bare `tacticalDC` key). The section is always suppressed. Fix:
-  enumerate all `tacticalDC.*` stat-map keys with non-zero totals and emit a
-  table row per type, matching V2 `ForumExportDlg.cpp:1735-1757` which lists
-  every active DC by name. The per-type keys already exist in the stat map
-  (`tacticalDC.All` for universal bonuses, `tacticalDC.Trip` / `tacticalDC.Stun`
-  / `tacticalDC.Sunder` / `tacticalDC.Assassinate` etc. for type-specific ones).
-  `BuildStats` needs a `keys()` method (or the section iterates a fixed list of
-  V2 tactical types: Assassinate, Trap, Trip, Stun, Sunder, StunningShield,
-  General, Fear, InnateAttack, BreathWeapon, Poison, RuneArm from
-  `TacticalTypes.h`). Small self-contained fix.
+- ✅ **X4 — Forum export `tacticalDCs` section fixed** — done (#108).
 
 - ✅ **X5 — Forum export `grantedFeats` section uses `stats.grantedFeatsList`** — done (this PR).
 
@@ -246,16 +236,7 @@ Remaining read/write-fidelity gaps:
 - ➖ **U8 — Spell metamagic class-gating** — not a gap; V2 also uses per-spell
   binary metamagic flags with no class-level gating.
 - ✅ **U9 — complete** — FindGearDialog (#64), ContentPane (#68), Help/About (#69).
-- ❌ **U10 — BreakdownsPanel tactical DC sub-types incomplete** — `BreakdownsPanel.tsx`
-  hardcodes four tactical DC sub-type rows (Trip, Stun, Sunder, Assassinate) but
-  V2's `TacticalTypes.h` defines 13 types: Assassinate, Trap, Trip, Stun, Sunder,
-  StunningShield, General, Wands, Fear, InnateAttack, BreathWeapon, Poison,
-  RuneArm. Enhancement data uses several of these additional types (Fear from
-  Warlock Tainted Scholar, InnateAttack from some Dragonborn enhancements, etc.).
-  The stat keys for the missing types exist in the stat map whenever effects set
-  them, but `BreakdownsPanel.tsx` never displays them, so users can't see these
-  bonuses. Fix: show all non-zero `tacticalDC.*` keys dynamically rather than a
-  hardcoded list.
+- ✅ **U10 — BreakdownsPanel tactical DC sub-types complete** — done (#108).
 
 ---
 

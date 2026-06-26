@@ -478,11 +478,22 @@ export default function BreakdownsPanel() {
     fixedRow('Skill Pts',  skillPointsTotal, String(skillPointsTotal), stats.resolve('skillPoints').bonuses),
     statRow('Off-hand Atk', 'offhand.attack', pct),
     statRow('Helpless Dmg', 'helpless',        pct),
-    statRow('Tactical DC',  'tacticalDC.All',  sign),
-    statRow('  vs Trip',    'tacticalDC.Trip', sign),
-    statRow('  vs Stun',    'tacticalDC.Stun', sign),
-    statRow('  vs Sunder',  'tacticalDC.Sunder', sign),
-    statRow('  vs Assassinate', 'tacticalDC.Assassinate', sign),
+    statRow('Tactical DC (All)', 'tacticalDC.All', sign),
+    ...[
+      ['Assassinate',    'Assassinate'],
+      ['Trap',           'Trap'],
+      ['Trip',           'Trip'],
+      ['Stun',           'Stun'],
+      ['Sunder',         'Sunder'],
+      ['StunningShield', 'Stunning Shield'],
+      ['General',        'General'],
+      ['Wands',          'Wands'],
+      ['Fear',           'Fear'],
+      ['InnateAttack',   'Innate Attack'],
+      ['BreathWeapon',   'Breath Weapon'],
+      ['Poison',         'Poison'],
+      ['RuneArm',        'Rune Arm'],
+    ].map(([key, label]) => statRow(`  vs ${label}`, `tacticalDC.${key}`, sign)),
   ]
 
   // Weapon-effect breakdowns (Stream-audit additions)
