@@ -374,14 +374,35 @@ const weaponDamage: SectionDef = {
   },
 }
 
+const V2_TACTICAL_TYPES: [key: string, label: string][] = [
+  ['Assassinate',    'Assassinate'],
+  ['Trap',           'Trap'],
+  ['Trip',           'Trip'],
+  ['Stun',           'Stun'],
+  ['Sunder',         'Sunder'],
+  ['StunningShield', 'Stunning Shield'],
+  ['General',        'General'],
+  ['Wands',          'Wands'],
+  ['Fear',           'Fear'],
+  ['InnateAttack',   'Innate Attack'],
+  ['BreathWeapon',   'Breath Weapon'],
+  ['Poison',         'Poison'],
+  ['RuneArm',        'Rune Arm'],
+]
+
 const tacticalDCs: SectionDef = {
   id: 'TacticalDCs',
   label: 'Tactical DCs',
   emit: ({ stats }) => {
     if (!stats) return []
-    const total = stats.total('tacticalDC')
-    if (total === 0) return []
-    return [`[b]Tactical DC[/b]: ${total}`]
+    const allBonus = stats.total('tacticalDC.All')
+    const rows: string[] = []
+    for (const [key, label] of V2_TACTICAL_TYPES) {
+      const total = allBonus + stats.total(`tacticalDC.${key}`)
+      if (total !== 0) rows.push(`  ${label}: ${sign(total)}`)
+    }
+    if (rows.length === 0) return []
+    return ['[b]Tactical DCs[/b]:', ...rows]
   },
 }
 
