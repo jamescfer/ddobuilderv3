@@ -106,6 +106,7 @@ the PR number, so this file doubles as a changelog.
 | 85 | **X5 — Forum export `grantedFeats` section uses `stats.grantedFeatsList`** — `sections.ts:grantedFeats` now reads `stats?.grantedFeatsList` (parallel to how `slas` reads `stats?.slaList`) instead of the stale heuristic that filtered `build.featChoices` for keys starting with `"granted:"` (a pattern that never matched real slot keys). When stats are available, the section emits one indented line per granted feat name, matching V2 `ForumExportDlg.cpp:662-735 AddGrantedFeats`. 5 regression tests in `parityPassX5.test.ts`. | this PR |
 | 86 | **X4 — Forum export `tacticalDCs` section fixed** — `sections.ts:tacticalDCs` was calling `stats.total('tacticalDC')` which is always 0 (parseEffect routes to `tacticalDC.All`/`tacticalDC.{Type}`, never the bare key). Now iterates all 13 V2 canonical tactical types from `TacticalTypes.h` (Assassinate, Trap, Trip, Stun, Sunder, StunningShield, General, Wands, Fear, InnateAttack, BreathWeapon, Poison, RuneArm), computes `total = tacticalDC.All + tacticalDC.{Type}`, and emits one row per non-zero type, matching V2 `ForumExportDlg.cpp:1735-1757`. 9 regression tests in `parityPassX4.test.ts`. | #108 |
 | 87 | **U10 — BreakdownsPanel tactical DC sub-types complete** — `BreakdownsPanel.tsx` hardcoded only 4 tactical DC sub-type rows (Trip, Stun, Sunder, Assassinate); now dynamically renders all 13 V2 types from `TacticalTypes.h`, matching V2 `BreakdownsPane.cpp::AddTacticalItem` which registers all 13. Users can now see Fear (Warlock Tainted Scholar), InnateAttack (Dragonborn enhancements), and all other types. | #108 |
+| 88 | **N6 — WeaponProficiencyClass grants class-based weapon proficiency** — `buildRuntimeGroupAdds()` now handles `WeaponProficiencyClass` effects (e.g. "Half-Elf Dilettante: Ranger" `<Item>Ranged</Item>`, Spells.xml "Master's Touch" `<Item>Simple</Item>`/`<Item>Martial</Item>`) by emitting a `RuntimeGroupMerge { baseGroup: 'Proficiency', mergedGroup: <className> }`. The existing `deriveWeaponClasses` transitive-merge logic then makes any weapon in the named static group (e.g. Longbow in Ranged) gain 'Proficiency' membership, so `isWeaponProficient('Longbow')` returns true. The other three types in the N6 stub — `WeaponOtherDamageBonus` (bane dice, EnemyType-gated, commented out in V2), `WeaponDamageBonusStat`/`WeaponDamageBonusCriticalStat` (Rogue Crippling Strike enemy STR drain, not a character damage bonus) — correctly return `[]` matching V2's own unhandled behavior. (V2 source: `BreakdownItemWeaponEffects.cpp:56/329-344`, `HalfElf.race.xml`, `Spells.xml`.) | this PR |
 
 ### Known approximation — RESOLVED (#93)
 
@@ -201,17 +202,7 @@ Remaining read/write-fidelity gaps:
 
 ## High-priority remaining — numerical correctness
 
-- ❌ **N6 — Weapon ability-driven damage effects returning `[]`** —
-  `effectParser.ts:1484-1488` explicitly returns `[]` for four effect types:
-  `WeaponOtherDamageBonus`, `WeaponDamageBonusStat`, `WeaponDamageBonusCriticalStat`,
-  and `WeaponProficiencyClass`. These handle ability-score-gated weapon damage
-  contributions (e.g., Warlock Pact weapons using CHA to damage, or class-keyed
-  stat-driven critical damage). The comment says "~5 effects" but the actual count
-  from `Output/DataFiles/` search is ~15–20 effects silently dropped. V2 source:
-  `BreakdownItemWeaponDamageBonus.cpp:157-205`. Unlike the `Weapon_AttackAbility`/
-  `WeaponAttackAbilityClass` family (which already emit `melee.attackAbility.*`
-  markers for `LargestStatBonus` picking), the `*Stat` variants carry an explicit
-  stat name and multiplier that can be resolved directly.
+- ✅ **N6 — WeaponProficiencyClass grants class-based weapon proficiency** — done (this PR).
 
 ---
 
