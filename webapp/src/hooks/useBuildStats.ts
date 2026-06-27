@@ -179,6 +179,12 @@ export function buildRuntimeGroupAdds(
         }
       } else if (eff.Type === 'MergeGroups' && its.length >= 2) {
         merges.push({ baseGroup: its[0], mergedGroup: its[1] })
+      } else if (eff.Type === 'WeaponProficiencyClass') {
+        // e.g. "Half-Elf Dilettante: Ranger" → Item=Ranged grants proficiency
+        // with every weapon in the Ranged static group via a group merge.
+        for (const cls of its) {
+          if (cls) merges.push({ baseGroup: 'Proficiency', mergedGroup: cls })
+        }
       }
     }
   }
