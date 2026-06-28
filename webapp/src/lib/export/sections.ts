@@ -9,6 +9,7 @@ import type {
 } from '../../types/ddo'
 import type { BuildStats } from '../../hooks/useBuildStats'
 import { buildAutomaticFeatGroups } from '../automaticFeats'
+import { SPELL_POWER_TYPES, SPELL_POWER_LABELS } from '../gamedata'
 
 const ABILITY_ABBREVS: Record<Ability, string> = {
   Strength: 'STR', Dexterity: 'DEX', Constitution: 'CON',
@@ -322,15 +323,13 @@ const spellPowers: SectionDef = {
   label: 'Spell powers',
   emit: ({ stats }) => {
     if (!stats) return []
-    const SCHOOLS = ['Fire', 'Cold', 'Acid', 'Electric', 'Sonic', 'Force',
-      'Light', 'Alignment', 'Negative', 'Positive', 'Repair', 'Rust', 'Universal']
     const rows: string[] = []
-    for (const s of SCHOOLS) {
-      const power = stats.total(`sp.${s}`)
-      const crit = stats.total(`sp.crit.${s}`)
-      const mult = stats.total(`sp.critMult.${s}`)
-      if (power || crit || mult) {
-        rows.push(`  ${s}: ${power} / crit ${crit}% × ${mult || 0}`)
+    for (const spKey of SPELL_POWER_TYPES) {
+      const power = stats.total(`sp.${spKey}`)
+      const crit = stats.total(`spCrit.${spKey}`)
+      if (power || crit) {
+        const label = SPELL_POWER_LABELS[spKey] ?? spKey
+        rows.push(`  ${label}: ${power}${crit ? ` / crit ${crit}%` : ''}`)
       }
     }
     return rows.length > 0 ? ['[b]Spell Powers[/b]:', ...rows] : []

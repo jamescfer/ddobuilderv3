@@ -107,6 +107,7 @@ the PR number, so this file doubles as a changelog.
 | 86 | **X4 — Forum export `tacticalDCs` section fixed** — `sections.ts:tacticalDCs` was calling `stats.total('tacticalDC')` which is always 0 (parseEffect routes to `tacticalDC.All`/`tacticalDC.{Type}`, never the bare key). Now iterates all 13 V2 canonical tactical types from `TacticalTypes.h` (Assassinate, Trap, Trip, Stun, Sunder, StunningShield, General, Wands, Fear, InnateAttack, BreathWeapon, Poison, RuneArm), computes `total = tacticalDC.All + tacticalDC.{Type}`, and emits one row per non-zero type, matching V2 `ForumExportDlg.cpp:1735-1757`. 9 regression tests in `parityPassX4.test.ts`. | #108 |
 | 87 | **U10 — BreakdownsPanel tactical DC sub-types complete** — `BreakdownsPanel.tsx` hardcoded only 4 tactical DC sub-type rows (Trip, Stun, Sunder, Assassinate); now dynamically renders all 13 V2 types from `TacticalTypes.h`, matching V2 `BreakdownsPane.cpp::AddTacticalItem` which registers all 13. Users can now see Fear (Warlock Tainted Scholar), InnateAttack (Dragonborn enhancements), and all other types. | #108 |
 | 88 | **N6 — WeaponProficiencyClass grants class-based weapon proficiency** — `buildRuntimeGroupAdds()` now handles `WeaponProficiencyClass` effects (e.g. "Half-Elf Dilettante: Ranger" `<Item>Ranged</Item>`, Spells.xml "Master's Touch" `<Item>Simple</Item>`/`<Item>Martial</Item>`) by emitting a `RuntimeGroupMerge { baseGroup: 'Proficiency', mergedGroup: <className> }`. The existing `deriveWeaponClasses` transitive-merge logic then makes any weapon in the named static group (e.g. Longbow in Ranged) gain 'Proficiency' membership, so `isWeaponProficient('Longbow')` returns true. The other three types in the N6 stub — `WeaponOtherDamageBonus` (bane dice, EnemyType-gated, commented out in V2), `WeaponDamageBonusStat`/`WeaponDamageBonusCriticalStat` (Rogue Crippling Strike enemy STR drain, not a character damage bonus) — correctly return `[]` matching V2's own unhandled behavior. (V2 source: `BreakdownItemWeaponEffects.cpp:56/329-344`, `HalfElf.race.xml`, `Spells.xml`.) | this PR |
+| 89 | **X6 — Missing alignment/physical spell power types in forum export** — `sections.ts:spellPowers` replaced hardcoded 13-type list with `SPELL_POWER_TYPES` from `gamedata.ts` (all 17 V2 types: Acid, LightAlignment, Chaos, Cold, Electric, Evil, Fire, Force, Lawful, Negative, Physical, Poison, Positive, Repair, Rust, Sonic, Untyped, plus Universal). Fixed wrong stat key `sp.crit.*` → `spCrit.*`; removed non-existent `sp.critMult.*`; uses `SPELL_POWER_LABELS` for display names (e.g. `LightAlignment` → `Light/Alignment`). Previously `Chaos`, `Evil`, `Lawful`, `Physical`, `Poison`, `Untyped` spell power bonuses (confirmed in Cleric Divine Disciple + Warlock Tainted Scholar trees) were silently absent from the forum export. `BreakdownsPanel.tsx` already used the full `SPELL_POWER_TYPES` list — no change needed there. V2 source: `BreakdownsPane.cpp:1764-1780`. | #109 |
 
 ### Known approximation — RESOLVED (#93)
 
@@ -246,19 +247,7 @@ Remaining read/write-fidelity gaps:
 - ✅ **Filigree set bonuses with conditional triggers** — done (#71).
 
 ### Spell power school coverage
-- ❌ **X6 — Missing alignment/physical spell power types in export and BreakdownsPanel** —
-  V2 tracks 17 distinct spell power types in `BreakdownsPane.cpp:1764-1780` (Acid,
-  LightAlignment, Chaos, Cold, Electric, Evil, Fire, Force, Lawful, Negative,
-  Physical, Poison, Positive, Repair, Rust, Sonic, Untyped). `parseEffect` correctly
-  emits all of these as `sp.Chaos`, `sp.Evil`, `sp.Lawful`, `sp.Physical`, `sp.Poison`,
-  `sp.Untyped` when present in enhancement data. However:
-  - `sections.ts:spellPowers` only iterates 13 types (omits Chaos, Evil, Lawful,
-    Physical, Poison, Untyped) — confirmed real data: Cleric Divine Disciple and
-    Warlock Tainted Scholar trees grant `SpellPower` effects with `<Item>Chaos</Item>`,
-    `<Item>Evil</Item>`, `<Item>Lawful</Item>`.
-  - `BreakdownsPanel.tsx` similarly uses the same restricted list.
-  Fix: add the 6 missing spell power types to both the forum export section and the
-  BreakdownsPanel display.
+- ✅ **X6 — Missing alignment/physical spell power types in export and BreakdownsPanel** — done (#109).
 
 ### Editor tools (intentionally out of parity scope)
 - ➖ **Item / enhancement-tree / spell / race / class editors** — V3 reads V2's
