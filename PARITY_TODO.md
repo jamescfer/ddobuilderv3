@@ -193,73 +193,64 @@ Remaining read/write-fidelity gaps:
 
 ---
 
-## High-priority remaining — forum export
-
-- ✅ **X4 — Forum export `tacticalDCs` section fixed** — done (#108).
-
-- ✅ **X5 — Forum export `grantedFeats` section uses `stats.grantedFeatsList`** — done (this PR).
-
----
-
 ## High-priority remaining — numerical correctness
 
-- ✅ **N6 — WeaponProficiencyClass grants class-based weapon proficiency** — done (this PR).
+- ❌ **N7 — Metamagic cost reductions not displayed** — `effectParser.ts` accumulates `metamagic.cost.{Name}` stat keys for SP-cost reductions from enhancements and feats (e.g. Arcane Insight −5 Maximize, Ruin the Economy −5 Quicken). However, (a) the **base SP surcharge** per metamagic (e.g. Maximize +25 SP, Quicken +10 SP, Empower +10 SP) has no V3 data source — it would need a hardcoded or data-driven table; (b) no V3 panel reads or renders any `metamagic.cost.*` stat key. Casters cannot see their effective metamagic costs. V2 source: `BreakdownsPane.cpp` metamagic-breakdown registration loop + hardcoded per-metamagic surcharge tables.
+
+- ❌ **N8 — Arcane Spell Failure not accumulated or displayed** — `effectParser.ts` handles `ArcaneSpellFailure` / `ArcaneSpellFailureShields` effect types (feats/enhancements that **reduce** ASF) and emits `arcaneSpellFailure` / `arcaneSpellFailureShield` stat keys. However, (a) the **base ASF from the equipped armor or shield** is a direct item property (e.g. Heavy Armor: 40%, Medium Armor: 20%), not an effect — this property is never read from the item data and never added to the stat baseline, so net ASF is always ≤ 0 instead of the actual armor value minus reductions; (b) no V3 panel renders either stat key. Impact: arcane casters wearing armor see no indication of their ASF risk. V2 source: `BreakdownsPane.cpp::AddDefenseBreakdowns`, item `ArcaneSpellFailure` property read in `BreakdownItemWeapon.cpp`.
 
 ---
 
 ## High-priority remaining — effect parser coverage
 
-- ✅ **E1 — `SLA` (Spell-Like Ability)** — done (#74/#69).
-- ✅ **Non-stance runtime gates** — done (#73): EnemyType hard-fails (as in V2),
-  MaterialType checks the equipped item's material, Skill checks the resolved
-  total.
+(All 219 V2 effect types surveyed — 216 handled; the 3 remaining intentionally
+return `[]` matching V2's own unhandled behavior: `WeaponOtherDamageBonusClass`,
+`WeaponOtherDamageBonusCritical`, `WeaponOtherDamageBonusCriticalClass` are
+bane-dice / enemy-stat-drain effects V2 also does not model. See Done table for
+E1–N6 history.)
 
 ---
 
 ## High-priority remaining — UI features
 
-- ✅ **U1 — Multi-life / multi-build document UI** — done (#65).
-- ✅ **U2 — Twists of Fate editor** — done (#58).
-- ✅ **U3 — Reaper AP persisted** — done (#55).
-- ✅ **U4 — Spells known-per-level limit** — done (#57).
-- ✅ **U5 — Granted / Special / Automatic feats consolidated** — done (#59/#60).
-- ✅ **U6 — Build comparison scope** — done (#66).
-- ✅ **U7 — Per-level training UI** — done (#62).
-- ➖ **U8 — Spell metamagic class-gating** — not a gap; V2 also uses per-spell
-  binary metamagic flags with no class-level gating.
-- ✅ **U9 — complete** — FindGearDialog (#64), ContentPane (#68), Help/About (#69).
-- ✅ **U10 — BreakdownsPanel tactical DC sub-types complete** — done (#108).
+(All known UI parity items closed — see Done table for U1–U10 history.)
 
 ---
 
-## Medium-priority remaining
+## High-priority remaining — forum export
 
-### Subsystems V3 hasn't ported
-- ✅ **Combat simulator with attack chains** — done (#70).
-- ➖ **Gear optimizer / auto-equip** — phantom: V2 has no such feature.
-- ✅ **Settings** — done (#67/#69).
-- ✅ **Build version migration** — done (#66).
+(All 26 V2 forum export sections verified present in `sections.ts` — see Done
+table for X1–X6 history.)
 
-### Data-file edge cases
-- ✅ **Item slot edge cases** — done (#71); trinket-via-augment not a V2 mechanic.
-- ✅ **Cosmetic gear effects** — done (#71).
-- ✅ **Sentient gem personality buffs** — not a gap (#71).
-- ✅ **Filigree set bonuses with conditional triggers** — done (#71).
+---
 
-### Spell power school coverage
-- ✅ **X6 — Missing alignment/physical spell power types in export and BreakdownsPanel** — done (#109).
+## Medium-priority remaining — display gaps
 
-### Editor tools (intentionally out of parity scope)
-- ➖ **Item / enhancement-tree / spell / race / class editors** — V3 reads V2's
-  XML directly; not on the parity path.
+These stats are already accumulated correctly by `effectParser.ts` and
+`useBuildStats.ts`; the gap is that no panel surfaces them to the user.
+
+- ❌ **U11 — Weapon alacrity not displayed** — `effectParser.ts` maps `Weapon_Alacrity` and `WeaponAlacrityClass` effects to the `weapon.alacrity` stat key; `attackEntry.ts` uses it in APM calculations. Neither `BreakdownsPanel` nor `CombatPanel` renders a visible row for it, so players cannot see their total attack-speed bonus. V2 shows "+N% Attack Speed" per equipped weapon as a dedicated sub-item (`BreakdownItemWeaponAttackSpeed.cpp`, registered in `BreakdownItemWeapon.cpp:116`).
+
+- ❌ **U12 — Critical multiplier 19-20 not displayed** — `weapon.critMultiplier19to20` is accumulated by `effectParser.ts` (from `Weapon_CriticalMultiplier19To20` effects on items and enhancements) and consumed in DPS calculations in `attackEntry.ts`, but `BreakdownsPanel` renders only the standard "Crit Multiplier" row and omits the 19-20 specific value. V2 shows a dedicated "Critical Multiplier (19-20)" sub-item per weapon (`BreakdownItemWeaponCriticalMultiplier.cpp:52-66`, registered in `BreakdownItemWeapon.cpp:113`).
+
+- ❌ **U13 — Sneak attack sub-components missing from BreakdownsPanel** — `BreakdownsPanel` renders only "Sneak Atk Dice" (the raw dice count from `melee.sneakDice`). V2 additionally shows three companion breakdown rows: **Sneak Attack Damage** (flat bonus damage per qualifying attack, `melee.sneakDamage`), **Sneak Attack Attack** (to-hit bonus on sneak attacks, `melee.sneakToHit`), and **Sneak Attack Range** (range in feet at which sneak attacks qualify). V2 source: `BreakdownsPane.cpp:1280-1292`, `BreakdownItemSneakAttackDice.cpp`.
+
+---
+
+## Medium-priority remaining — subsystems
+
+(All core subsystems ported — combat simulator, settings, build migration, gear
+import, data edge cases all done. See Done table items #70–#71, #66–#68.)
 
 ---
 
 ## Low-priority polish
 
-- ✅ **Keyboard shortcuts / print layout / auto-save / drag-and-drop import** —
-  done (#69).
-- ✅ **L1 — Build history log (V2 `LogPane`)** — `lib/buildLog.ts` exports `actionToLogMessage` mapping key reducer action types to human-readable log strings (feat trained, class changed, gear equipped, enhancement selected, etc.); `BuildLogContext.tsx` wraps `CharacterProvider`'s dispatch to capture a session-only (non-persisted) `LogEntry[]`; `BuildHistoryPanel.tsx` renders entries in reverse-chronological order with Copy-to-Clipboard and Clear buttons (V2 `CLogPane::OnCopyLogToClipboard`/`OnClearLog` parity). Registered in Sidebar and Dashboard. 14 regression tests.
+- ❌ **L2 — Duration bonus display absent** — V2's `BreakdownItemDuration.cpp` tracks a generic "Duration" bonus granted by feats/enhancements (e.g. Extend Spell metamagic, certain enhancement lines that add +N% to buff/song durations), displayed as formatted time in the BreakdownsPane. V3 has no `duration` stat key in `effectParser.ts` nor a panel section to display it. Impact: low (display-only; duration does not affect combat damage or saves).
+
+- ❌ **L3 — Tumble charges not displayed** — Enhancements and feats grant extra tumble charges (V2 `Effect_ExtraTumble` or similar). V3's `effectParser.ts` may not handle this specific effect type, and `BreakdownsPanel` has no tumble-charges row. V2 shows a tumble charge count in `BreakdownsPane.cpp` alongside other class-resource counts. Verify whether the effect type is parsed before implementing the display.
+
+- ❌ **L4 — Off-hand doublestrike base derivation missing** — V2 seeds off-hand doublestrike from main-hand doublestrike × 0.5 (or × 0.65 with Perfect Two Weapon Fighting) before adding direct `Effect_DoublestrikeOffhand` contributions (`BreakdownItemOffhandDoublestrike.cpp:54-77`). V3's `offhand.doublestrike` stat accumulates only direct off-hand effects, omitting the main-hand fraction. Builds with main-hand doublestrike but no explicit off-hand-doublestrike feats/enhancements will show 0% off-hand doublestrike instead of ~50% of main-hand. Note: this is a documented "minor edge case not changed" in the BreakdownItem* suite review above — it is now promoted to an explicit TODO.
 
 ---
 
@@ -302,12 +293,15 @@ These V2 features won't be ported because they don't make sense in a webapp:
 
 ---
 
-*Maintained by the parity-pass series. See PRs #53–#105 and the Done table
-above for completed items. Last full V2↔V3 review: 2026-06 (third pass) —
-re-scan of all V2 effect types vs. `effectParser.ts`, all V2 Pane classes vs.
-V3 components, all V2 `Breakdown*.cpp` formulas vs. `useBuildStats.ts`, and all
-25 V2 forum export sections vs. `sections.ts`. New gaps found: X4 (tacticalDCs
-section broken stat key), X5 (grantedFeats section ignores stats.grantedFeatsList),
-N6 (4 weapon ability-damage effect types still returning []), X6 (6 spell power
-types missing from export + BreakdownsPanel), U10 (BreakdownsPanel hardcoded
-tactical DC sub-types).*
+*Maintained by the parity-pass series. See PRs #53–#109 and the Done table
+above for completed items. Last full V2↔V3 review: 2026-06 (fourth pass) —
+complete re-scan of all 219 V2 effect types vs. `effectParser.ts` (216/219
+handled; 3 intentionally `[]`), all 24 V2 Pane classes vs. V3 components
+(100% covered), all 26 V2 forum export sections vs. `sections.ts` (100%
+covered), all 45 V2 `Breakdown*.cpp` formulas vs. `useBuildStats.ts` /
+`BreakdownsPanel.tsx`. New gaps found: N7 (metamagic cost reductions not
+displayed + no base surcharge table), N8 (arcane spell failure not
+accumulated or displayed), U11 (weapon alacrity display missing), U12 (crit
+multiplier 19-20 display missing), U13 (sneak attack sub-components missing),
+L2 (duration bonus absent), L3 (tumble charges not displayed), L4 (off-hand
+doublestrike base derivation missing).*
