@@ -193,17 +193,30 @@ Remaining read/write-fidelity gaps:
 
 ---
 
-## High-priority remaining — forum export
-
-- ✅ **X4 — Forum export `tacticalDCs` section fixed** — done (#108).
-
-- ✅ **X5 — Forum export `grantedFeats` section uses `stats.grantedFeatsList`** — done (this PR).
-
----
-
 ## High-priority remaining — numerical correctness
 
 - ✅ **N6 — WeaponProficiencyClass grants class-based weapon proficiency** — done (this PR).
+
+- ❌ **N7 — `Weapon_CriticalRange` effects route to dead stat key `weapon.critRange`** — `parseEffect`
+  routes `Weapon_CriticalRange` to `weapon.critRange`, but that key is never read by `CombatPanel`
+  (`stats.total('melee.crit.range')`) or `attackEntry.ts`. **31 enhancement trees** silently lose
+  critical-threat-range bonuses: Kensei "Keen Edge" (+1 range to Focus Weapon, `Item=All`, gated by
+  `GroupMember Focus Weapon`), Rogue Assassin "Knife Specialization" (+1–2 to Dagger/Kukri range),
+  Dwarf/Duergar racial enhancements, Cleric Warpriest, Fighter Ravager, Monk Shintao, Ranger
+  DeepwoodStalker, Artificer BattleEngineer, Vanguard, and more. Fix: route `Weapon_CriticalRange` to
+  `melee.crit.range` with the same gate as `WeaponCriticalRangeClass` — when `items.includes('All')`
+  or `ctx?.weaponClassMain && items.some(i => ctx.weaponClassMain!.has(i))`. Update `BreakdownsPanel`
+  to read `melee.crit.range` (currently reads the always-zero `weapon.threatRange`). V2 source:
+  `BreakdownItemWeaponCriticalThreatRange::AffectsUs` handles `Effect_Weapon_CriticalRange` alongside
+  `Effect_WeaponCriticalRangeClass` in the same breakdown.
+
+---
+
+## High-priority remaining — forum export
+
+- ✅ **X4 — Forum export `tacticalDCs` section fixed** — done (#108).
+- ✅ **X5 — Forum export `grantedFeats` section uses `stats.grantedFeatsList`** — done (this PR).
+- ✅ **X6 — Missing alignment/physical spell power types in export and BreakdownsPanel** — done (#109).
 
 ---
 
@@ -234,6 +247,35 @@ Remaining read/write-fidelity gaps:
 
 ## Medium-priority remaining
 
+### Numerical / breakdown display
+
+- ❌ **N8 — Offhand doublestrike not shown in BreakdownsPanel** — `attackEntry.ts:208` correctly
+  derives offhand doublestrike as 50% of mainhand (65% with Perfect Two Weapon Fighting, matching V2
+  `BreakdownItemOffhandDoublestrike.cpp:54-77`), but `BreakdownsPanel` does not surface this derived
+  value — it only shows `offhand.attack` (the off-hand *proc* chance). A user inspecting breakdowns
+  cannot see their effective offhand doublestrike. Add a derived `offhand.doublestrike.derived` stat or
+  compute it inline in `BreakdownsPanel` from `melee.doublestrike` × 0.5/0.65.
+
+### Forum export gaps
+
+- ❌ **X7 — WeaponDamage forum export section much narrower than V2** — V2's `AddWeaponDamage`
+  (`ForumExportDlg.cpp:1681-1733`) emits 12+ distinct combat stats: Melee Power, Doublestrike%,
+  Strikethrough%, mainhand/offhand damage-ability multipliers, Off-Hand attack chance%, Fortification
+  Bypass%, Dodge Bypass%, Helpless Damage%, Ranged Power, Doubleshot%, Sneak Attack bonus/dice, and
+  per-weapon critical stats. V3's `weaponDamage` section (`sections.ts:360-374`) shows only the
+  equipped weapon's dice/crit line and to-hit/damage/doublestrike in a 3-line stub.
+
+- ❌ **X8 — Spells forum export missing rich table columns** — V2's `AddSpells`
+  (`ForumExportDlg.cpp:1523-1570`) generates a BBCode table with columns: School, CL/MCL (caster
+  level / max caster level), DC, Average Damage, Crit Damage per spell. V3's `spells` section
+  (`sections.ts:339-358`) only lists spell names grouped by class and level — no spell stats.
+
+- ❌ **X9 — Character header export missing defensive stats compact table** — V2's header
+  (`ForumExportDlg.cpp:325-392`) includes a compact stat table alongside ability scores: HP, PRR, MRR,
+  AC, Dodge/DodgeCap, Fortification%, Repair/Negative/Healing Amplification, Spell Resistance, BAB, DR
+  list, and Immunities. V3's `characterHeader` section (`sections.ts:43-57`) emits only the character
+  name, race/alignment, class list, and total level — no defensive stats.
+
 ### Subsystems V3 hasn't ported
 - ✅ **Combat simulator with attack chains** — done (#70).
 - ➖ **Gear optimizer / auto-equip** — phantom: V2 has no such feature.
@@ -245,9 +287,6 @@ Remaining read/write-fidelity gaps:
 - ✅ **Cosmetic gear effects** — done (#71).
 - ✅ **Sentient gem personality buffs** — not a gap (#71).
 - ✅ **Filigree set bonuses with conditional triggers** — done (#71).
-
-### Spell power school coverage
-- ✅ **X6 — Missing alignment/physical spell power types in export and BreakdownsPanel** — done (#109).
 
 ### Editor tools (intentionally out of parity scope)
 - ➖ **Item / enhancement-tree / spell / race / class editors** — V3 reads V2's
